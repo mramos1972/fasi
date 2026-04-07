@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: layout(~{::title}, ~{::section})}">
+<head><title>Movimiento — FASI</title></head>
+<body>
+<section>
+  <h2 class="text-2xl font-bold text-gray-800 mb-6"
+      th:text="${movimiento.id == null} ? 'Nuevo movimiento' : 'Editar movimiento'"></h2>
+  <div class="bg-white rounded-xl shadow p-8 max-w-lg">
+    <form th:action="${movimiento.id == null} ? @{/contabilidad} : @{/contabilidad/{id}(id=${movimiento.id})}"
+          th:object="${movimiento}" method="post" class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Concepto *</label>
+        <input type="text" th:field="*{concepto}" required
+               class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-800"/>
+        <p th:if="${#fields.hasErrors('concepto')}" th:errors="*{concepto}"
+           class="text-red-500 text-xs mt-1"></p>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Importe (€) *</label>
+          <input type="number" th:field="*{importe}" step="0.01" min="0.01" required
+                 class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-800"/>
+          <p th:if="${#fields.hasErrors('importe')}" th:errors="*{importe}"
+             class="text-red-500 text-xs mt-1"></p>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Tipo *</label>
+          <select th:field="*{tipo}" required
+                  class="w-full border border-gray-300 rounded-lg px-3 py-2">
+            <option th:each="t : ${tipos}" th:value="${t}" th:text="${t}"></option>
+          </select>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
+          <input type="text" th:field="*{categoria}"
+                 class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-800"/>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Fecha *</label>
+          <input type="date" th:field="*{fecha}" required
+                 class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-800"/>
+          <p th:if="${#fields.hasErrors('fecha')}" th:errors="*{fecha}"
+             class="text-red-500 text-xs mt-1"></p>
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Notas</label>
+        <textarea th:field="*{notas}" rows="2"
+                  class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-800"></textarea>
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button type="submit"
+                class="bg-gray-900 text-white px-6 py-2 rounded-lg hover:bg-gray-700 transition">
+          Guardar
+        </button>
+        <a th:href="@{/contabilidad}"
+           class="px-6 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition">
+          Cancelar
+        </a>
+      </div>
+    </form>
+  </div>
+</section>
+</body>
+</html>

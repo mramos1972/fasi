@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: layout(~{::title}, ~{::section})}">
+<head><title>Documentos — FASI</title></head>
+<body>
+<section>
+  <div class="flex justify-between items-center mb-6">
+    <h2 class="text-2xl font-bold text-gray-800">📄 Documentos</h2>
+    <a th:href="@{/documentos/subir}"
+       class="bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition text-sm">
+      + Subir documento
+    </a>
+  </div>
+  <div class="bg-white rounded-xl shadow overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50 text-gray-600 uppercase text-xs">
+        <tr>
+          <th class="px-4 py-3 text-left">Nombre</th>
+          <th class="px-4 py-3 text-left">Categoría</th>
+          <th class="px-4 py-3 text-left">Tipo</th>
+          <th class="px-4 py-3 text-left">Tamaño</th>
+          <th class="px-4 py-3 text-left">Fecha</th>
+          <th class="px-4 py-3 text-left">Acciones</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        <tr th:each="d : ${documentos}" class="hover:bg-gray-50">
+          <td class="px-4 py-3 font-medium" th:text="${d.nombre}"></td>
+          <td class="px-4 py-3 text-gray-500" th:text="${d.categoria}"></td>
+          <td class="px-4 py-3 text-gray-500 text-xs" th:text="${d.tipo}"></td>
+          <td class="px-4 py-3 text-gray-500 text-xs"
+              th:text="${d.tamanioBytes != null} ? ${#numbers.formatDecimal(d.tamanioBytes / 1024.0, 1, 1)} + ' KB' : '-'"></td>
+          <td class="px-4 py-3 text-gray-500"
+              th:text="${#temporals.format(d.createdAt, 'dd/MM/yyyy')}"></td>
+          <td class="px-4 py-3 flex gap-2">
+            <a th:href="@{/documentos/{id}/descargar(id=${d.id})}"
+               class="text-blue-600 hover:underline text-xs">Descargar</a>
+            <form th:action="@{/documentos/{id}/eliminar(id=${d.id})}" method="post"
+                  onsubmit="return confirm('¿Eliminar documento?')">
+              <button type="submit" class="text-red-500 hover:underline text-xs">Eliminar</button>
+            </form>
+          </td>
+        </tr>
+        <tr th:if="${#lists.isEmpty(documentos)}">
+          <td colspan="6" class="px-4 py-8 text-center text-gray-400">
+            No hay documentos. ¡Sube el primero!
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+</body>
+</html>

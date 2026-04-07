@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: layout(~{::title}, ~{::section})}">
+<head><title>404 — FASI</title></head>
+<body>
+<section class="text-center py-20">
+  <p class="text-8xl mb-4">🔍</p>
+  <h2 class="text-3xl font-bold text-gray-800 mb-2">Página no encontrada</h2>
+  <p class="text-gray-500 mb-6" th:text="${error}">El recurso solicitado no existe.</p>
+  <a th:href="@{/}"
+     class="bg-gray-900 text-white px-6 py-2 rounded-lg hover:bg-gray-700 transition">
+    Volver al inicio
+  </a>
+</section>
+</body>
+</html>

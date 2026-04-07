@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: layout(~{::title}, ~{::section})}">
+<head><title>Agenda — FASI</title></head>
+<body>
+<section>
+  <div class="flex justify-between items-center mb-4">
+    <h2 class="text-2xl font-bold text-gray-800">📇 Agenda</h2>
+    <a th:href="@{/agenda/nuevo}"
+       class="bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition text-sm">
+      + Nuevo contacto
+    </a>
+  </div>
+  <form th:action="@{/agenda}" method="get" class="mb-4 flex gap-2">
+    <input type="text" name="q" th:value="${q}" placeholder="Buscar por nombre o apellidos..."
+           class="border border-gray-300 rounded-lg px-3 py-2 text-sm w-72 focus:outline-none focus:ring-2 focus:ring-gray-800"/>
+    <button type="submit"
+            class="bg-gray-200 px-4 py-2 rounded-lg text-sm hover:bg-gray-300 transition">
+      Buscar
+    </button>
+    <a th:href="@{/agenda}"
+       class="px-4 py-2 rounded-lg text-sm border border-gray-300 hover:bg-gray-50 transition">
+      Limpiar
+    </a>
+  </form>
+  <div class="bg-white rounded-xl shadow overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50 text-gray-600 uppercase text-xs">
+        <tr>
+          <th class="px-4 py-3 text-left">Nombre</th>
+          <th class="px-4 py-3 text-left">Apellidos</th>
+          <th class="px-4 py-3 text-left">Email</th>
+          <th class="px-4 py-3 text-left">Teléfono</th>
+          <th class="px-4 py-3 text-left">Acciones</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        <tr th:each="c : ${contactos}" class="hover:bg-gray-50">
+          <td class="px-4 py-3 font-medium" th:text="${c.nombre}"></td>
+          <td class="px-4 py-3" th:text="${c.apellidos}"></td>
+          <td class="px-4 py-3 text-gray-500" th:text="${c.email}"></td>
+          <td class="px-4 py-3 text-gray-500" th:text="${c.telefono}"></td>
+          <td class="px-4 py-3 flex gap-2">
+            <a th:href="@{/agenda/{id}/editar(id=${c.id})}"
+               class="text-blue-600 hover:underline text-xs">Editar</a>
+            <form th:action="@{/agenda/{id}/eliminar(id=${c.id})}" method="post"
+                  onsubmit="return confirm('¿Eliminar contacto?')">
+              <button type="submit" class="text-red-500 hover:underline text-xs">Eliminar</button>
+            </form>
+          </td>
+        </tr>
+        <tr th:if="${#lists.isEmpty(contactos)}">
+          <td colspan="5" class="px-4 py-8 text-center text-gray-400">
+            No hay contactos. ¡Añade el primero!
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+</body>
+</html>

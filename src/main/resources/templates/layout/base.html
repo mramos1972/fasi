@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security"
+      th:fragment="layout(title, content)">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title th:replace="${title}">FASI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex">
+  <aside class="w-64 bg-gray-900 text-white flex flex-col min-h-screen fixed">
+    <div class="p-6 border-b border-gray-700">
+      <span class="text-2xl font-bold tracking-wide">⚡ FASI</span>
+      <p class="text-xs text-gray-400 mt-1">Full Assistant</p>
+    </div>
+    <nav class="flex-1 p-4 space-y-1">
+      <a th:href="@{/}"             class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">🏠 <span>Dashboard</span></a>
+      <a th:href="@{/agenda}"       class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">📇 <span>Agenda</span></a>
+      <a th:href="@{/tareas}"       class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">✅ <span>Tareas</span></a>
+      <a th:href="@{/contabilidad}" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">💰 <span>Contabilidad</span></a>
+      <a th:href="@{/documentos}"   class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">📄 <span>Documentos</span></a>
+      <a th:href="@{/fotos}"        class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">🖼️ <span>Fotos</span></a>
+    </nav>
+    <div class="p-4 border-t border-gray-700 text-sm text-gray-400">
+      <span sec:authentication="name">usuario</span>
+      <form th:action="@{/logout}" method="post" class="inline ml-2">
+        <button type="submit" class="text-red-400 hover:text-red-300">salir</button>
+      </form>
+    </div>
+  </aside>
+  <main class="ml-64 flex-1 p-8">
+    <th:block th:replace="${content}"/>
+  </main>
+</body>
+</html>
