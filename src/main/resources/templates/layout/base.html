@@ -11,21 +11,37 @@
 </head>
 <body class="bg-gray-100 min-h-screen">
 
-  <!-- ═══ TOPBAR MÓVIL (visible solo en móvil) ═══ -->
-  <header class="lg:hidden bg-gray-900 text-white flex items-center justify-between px-4 py-3 sticky top-0 z-50">
-    <span class="text-xl font-bold">⚡ FASI</span>
-    <button onclick="document.getElementById('sidebar').classList.toggle('hidden')"
-            class="text-white text-2xl focus:outline-none">☰</button>
+  <!-- ═══ TOPBAR MÓVIL ═══ -->
+  <header class="lg:hidden bg-gray-900 text-white sticky top-0 z-50">
+    <div class="flex items-center justify-between px-4 py-3">
+      <span class="text-xl font-bold">⚡ FASI</span>
+      <button id="menu-btn"
+              onclick="document.getElementById('mobile-menu').classList.toggle('hidden')"
+              class="text-white text-2xl focus:outline-none">☰</button>
+    </div>
+
+    <!-- Menú desplegable hacia abajo -->
+    <nav id="mobile-menu" class="hidden bg-gray-800 px-4 pb-4 space-y-1">
+      <a th:href="@{/}"             class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">🏠 <span>Dashboard</span></a>
+      <a th:href="@{/agenda}"       class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">📇 <span>Agenda</span></a>
+      <a th:href="@{/tareas}"       class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">✅ <span>Tareas</span></a>
+      <a th:href="@{/contabilidad}" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">💰 <span>Contabilidad</span></a>
+      <a th:href="@{/documentos}"   class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">📄 <span>Documentos</span></a>
+      <a th:href="@{/fotos}"        class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">🖼️ <span>Fotos</span></a>
+      <div class="border-t border-gray-700 pt-2 mt-2 text-sm text-gray-400">
+        <span sec:authentication="name">usuario</span>
+        <form th:action="@{/logout}" method="post" class="inline ml-2">
+          <button type="submit" class="text-red-400 hover:text-red-300">salir</button>
+        </form>
+      </div>
+    </nav>
   </header>
 
   <div class="flex">
 
-    <!-- ═══ SIDEBAR ═══ -->
-    <!-- móvil: oculta por defecto, se abre con el botón -->
-    <!-- desktop: siempre visible y fija -->
-    <aside id="sidebar"
-           class="hidden lg:flex lg:flex-col w-64 bg-gray-900 text-white min-h-screen lg:fixed lg:top-0 lg:left-0 z-40">
-      <div class="p-6 border-b border-gray-700 hidden lg:block">
+    <!-- ═══ SIDEBAR DESKTOP (solo lg+) ═══ -->
+    <aside class="hidden lg:flex lg:flex-col w-64 bg-gray-900 text-white min-h-screen fixed top-0 left-0 z-40">
+      <div class="p-6 border-b border-gray-700">
         <span class="text-2xl font-bold tracking-wide">⚡ FASI</span>
         <p class="text-xs text-gray-400 mt-1">Full Assistant</p>
       </div>
