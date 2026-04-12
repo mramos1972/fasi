@@ -16,12 +16,13 @@
     <div class="flex items-center justify-between px-4 py-3">
       <span class="text-xl font-bold">⚡ FASI</span>
       <button id="menu-btn"
-              onclick="document.getElementById('mobile-menu').classList.toggle('hidden')"
               class="text-white text-2xl focus:outline-none">☰</button>
     </div>
 
-    <!-- Menú desplegable hacia abajo -->
-    <nav id="mobile-menu" class="hidden bg-gray-800 px-4 pb-4 space-y-1">
+    <!-- ⭐ CAMBIO: relative en el header padre para que el absolute se ancle aquí -->
+    <!-- Menú flotante — NO empuja contenido -->
+    <nav id="mobile-menu"
+         class="hidden absolute left-0 right-0 bg-gray-800 px-4 pb-4 space-y-1 shadow-xl z-50">
       <a th:href="@{/}"             class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">🏠 <span>Dashboard</span></a>
       <a th:href="@{/agenda}"       class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">📇 <span>Agenda</span></a>
       <a th:href="@{/tareas}"       class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">✅ <span>Tareas</span></a>
@@ -36,6 +37,11 @@
       </div>
     </nav>
   </header>
+
+  <!-- ⭐ CAMBIO: overlay invisible que cubre toda la pantalla para cerrar al clicar fuera -->
+  <div id="menu-overlay"
+       class="hidden fixed inset-0 z-40 lg:hidden"
+       onclick="cerrarMenu()"></div>
 
   <div class="flex">
 
@@ -67,5 +73,28 @@
     </main>
 
   </div>
+
+  <!-- ⭐ CAMBIO: JavaScript limpio para abrir/cerrar menú -->
+  <script>
+    const menuBtn     = document.getElementById('menu-btn');
+    const mobileMenu  = document.getElementById('mobile-menu');
+    const overlay     = document.getElementById('menu-overlay');
+
+    function abrirMenu() {
+      mobileMenu.classList.remove('hidden');
+      overlay.classList.remove('hidden');
+    }
+
+    function cerrarMenu() {
+      mobileMenu.classList.add('hidden');
+      overlay.classList.add('hidden');
+    }
+
+    menuBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      mobileMenu.classList.contains('hidden') ? abrirMenu() : cerrarMenu();
+    });
+  </script>
+
 </body>
 </html>
