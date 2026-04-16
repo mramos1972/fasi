@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: layout(~{::title}, ~{::section})}">
+<head><title>Desarrollo — FASI</title></head>
+<body>
+<section>
+  <div class="flex justify-between items-center mb-6">
+    <h2 class="text-2xl font-bold text-gray-800">🛠️ Desarrollo</h2>
+    <a th:href="@{/desarrollo/nuevo}"
+       class="bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition text-sm">
+      + Nueva entrada
+    </a>
+  </div>
+  <div class="bg-white rounded-xl shadow overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50 text-gray-600 uppercase text-xs">
+        <tr>
+          <th class="px-4 py-3 text-left">Título</th>
+          <th class="px-4 py-3 text-left">Estado</th>
+          <th class="px-4 py-3 text-left">Creado</th>
+          <th class="px-4 py-3 text-left">Aplicado</th>
+          <th class="px-4 py-3 text-left">Acciones</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        <tr th:each="d : ${desarrollos}" class="hover:bg-gray-50">
+          <td class="px-4 py-3 font-medium" th:text="${d.titulo}"></td>
+          <td class="px-4 py-3">
+            <span th:text="${d.estado}"
+                  th:classappend="${d.estado.name() == 'APLICADO'}    ? 'bg-green-100 text-green-700'  :
+                                  (${d.estado.name() == 'DESCARTADO'} ? 'bg-red-100 text-red-700'      :
+                                  'bg-yellow-100 text-yellow-700')"
+                  class="px-2 py-1 rounded-full text-xs font-semibold"></span>
+          </td>
+          <td class="px-4 py-3 text-gray-500"
+              th:text="${#temporals.format(d.createdAt, 'dd/MM/yyyy HH:mm')}"></td>
+          <td class="px-4 py-3 text-gray-500"
+              th:text="${d.fechaAplicado != null} ? ${#temporals.format(d.fechaAplicado, 'dd/MM/yyyy HH:mm')} : '-'"></td>
+          <td class="px-4 py-3">
+            <div class="flex flex-wrap gap-2">
+              <a th:href="@{/desarrollo/{id}/editar(id=${d.id})}"
+                 class="text-blue-600 hover:underline text-xs">Editar</a>
+              <a th:if="${d.scriptGenerado != null and !#strings.isEmpty(d.scriptGenerado)}"
+                 th:href="@{/desarrollo/{id}/descargar(id=${d.id})}"
+                 class="text-indigo-600 hover:underline text-xs">⬇ Script</a>
+              <form th:if="${d.estado.name() == 'PENDIENTE'}"
+                    th:action="@{/desarrollo/{id}/aplicar(id=${d.id})}" method="post">
+                <button type="submit" class="text-green-600 hover:underline text-xs">✔ Aplicado</button>
+              </form>
+              <form th:if="${d.estado.name() == 'PENDIENTE'}"
+                    th:action="@{/desarrollo/{id}/descartar(id=${d.id})}" method="post"
+                    onsubmit="return confirm('¿Descartar este cambio?')">
+                <button type="submit" class="text-orange-500 hover:underline text-xs">✖ Descartar</button>
+              </form>
+              <form th:action="@{/desarrollo/{id}/eliminar(id=${d.id})}" method="post"
+                    onsubmit="return confirm('¿Eliminar entrada?')">
+                <button type="submit" class="text-red-500 hover:underline text-xs">Eliminar</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        <tr th:if="${#lists.isEmpty(desarrollos)}">
+          <td colspan="5" class="px-4 py-8 text-center text-gray-400">
+            No hay entradas de desarrollo todavía.
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+</body>
+</html>

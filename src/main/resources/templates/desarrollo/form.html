@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: layout(~{::title}, ~{::section})}">
+<head><title>Desarrollo — FASI</title></head>
+<body>
+<section>
+  <h2 class="text-2xl font-bold text-gray-800 mb-6"
+      th:text="${desarrollo.id == null} ? 'Nueva entrada de desarrollo' : 'Editar entrada'"></h2>
+  <div class="bg-white rounded-xl shadow p-8 max-w-3xl">
+    <form th:action="${desarrollo.id == null} ? @{/desarrollo} : @{/desarrollo/{id}(id=${desarrollo.id})}"
+          th:object="${desarrollo}" method="post" class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Título *</label>
+        <input type="text" th:field="*{titulo}" required
+               class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-800"/>
+        <p th:if="${#fields.hasErrors('titulo')}" th:errors="*{titulo}"
+           class="text-red-500 text-xs mt-1"></p>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Descripción / Prompt</label>
+        <textarea th:field="*{descripcion}" rows="5"
+                  placeholder="Describe aquí qué cambios quieres implementar..."
+                  class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-800 font-mono text-sm"></textarea>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Estado</label>
+        <select th:field="*{estado}"
+                class="w-full border border-gray-300 rounded-lg px-3 py-2">
+          <option th:each="e : ${estados}" th:value="${e}" th:text="${e}"></option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Script generado</label>
+        <textarea th:field="*{scriptGenerado}" rows="12"
+                  placeholder="#!/bin/bash&#10;# Pega aquí el script generado por la IA..."
+                  class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-800 font-mono text-xs bg-gray-50"></textarea>
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button type="submit"
+                class="bg-gray-900 text-white px-6 py-2 rounded-lg hover:bg-gray-700 transition">
+          Guardar
+        </button>
+        <a th:href="@{/desarrollo}"
+           class="px-6 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition">
+          Cancelar
+        </a>
+      </div>
+    </form>
+  </div>
+</section>
+</body>
+</html>
