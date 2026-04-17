@@ -5,7 +5,7 @@
 <body>
 <section>
   <div class="flex justify-between items-center mb-4">
-    <h2 class="text-2xl font-bold text-gray-800">📇 Agenda</h2>
+    <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100">📇 Agenda</h2>
     <a th:href="@{/agenda/nuevo}"
        class="bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition text-sm">
       + Nuevo contacto
@@ -23,9 +23,9 @@
       Limpiar
     </a>
   </form>
-  <div class="bg-white rounded-xl shadow overflow-hidden">
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
     <table class="w-full text-sm">
-      <thead class="bg-gray-50 text-gray-600 uppercase text-xs">
+      <thead class="bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 uppercase text-xs">
         <tr>
           <th class="px-4 py-3 text-left">Nombre</th>
           <th class="px-4 py-3 text-left">Apellidos</th>
@@ -34,8 +34,8 @@
           <th class="px-4 py-3 text-left">Acciones</th>
         </tr>
       </thead>
-      <tbody class="divide-y divide-gray-100">
-        <tr th:each="c : ${contactos}" class="hover:bg-gray-50">
+      <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+        <tr th:each="c : ${contactos}" class="hover:bg-gray-50 dark:hover:bg-gray-700">
           <td class="px-4 py-3 font-medium" th:text="${c.nombre}"></td>
           <td class="px-4 py-3" th:text="${c.apellidos}"></td>
           <td class="px-4 py-3 text-gray-500" th:text="${c.email}"></td>
