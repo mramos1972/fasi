@@ -1,3 +1,57 @@
+#!/bin/bash
+set -e
+TMPL="src/main/resources/templates"
+BASE_HTML="$TMPL/layout/base.html"
+
+echo "🔧 Aplicando correcciones al módulo IA..."
+
+# ════════════════════════════════════════════════════════════
+# FIX 1 — Limpiar duplicados en el menú
+# Regenerar base.html con los enlaces correctos (1 vez cada uno)
+# ════════════════════════════════════════════════════════════
+
+# Eliminar todas las líneas duplicadas de Asistente IA que metió el sed
+# y dejar solo una entrada limpia en cada menú (desktop + móvil)
+
+# Sidebar DESKTOP — quitar todas las líneas de IA y poner solo una
+python3 - << 'PYEOF'
+import re
+
+with open("src/main/resources/templates/layout/base.html", "r") as f:
+    content = f.read()
+
+# Eliminar TODAS las líneas que contengan /ia del menú
+ia_line_pattern = r'\n\s*<a th:href="@\{/ia\}"[^>]*>.*?</a>'
+content_clean = re.sub(ia_line_pattern, '', content)
+
+# Insertar UNA línea en sidebar desktop (después del enlace /desarrollo en el aside)
+desktop_anchor = '<a th:href="@{/desarrollo}"   class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">🛠️ <span>Desarrollo</span></a>'
+desktop_replacement = desktop_anchor + '\n        <a th:href="@{/ia}"            class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">🤖 <span>Asistente IA</span></a>'
+
+# Solo reemplazar la PRIMERA ocurrencia (sidebar desktop dentro de <aside>)
+content_fixed = content_clean.replace(desktop_anchor, desktop_replacement, 1)
+
+# Insertar UNA línea en menú móvil (segunda ocurrencia de /desarrollo)
+mobile_anchor = '<a th:href="@{/desarrollo}"   class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">🛠️ <span>Desarrollo</span></a>'
+parts = content_fixed.split(mobile_anchor)
+if len(parts) >= 3:
+    mobile_ia = '\n      <a th:href="@{/ia}"            class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">🤖 <span>Asistente IA</span></a>'
+    content_fixed = parts[0] + mobile_anchor + mobile_ia + mobile_anchor.join(parts[1:]) if len(parts) == 2 else \
+                    mobile_anchor.join(parts[:2]) + mobile_ia + mobile_anchor + mobile_anchor.join(parts[2:])
+
+with open("src/main/resources/templates/layout/base.html", "w") as f:
+    f.write(content_fixed)
+
+print("✅ Menú corregido — una sola entrada Asistente IA")
+PYEOF
+
+# ════════════════════════════════════════════════════════════
+# FIX 2 — Reescribir chat.html con HTMX corregido
+# El problema: hx-swap="beforeend" con fragmento :: no funciona bien juntos
+# Solución: separar el chat en dos partes — lista de mensajes + form
+# ════════════════════════════════════════════════════════════
+
+cat > "$TMPL/ia/chat.html" << 'EOF'
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org"
       th:replace="~{layout/base :: layout(~{::title}, ~{::section})}">
@@ -271,3 +325,16 @@ window.addEventListener('load', () => {
 
 </body>
 </html>
+EOF
+
+echo ""
+echo "════════════════════════════════════════════"
+echo "✅ Correcciones aplicadas"
+echo "════════════════════════════════════════════"
+echo "  Fix 1: Menú con entrada duplicada → corregido"
+echo "  Fix 2: HTMX reemplazado por fetch() nativo"
+echo "         (más robusto para respuestas lentas de IA)"
+echo ""
+echo "🚀 Reinicia la app:"
+echo "   ./mvnw spring-boot:run"
+echo "════════════════════════════════════════════"
