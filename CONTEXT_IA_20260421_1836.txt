@@ -1,0 +1,2411 @@
+======================================================
+  FASI — CONTEXTO COMPLETO PARA IA
+  Generado: 2026-04-21 18:36
+======================================================
+
+══ ESTRUCTURA DEL PROYECTO ══
+.
+├── src
+│   ├── main
+│   │   ├── java
+│   │   │   └── com
+│   │   │       └── miempresa
+│   │   └── resources
+│   │       ├── db
+│   │       │   └── migration
+│   │       ├── static
+│   │       │   ├── css
+│   │       │   ├── images
+│   │       │   └── js
+│   │       ├── templates
+│   │       │   ├── agenda
+│   │       │   ├── contabilidad
+│   │       │   ├── desarrollo
+│   │       │   ├── documentos
+│   │       │   ├── error
+│   │       │   ├── fotos
+│   │       │   ├── layout
+│   │       │   ├── tareas
+│   │       │   ├── index.html
+│   │       │   └── login.html
+│   │       ├── application-dev.properties
+│   │       ├── application-prod.properties
+│   │       └── application.properties
+│   └── test
+│       └── java
+│           └── com
+│               └── miempresa
+├── target
+│   ├── classes
+│   │   ├── com
+│   │   │   └── miempresa
+│   │   │       └── fasi
+│   │   ├── db
+│   │   │   └── migration
+│   │   │       ├── V1__init_schema.sql
+│   │   │       ├── V2__agenda.sql
+│   │   │       ├── V3__tareas.sql
+│   │   │       ├── V4__contabilidad.sql
+│   │   │       ├── V5__documentos.sql
+│   │   │       └── V6__desarrollo.sql
+│   │   ├── static
+│   │   │   └── js
+│   │   │       ├── htmx.min.js
+│   │   │       └── tailwind.min.js
+│   │   ├── templates
+│   │   │   ├── agenda
+│   │   │   │   ├── form.html
+│   │   │   │   └── list.html
+│   │   │   ├── contabilidad
+│   │   │   │   ├── form.html
+│   │   │   │   └── list.html
+│   │   │   ├── desarrollo
+│   │   │   │   ├── form.html
+│   │   │   │   └── list.html
+│   │   │   ├── documentos
+│   │   │   │   ├── form.html
+│   │   │   │   └── list.html
+│   │   │   ├── error
+│   │   │   │   ├── 404.html
+│   │   │   │   └── 500.html
+│   │   │   ├── fotos
+│   │   │   │   └── stub.html
+│   │   │   ├── layout
+│   │   │   │   └── base.html
+│   │   │   ├── tareas
+│   │   │   │   ├── form.html
+│   │   │   │   └── list.html
+│   │   │   ├── index.html
+│   │   │   └── login.html
+│   │   ├── application-dev.properties
+│   │   ├── application-prod.properties
+│   │   └── application.properties
+│   ├── generated-sources
+│   │   └── annotations
+│   ├── generated-test-sources
+│   │   └── test-annotations
+│   └── test-classes
+│       └── com
+│           └── miempresa
+│               └── fasi
+├── CONTEXT_IA.txt
+├── CONTEXT_IA_20260417_0718.txt
+├── CONTEXT_IA_20260419_1848.txt
+├── CONTEXT_IA_20260421_1836.txt
+├── Dockerfile
+├── HELP.md
+├── Jenkinsfile
+├── apply_changes.sh
+├── apply_changes_20260417_0718.sh
+├── get-context.sh
+├── mvnw
+├── mvnw.cmd
+└── pom.xml
+
+51 directories, 45 files
+
+══ MIGRACIONES FLYWAY (estado BD) ══
+src/main/resources/db/migration/V1__init_schema.sql
+src/main/resources/db/migration/V2__agenda.sql
+src/main/resources/db/migration/V3__tareas.sql
+src/main/resources/db/migration/V4__contabilidad.sql
+src/main/resources/db/migration/V5__documentos.sql
+src/main/resources/db/migration/V6__desarrollo.sql
+--- Última migración:
+src/main/resources/db/migration/V6__desarrollo.sql
+
+══ FICHEROS DE CONFIGURACIÓN ══
+
+--- pom.xml ---
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>3.2.5</version>
+    <relativePath/>
+  </parent>
+  <groupId>com.miempresa</groupId>
+  <artifactId>fasi</artifactId>
+  <version>0.0.1-SNAPSHOT</version>
+  <name>fasi</name>
+  <description>Full Assistant — agenda, tareas, contabilidad, documentos</description>
+  <properties>
+    <java.version>17</java.version>
+    <springdoc.version>2.5.0</springdoc.version>
+    <finalName>app</finalName>
+  </properties>
+  <dependencies>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-thymeleaf</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-security</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.thymeleaf.extras</groupId>
+      <artifactId>thymeleaf-extras-springsecurity6</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-validation</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springdoc</groupId>
+      <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+      <version>${springdoc.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
+      <optional>true</optional>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.security</groupId>
+      <artifactId>spring-security-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+  <build>
+    <finalName>${finalName}</finalName>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+        <configuration>
+          <excludes>
+            <exclude>
+              <groupId>org.projectlombok</groupId>
+              <artifactId>lombok</artifactId>
+            </exclude>
+          </excludes>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>
+
+--- Dockerfile ---
+FROM eclipse-temurin:17-jre-alpine
+WORKDIR /app
+RUN addgroup -S fasi && adduser -S fasi -G fasi
+COPY target/app.jar app.jar
+RUN mkdir -p /uploads && chown fasi:fasi /uploads
+USER fasi
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "app.jar"]
+
+--- Jenkinsfile ---
+@Library('jenkins-shared-library') _
+mavenPipeline(
+  appName: 'fasi'
+)
+
+--- src/main/resources/application.properties ---
+spring.application.name=fasi
+spring.profiles.active=${SPRING_PROFILE:dev}
+spring.jpa.open-in-view=false
+spring.jpa.hibernate.ddl-auto=validate
+spring.flyway.enabled=true
+spring.flyway.locations=classpath:db/migration
+spring.thymeleaf.cache=false
+springdoc.swagger-ui.path=/swagger-ui.html
+springdoc.api-docs.path=/api-docs
+fasi.upload.dir=${UPLOAD_DIR:./uploads}
+
+--- src/main/resources/application-dev.properties ---
+spring.datasource.url=jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:fasi_dev}
+spring.datasource.username=${DB_USER:fasi}
+spring.datasource.password=${DB_PASS:fasi}
+spring.datasource.driver-class-name=org.postgresql.Driver
+spring.jpa.show-sql=true
+spring.jpa.properties.hibernate.format_sql=true
+logging.level.com.miempresa.fasi=DEBUG
+server.address=0.0.0.0
+
+
+--- src/main/resources/application-prod.properties ---
+spring.datasource.url=jdbc:postgresql://${DB_HOST}:${DB_PORT:5432}/${DB_NAME}
+spring.datasource.username=${DB_USER}
+spring.datasource.password=${DB_PASS}
+spring.datasource.driver-class-name=org.postgresql.Driver
+spring.thymeleaf.cache=true
+logging.level.com.miempresa.fasi=INFO
+
+══ JAVA — TODOS LOS FICHEROS FUENTE ══
+
+--- src/main/java/com/miempresa/fasi/FasiApplication.java ---
+package com.miempresa.fasi;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
+
+@SpringBootApplication
+@EnableJpaAuditing
+public class FasiApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(FasiApplication.class, args);
+    }
+}
+
+--- src/main/java/com/miempresa/fasi/HomeController.java ---
+package com.miempresa.fasi;
+
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.GetMapping;
+
+@Controller
+public class HomeController {
+
+    @GetMapping("/")
+    public String home() {
+        return "index";
+    }
+
+    @GetMapping("/login")
+    public String login() {
+        return "login";
+    }
+}
+
+--- src/main/java/com/miempresa/fasi/agenda/Contacto.java ---
+package com.miempresa.fasi.agenda;
+
+import com.miempresa.fasi.common.BaseEntity;
+import jakarta.persistence.*;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import lombok.*;
+
+@Entity
+@Table(name = "contactos")
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+public class Contacto extends BaseEntity {
+
+    @NotBlank
+    @Column(nullable = false)
+    private String nombre;
+
+    private String apellidos;
+
+    @Email
+    private String email;
+
+    private String telefono;
+
+    @Column(columnDefinition = "TEXT")
+    private String notas;
+}
+
+--- src/main/java/com/miempresa/fasi/agenda/ContactoController.java ---
+package com.miempresa.fasi.agenda;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.validation.BindingResult;
+import org.springframework.web.bind.annotation.*;
+
+import jakarta.validation.Valid;
+import java.util.UUID;
+
+@Controller
+@RequestMapping("/agenda")
+@RequiredArgsConstructor
+public class ContactoController {
+
+    private final ContactoService service;
+
+    @GetMapping
+    public String list(@RequestParam(required = false) String q, Model model) {
+        model.addAttribute("contactos", q != null && !q.isBlank()
+            ? service.search(q) : service.findAll());
+        model.addAttribute("q", q);
+        return "agenda/list";
+    }
+
+    @GetMapping("/nuevo")
+    public String newForm(Model model) {
+        model.addAttribute("contacto", new Contacto());
+        return "agenda/form";
+    }
+
+    @GetMapping("/{id}/editar")
+    public String editForm(@PathVariable UUID id, Model model) {
+        model.addAttribute("contacto", service.findById(id));
+        return "agenda/form";
+    }
+
+    @PostMapping
+    public String save(@Valid @ModelAttribute Contacto contacto, BindingResult br) {
+        if (br.hasErrors()) return "agenda/form";
+        service.save(contacto);
+        return "redirect:/agenda";
+    }
+
+    @PostMapping("/{id}")
+    public String update(@PathVariable UUID id,
+                         @Valid @ModelAttribute Contacto contacto, BindingResult br) {
+        if (br.hasErrors()) return "agenda/form";
+        service.update(id, contacto);
+        return "redirect:/agenda";
+    }
+
+    @PostMapping("/{id}/eliminar")
+    public String delete(@PathVariable UUID id) {
+        service.delete(id);
+        return "redirect:/agenda";
+    }
+}
+
+--- src/main/java/com/miempresa/fasi/agenda/ContactoRepository.java ---
+package com.miempresa.fasi.agenda;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.UUID;
+
+@Repository
+public interface ContactoRepository extends JpaRepository<Contacto, UUID> {
+    List<Contacto> findByNombreContainingIgnoreCaseOrApellidosContainingIgnoreCase(
+        String nombre, String apellidos);
+    List<Contacto> findAllByOrderByApellidosAscNombreAsc();
+}
+
+--- src/main/java/com/miempresa/fasi/agenda/ContactoService.java ---
+package com.miempresa.fasi.agenda;
+
+import jakarta.persistence.EntityNotFoundException;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class ContactoService {
+
+    private final ContactoRepository repo;
+
+    public List<Contacto> findAll() {
+        return repo.findAllByOrderByApellidosAscNombreAsc();
+    }
+
+    public List<Contacto> search(String q) {
+        return repo.findByNombreContainingIgnoreCaseOrApellidosContainingIgnoreCase(q, q);
+    }
+
+    public Contacto findById(UUID id) {
+        return repo.findById(id)
+            .orElseThrow(() -> new EntityNotFoundException("Contacto no encontrado: " + id));
+    }
+
+    @Transactional
+    public Contacto save(Contacto c) { return repo.save(c); }
+
+    @Transactional
+    public Contacto update(UUID id, Contacto datos) {
+        Contacto c = findById(id);
+        c.setNombre(datos.getNombre());
+        c.setApellidos(datos.getApellidos());
+        c.setEmail(datos.getEmail());
+        c.setTelefono(datos.getTelefono());
+        c.setNotas(datos.getNotas());
+        return repo.save(c);
+    }
+
+    @Transactional
+    public void delete(UUID id) { repo.deleteById(id); }
+}
+
+--- src/main/java/com/miempresa/fasi/common/ApiResponse.java ---
+package com.miempresa.fasi.common;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import lombok.Getter;
+
+import java.time.LocalDateTime;
+
+@Getter
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class ApiResponse<T> {
+
+    private final boolean success;
+    private final String  message;
+    private final T       data;
+    private final LocalDateTime timestamp = LocalDateTime.now();
+
+    private ApiResponse(boolean success, String message, T data) {
+        this.success = success;
+        this.message = message;
+        this.data    = data;
+    }
+
+    public static <T> ApiResponse<T> ok(T data) {
+        return new ApiResponse<>(true, null, data);
+    }
+
+    public static <T> ApiResponse<T> ok(String message, T data) {
+        return new ApiResponse<>(true, message, data);
+    }
+
+    public static <T> ApiResponse<T> error(String message) {
+        return new ApiResponse<>(false, message, null);
+    }
+}
+
+--- src/main/java/com/miempresa/fasi/common/BaseEntity.java ---
+package com.miempresa.fasi.common;
+
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+@Getter
+@Setter
+@MappedSuperclass
+@EntityListeners(AuditingEntityListener.class)
+public abstract class BaseEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(updatable = false, nullable = false)
+    private UUID id;
+
+    @CreatedDate
+    @Column(updatable = false, nullable = false)
+    private LocalDateTime createdAt;
+
+    @LastModifiedDate
+    @Column(nullable = false)
+    private LocalDateTime updatedAt;
+}
+
+--- src/main/java/com/miempresa/fasi/common/GlobalExceptionHandler.java ---
+package com.miempresa.fasi.common;
+
+import jakarta.persistence.EntityNotFoundException;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.stream.Collectors;
+
+@Slf4j
+@ControllerAdvice
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(EntityNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public String notFound(EntityNotFoundException ex, Model model) {
+        model.addAttribute("error", ex.getMessage());
+        return "error/404";
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ResponseBody
+    public ApiResponse<Void> validationError(MethodArgumentNotValidException ex) {
+        String msg = ex.getBindingResult().getFieldErrors().stream()
+            .map(e -> e.getField() + ": " + e.getDefaultMessage())
+            .collect(Collectors.joining(", "));
+        return ApiResponse.error(msg);
+    }
+
+    @ExceptionHandler(Exception.class)
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    public String genericError(Exception ex, Model model) {
+        log.error("Error no controlado", ex);
+        model.addAttribute("error", "Error interno del servidor");
+        return "error/500";
+    }
+}
+
+--- src/main/java/com/miempresa/fasi/config/OpenApiConfig.java ---
+package com.miempresa.fasi.config;
+
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.info.Info;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class OpenApiConfig {
+
+    @Bean
+    public OpenAPI fasiOpenAPI() {
+        return new OpenAPI()
+            .info(new Info()
+                .title("FASI API")
+                .description("Full Assistant — API REST")
+                .version("0.0.1-SNAPSHOT"));
+    }
+}
+
+--- src/main/java/com/miempresa/fasi/config/SecurityConfig.java ---
+package com.miempresa.fasi.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.security.web.SecurityFilterChain;
+
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/css/**", "/js/**", "/images/**", "/webjars/**").permitAll()
+                .requestMatchers("/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                .anyRequest().authenticated()
+            )
+            .formLogin(form -> form
+                .loginPage("/login")
+                .defaultSuccessUrl("/", true)
+                .permitAll()
+            )
+            .logout(logout -> logout
+                .logoutSuccessUrl("/login?logout")
+                .permitAll()
+            );
+        return http.build();
+    }
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public UserDetailsService userDetailsService(PasswordEncoder encoder) {
+        var admin = User.builder()
+            .username("admin")
+            .password(encoder.encode("admin"))
+            .roles("ADMIN")
+            .build();
+        return new InMemoryUserDetailsManager(admin);
+    }
+}
+
+--- src/main/java/com/miempresa/fasi/contabilidad/Movimiento.java ---
+package com.miempresa.fasi.contabilidad;
+
+import com.miempresa.fasi.common.BaseEntity;
+import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+import lombok.*;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+
+@Entity
+@Table(name = "movimientos")
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+public class Movimiento extends BaseEntity {
+
+    @NotBlank
+    @Column(nullable = false)
+    private String concepto;
+
+    @NotNull @Positive
+    @Column(nullable = false, precision = 12, scale = 2)
+    private BigDecimal importe;
+
+    @NotNull
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private TipoMovimiento tipo;
+
+    private String categoria;
+
+    @NotNull
+    @Column(nullable = false)
+    private LocalDate fecha;
+
+    @Column(columnDefinition = "TEXT")
+    private String notas;
+
+    public enum TipoMovimiento { INGRESO, GASTO }
+}
+
+--- src/main/java/com/miempresa/fasi/contabilidad/MovimientoController.java ---
+package com.miempresa.fasi.contabilidad;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.validation.BindingResult;
+import org.springframework.web.bind.annotation.*;
+
+import jakarta.validation.Valid;
+import java.util.UUID;
+
+@Controller
+@RequestMapping("/contabilidad")
+@RequiredArgsConstructor
+public class MovimientoController {
+
+    private final MovimientoService service;
+
+    @GetMapping
+    public String list(Model model) {
+        model.addAttribute("movimientos", service.findAll());
+        model.addAttribute("resumen", service.resumen());
+        model.addAttribute("tipos", Movimiento.TipoMovimiento.values());
+        return "contabilidad/list";
+    }
+
+    @GetMapping("/nuevo")
+    public String newForm(Model model) {
+        model.addAttribute("movimiento", new Movimiento());
+        model.addAttribute("tipos", Movimiento.TipoMovimiento.values());
+        return "contabilidad/form";
+    }
+
+    @GetMapping("/{id}/editar")
+    public String editForm(@PathVariable UUID id, Model model) {
+        model.addAttribute("movimiento", service.findById(id));
+        model.addAttribute("tipos", Movimiento.TipoMovimiento.values());
+        return "contabilidad/form";
+    }
+
+    @PostMapping
+    public String save(@Valid @ModelAttribute Movimiento movimiento, BindingResult br, Model model) {
+        if (br.hasErrors()) {
+            model.addAttribute("tipos", Movimiento.TipoMovimiento.values());
+            return "contabilidad/form";
+        }
+        service.save(movimiento);
+        return "redirect:/contabilidad";
+    }
+
+    @PostMapping("/{id}")
+    public String update(@PathVariable UUID id,
+                         @Valid @ModelAttribute Movimiento movimiento,
+                         BindingResult br, Model model) {
+        if (br.hasErrors()) {
+            model.addAttribute("tipos", Movimiento.TipoMovimiento.values());
+            return "contabilidad/form";
+        }
+        service.update(id, movimiento);
+        return "redirect:/contabilidad";
+    }
+
+    @PostMapping("/{id}/eliminar")
+    public String delete(@PathVariable UUID id) {
+        service.delete(id);
+        return "redirect:/contabilidad";
+    }
+}
+
+--- src/main/java/com/miempresa/fasi/contabilidad/MovimientoRepository.java ---
+package com.miempresa.fasi.contabilidad;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.stereotype.Repository;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.UUID;
+
+@Repository
+public interface MovimientoRepository extends JpaRepository<Movimiento, UUID> {
+    List<Movimiento> findAllByOrderByFechaDesc();
+    List<Movimiento> findByFechaBetweenOrderByFechaDesc(LocalDate desde, LocalDate hasta);
+
+    @Query("SELECT COALESCE(SUM(m.importe),0) FROM Movimiento m WHERE m.tipo = :tipo")
+    BigDecimal sumByTipo(Movimiento.TipoMovimiento tipo);
+}
+
+--- src/main/java/com/miempresa/fasi/contabilidad/MovimientoService.java ---
+package com.miempresa.fasi.contabilidad;
+
+import jakarta.persistence.EntityNotFoundException;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class MovimientoService {
+
+    private final MovimientoRepository repo;
+
+    public List<Movimiento> findAll() { return repo.findAllByOrderByFechaDesc(); }
+
+    public List<Movimiento> findByRango(LocalDate desde, LocalDate hasta) {
+        return repo.findByFechaBetweenOrderByFechaDesc(desde, hasta);
+    }
+
+    public Movimiento findById(UUID id) {
+        return repo.findById(id)
+            .orElseThrow(() -> new EntityNotFoundException("Movimiento no encontrado: " + id));
+    }
+
+    public Map<String, BigDecimal> resumen() {
+        BigDecimal ingresos = repo.sumByTipo(Movimiento.TipoMovimiento.INGRESO);
+        BigDecimal gastos   = repo.sumByTipo(Movimiento.TipoMovimiento.GASTO);
+        return Map.of(
+            "ingresos", ingresos,
+            "gastos",   gastos,
+            "saldo",    ingresos.subtract(gastos)
+        );
+    }
+
+    @Transactional
+    public Movimiento save(Movimiento m) { return repo.save(m); }
+
+    @Transactional
+    public Movimiento update(UUID id, Movimiento datos) {
+        Movimiento m = findById(id);
+        m.setConcepto(datos.getConcepto());
+        m.setImporte(datos.getImporte());
+        m.setTipo(datos.getTipo());
+        m.setCategoria(datos.getCategoria());
+        m.setFecha(datos.getFecha());
+        m.setNotas(datos.getNotas());
+        return repo.save(m);
+    }
+
+    @Transactional
+    public void delete(UUID id) { repo.deleteById(id); }
+}
+
+--- src/main/java/com/miempresa/fasi/desarrollo/Desarrollo.java ---
+package com.miempresa.fasi.desarrollo;
+
+import com.miempresa.fasi.common.BaseEntity;
+import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import lombok.*;
+
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = "desarrollos")
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+public class Desarrollo extends BaseEntity {
+
+    @NotBlank
+    @Column(nullable = false)
+    private String titulo;
+
+    @Column(columnDefinition = "TEXT")
+    private String descripcion;
+
+    @NotNull
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private EstadoDesarrollo estado;
+
+    @Column(columnDefinition = "TEXT")
+    private String scriptGenerado;
+
+    private LocalDateTime fechaAplicado;
+
+    public enum EstadoDesarrollo { PENDIENTE, APLICADO, DESCARTADO }
+}
+
+--- src/main/java/com/miempresa/fasi/desarrollo/DesarrolloController.java ---
+package com.miempresa.fasi.desarrollo;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.validation.BindingResult;
+import org.springframework.web.bind.annotation.*;
+
+import jakarta.validation.Valid;
+import java.nio.charset.StandardCharsets;
+import java.util.UUID;
+
+@Controller
+@RequestMapping("/desarrollo")
+@RequiredArgsConstructor
+public class DesarrolloController {
+
+    private final DesarrolloService service;
+
+    @GetMapping
+    public String list(Model model) {
+        model.addAttribute("desarrollos", service.findAll());
+        model.addAttribute("estados", Desarrollo.EstadoDesarrollo.values());
+        return "desarrollo/list";
+    }
+
+    @GetMapping("/nuevo")
+    public String newForm(Model model) {
+        model.addAttribute("desarrollo", Desarrollo.builder()
+                .estado(Desarrollo.EstadoDesarrollo.PENDIENTE)
+                .build());
+        model.addAttribute("estados", Desarrollo.EstadoDesarrollo.values());
+        return "desarrollo/form";
+    }
+
+    @GetMapping("/{id}/editar")
+    public String editForm(@PathVariable UUID id, Model model) {
+        model.addAttribute("desarrollo", service.findById(id));
+        model.addAttribute("estados", Desarrollo.EstadoDesarrollo.values());
+        return "desarrollo/form";
+    }
+
+    @PostMapping
+    public String save(@Valid @ModelAttribute Desarrollo desarrollo, BindingResult br, Model model) {
+        if (br.hasErrors()) {
+            model.addAttribute("estados", Desarrollo.EstadoDesarrollo.values());
+            return "desarrollo/form";
+        }
+        service.save(desarrollo);
+        return "redirect:/desarrollo";
+    }
+
+    @PostMapping("/{id}")
+    public String update(@PathVariable UUID id,
+                         @Valid @ModelAttribute Desarrollo desarrollo,
+                         BindingResult br, Model model) {
+        if (br.hasErrors()) {
+            model.addAttribute("estados", Desarrollo.EstadoDesarrollo.values());
+            return "desarrollo/form";
+        }
+        service.update(id, desarrollo);
+        return "redirect:/desarrollo";
+    }
+
+    @PostMapping("/{id}/aplicar")
+    public String aplicar(@PathVariable UUID id) {
+        service.marcarAplicado(id);
+        return "redirect:/desarrollo";
+    }
+
+    @PostMapping("/{id}/descartar")
+    public String descartar(@PathVariable UUID id) {
+        service.marcarDescartado(id);
+        return "redirect:/desarrollo";
+    }
+
+    @GetMapping("/{id}/descargar")
+    public ResponseEntity<byte[]> descargarScript(@PathVariable UUID id) {
+        Desarrollo d = service.findById(id);
+        String script = d.getScriptGenerado() != null ? d.getScriptGenerado() : "#!/bin/bash\n# Sin script generado";
+        byte[] bytes = script.getBytes(StandardCharsets.UTF_8);
+        return ResponseEntity.ok()
+            .header(HttpHeaders.CONTENT_DISPOSITION,
+                    "attachment; filename=\"apply-" + d.getId() + ".sh\"")
+            .contentType(MediaType.parseMediaType("application/x-sh"))
+            .body(bytes);
+    }
+
+    @PostMapping("/{id}/eliminar")
+    public String delete(@PathVariable UUID id) {
+        service.delete(id);
+        return "redirect:/desarrollo";
+    }
+}
+
+--- src/main/java/com/miempresa/fasi/desarrollo/DesarrolloRepository.java ---
+package com.miempresa.fasi.desarrollo;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.UUID;
+
+@Repository
+public interface DesarrolloRepository extends JpaRepository<Desarrollo, UUID> {
+    List<Desarrollo> findAllByOrderByCreatedAtDesc();
+    List<Desarrollo> findByEstadoOrderByCreatedAtDesc(Desarrollo.EstadoDesarrollo estado);
+}
+
+--- src/main/java/com/miempresa/fasi/desarrollo/DesarrolloService.java ---
+package com.miempresa.fasi.desarrollo;
+
+import jakarta.persistence.EntityNotFoundException;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class DesarrolloService {
+
+    private final DesarrolloRepository repo;
+
+    public List<Desarrollo> findAll() {
+        return repo.findAllByOrderByCreatedAtDesc();
+    }
+
+    public List<Desarrollo> findByEstado(Desarrollo.EstadoDesarrollo estado) {
+        return repo.findByEstadoOrderByCreatedAtDesc(estado);
+    }
+
+    public Desarrollo findById(UUID id) {
+        return repo.findById(id)
+            .orElseThrow(() -> new EntityNotFoundException("Desarrollo no encontrado: " + id));
+    }
+
+    @Transactional
+    public Desarrollo save(Desarrollo d) {
+        if (d.getEstado() == null) {
+            d.setEstado(Desarrollo.EstadoDesarrollo.PENDIENTE);
+        }
+        return repo.save(d);
+    }
+
+    @Transactional
+    public Desarrollo update(UUID id, Desarrollo datos) {
+        Desarrollo d = findById(id);
+        d.setTitulo(datos.getTitulo());
+        d.setDescripcion(datos.getDescripcion());
+        d.setEstado(datos.getEstado());
+        d.setScriptGenerado(datos.getScriptGenerado());
+        return repo.save(d);
+    }
+
+    @Transactional
+    public Desarrollo marcarAplicado(UUID id) {
+        Desarrollo d = findById(id);
+        d.setEstado(Desarrollo.EstadoDesarrollo.APLICADO);
+        d.setFechaAplicado(LocalDateTime.now());
+        return repo.save(d);
+    }
+
+    @Transactional
+    public Desarrollo marcarDescartado(UUID id) {
+        Desarrollo d = findById(id);
+        d.setEstado(Desarrollo.EstadoDesarrollo.DESCARTADO);
+        return repo.save(d);
+    }
+
+    @Transactional
+    public void delete(UUID id) {
+        repo.deleteById(id);
+    }
+}
+
+--- src/main/java/com/miempresa/fasi/documentos/Documento.java ---
+package com.miempresa.fasi.documentos;
+
+import com.miempresa.fasi.common.BaseEntity;
+import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;
+import lombok.*;
+
+@Entity
+@Table(name = "documentos")
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+public class Documento extends BaseEntity {
+
+    @NotBlank
+    @Column(nullable = false)
+    private String nombre;
+
+    @Column(columnDefinition = "TEXT")
+    private String descripcion;
+
+    private String tipo;
+
+    @Column(nullable = false)
+    private String ruta;
+
+    private Long   tamanioBytes;
+    private String categoria;
+}
+
+--- src/main/java/com/miempresa/fasi/documentos/DocumentoController.java ---
+package com.miempresa.fasi.documentos;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
+import org.springframework.http.*;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.net.MalformedURLException;
+import java.nio.file.Paths;
+import java.util.UUID;
+
+@Controller
+@RequestMapping("/documentos")
+@RequiredArgsConstructor
+public class DocumentoController {
+
+    private final DocumentoService service;
+
+    @Value("${fasi.upload.dir:./uploads}")
+    private String uploadDir;
+
+    @GetMapping
+    public String list(Model model) {
+        model.addAttribute("documentos", service.findAll());
+        return "documentos/list";
+    }
+
+    @GetMapping("/subir")
+    public String uploadForm() { return "documentos/form"; }
+
+    @PostMapping("/subir")
+    public String upload(@RequestParam String nombre,
+                         @RequestParam(required = false) String descripcion,
+                         @RequestParam(required = false) String categoria,
+                         @RequestParam MultipartFile file) throws IOException {
+        service.upload(nombre, descripcion, categoria, file);
+        return "redirect:/documentos";
+    }
+
+    @GetMapping("/{id}/descargar")
+    public ResponseEntity<Resource> download(@PathVariable UUID id)
+            throws MalformedURLException {
+        Documento doc = service.findById(id);
+        Resource resource = new UrlResource(Paths.get(uploadDir, doc.getRuta()).toUri());
+        return ResponseEntity.ok()
+            .header(HttpHeaders.CONTENT_DISPOSITION,
+                    "attachment; filename=\"" + doc.getNombre() + "\"")
+            .contentType(MediaType.parseMediaType(
+                doc.getTipo() != null ? doc.getTipo() : "application/octet-stream"))
+            .body(resource);
+    }
+
+    @PostMapping("/{id}/eliminar")
+    public String delete(@PathVariable UUID id) throws IOException {
+        service.delete(id);
+        return "redirect:/documentos";
+    }
+}
+
+--- src/main/java/com/miempresa/fasi/documentos/DocumentoRepository.java ---
+package com.miempresa.fasi.documentos;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.UUID;
+
+@Repository
+public interface DocumentoRepository extends JpaRepository<Documento, UUID> {
+    List<Documento> findAllByOrderByCreatedAtDesc();
+    List<Documento> findByCategoriaIgnoreCaseOrderByCreatedAtDesc(String categoria);
+}
+
+--- src/main/java/com/miempresa/fasi/documentos/DocumentoService.java ---
+package com.miempresa.fasi.documentos;
+
+import jakarta.persistence.EntityNotFoundException;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.nio.file.*;
+import java.util.List;
+import java.util.UUID;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class DocumentoService {
+
+    private final DocumentoRepository repo;
+
+    @Value("${fasi.upload.dir:./uploads}")
+    private String uploadDir;
+
+    public List<Documento> findAll() { return repo.findAllByOrderByCreatedAtDesc(); }
+
+    public Documento findById(UUID id) {
+        return repo.findById(id)
+            .orElseThrow(() -> new EntityNotFoundException("Documento no encontrado: " + id));
+    }
+
+    @Transactional
+    public Documento upload(String nombre, String descripcion,
+                            String categoria, MultipartFile file) throws IOException {
+        Path dir = Paths.get(uploadDir);
+        Files.createDirectories(dir);
+        String filename = UUID.randomUUID() + "_" + file.getOriginalFilename();
+        Files.copy(file.getInputStream(), dir.resolve(filename),
+                   StandardCopyOption.REPLACE_EXISTING);
+        return repo.save(Documento.builder()
+            .nombre(nombre).descripcion(descripcion).categoria(categoria)
+            .tipo(file.getContentType()).ruta(filename).tamanioBytes(file.getSize())
+            .build());
+    }
+
+    @Transactional
+    public void delete(UUID id) {
+        Documento doc = findById(id);
+        try { Files.deleteIfExists(Paths.get(uploadDir, doc.getRuta())); }
+        catch (IOException e) { log.warn("No se pudo borrar: {}", doc.getRuta()); }
+        repo.deleteById(id);
+    }
+}
+
+--- src/main/java/com/miempresa/fasi/fotos/FotoStubController.java ---
+package com.miempresa.fasi.fotos;
+
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+@Controller
+@RequestMapping("/fotos")
+public class FotoStubController {
+
+    @GetMapping
+    public String stub(Model model) {
+        model.addAttribute("mensaje",
+            "Módulo de fotos disponible cuando se configure el almacenamiento en nube ☁️");
+        return "fotos/stub";
+    }
+}
+
+--- src/main/java/com/miempresa/fasi/tareas/Tarea.java ---
+package com.miempresa.fasi.tareas;
+
+import com.miempresa.fasi.common.BaseEntity;
+import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import lombok.*;
+
+import java.time.LocalDate;
+
+@Entity
+@Table(name = "tareas")
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+public class Tarea extends BaseEntity {
+
+    @NotBlank
+    @Column(nullable = false)
+    private String titulo;
+
+    @Column(columnDefinition = "TEXT")
+    private String descripcion;
+
+    @NotNull
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private EstadoTarea estado;
+
+    @NotNull
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private PrioridadTarea prioridad;
+
+    private LocalDate fechaVencimiento;
+
+    public enum EstadoTarea    { PENDIENTE, EN_CURSO, HECHA }
+    public enum PrioridadTarea { ALTA, MEDIA, BAJA }
+}
+
+--- src/main/java/com/miempresa/fasi/tareas/TareaController.java ---
+package com.miempresa.fasi.tareas;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.validation.BindingResult;
+import org.springframework.web.bind.annotation.*;
+
+import jakarta.validation.Valid;
+import java.util.UUID;
+
+@Controller
+@RequestMapping("/tareas")
+@RequiredArgsConstructor
+public class TareaController {
+
+    private final TareaService service;
+
+    @GetMapping
+    public String list(Model model) {
+        model.addAttribute("tareas", service.findAll());
+        model.addAttribute("estados", Tarea.EstadoTarea.values());
+        model.addAttribute("prioridades", Tarea.PrioridadTarea.values());
+        return "tareas/list";
+    }
+
+    @GetMapping("/nueva")
+    public String newForm(Model model) {
+        model.addAttribute("tarea", new Tarea());
+        model.addAttribute("estados", Tarea.EstadoTarea.values());
+        model.addAttribute("prioridades", Tarea.PrioridadTarea.values());
+        return "tareas/form";
+    }
+
+    @GetMapping("/{id}/editar")
+    public String editForm(@PathVariable UUID id, Model model) {
+        model.addAttribute("tarea", service.findById(id));
+        model.addAttribute("estados", Tarea.EstadoTarea.values());
+        model.addAttribute("prioridades", Tarea.PrioridadTarea.values());
+        return "tareas/form";
+    }
+
+    @PostMapping
+    public String save(@Valid @ModelAttribute Tarea tarea, BindingResult br, Model model) {
+        if (br.hasErrors()) {
+            model.addAttribute("estados", Tarea.EstadoTarea.values());
+            model.addAttribute("prioridades", Tarea.PrioridadTarea.values());
+            return "tareas/form";
+        }
+        service.save(tarea);
+        return "redirect:/tareas";
+    }
+
+    @PostMapping("/{id}")
+    public String update(@PathVariable UUID id,
+                         @Valid @ModelAttribute Tarea tarea,
+                         BindingResult br, Model model) {
+        if (br.hasErrors()) {
+            model.addAttribute("estados", Tarea.EstadoTarea.values());
+            model.addAttribute("prioridades", Tarea.PrioridadTarea.values());
+            return "tareas/form";
+        }
+        service.update(id, tarea);
+        return "redirect:/tareas";
+    }
+
+    @PostMapping("/{id}/eliminar")
+    public String delete(@PathVariable UUID id) {
+        service.delete(id);
+        return "redirect:/tareas";
+    }
+}
+
+--- src/main/java/com/miempresa/fasi/tareas/TareaRepository.java ---
+package com.miempresa.fasi.tareas;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.UUID;
+
+@Repository
+public interface TareaRepository extends JpaRepository<Tarea, UUID> {
+    List<Tarea> findByEstadoOrderByPrioridadAscFechaVencimientoAsc(Tarea.EstadoTarea estado);
+    List<Tarea> findAllByOrderByPrioridadAscFechaVencimientoAsc();
+}
+
+--- src/main/java/com/miempresa/fasi/tareas/TareaService.java ---
+package com.miempresa.fasi.tareas;
+
+import jakarta.persistence.EntityNotFoundException;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class TareaService {
+
+    private final TareaRepository repo;
+
+    public List<Tarea> findAll() {
+        return repo.findAllByOrderByPrioridadAscFechaVencimientoAsc();
+    }
+
+    public List<Tarea> findByEstado(Tarea.EstadoTarea estado) {
+        return repo.findByEstadoOrderByPrioridadAscFechaVencimientoAsc(estado);
+    }
+
+    public Tarea findById(UUID id) {
+        return repo.findById(id)
+            .orElseThrow(() -> new EntityNotFoundException("Tarea no encontrada: " + id));
+    }
+
+    @Transactional
+    public Tarea save(Tarea tarea) { return repo.save(tarea); }
+
+    @Transactional
+    public Tarea update(UUID id, Tarea datos) {
+        Tarea tarea = findById(id);
+        tarea.setTitulo(datos.getTitulo());
+        tarea.setDescripcion(datos.getDescripcion());
+        tarea.setEstado(datos.getEstado());
+        tarea.setPrioridad(datos.getPrioridad());
+        tarea.setFechaVencimiento(datos.getFechaVencimiento());
+        return repo.save(tarea);
+    }
+
+    @Transactional
+    public void delete(UUID id) { repo.deleteById(id); }
+}
+
+══ TEMPLATES THYMELEAF ══
+
+--- src/main/resources/templates/agenda/form.html ---
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: layout(~{::title}, ~{::section})}">
+<head><title>Contacto — FASI</title></head>
+<body>
+<section>
+  <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6"
+      th:text="${contacto.id == null} ? 'Nuevo contacto' : 'Editar contacto'"></h2>
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-8 max-w-lg">
+    <form th:action="${contacto.id == null} ? @{/agenda} : @{/agenda/{id}(id=${contacto.id})}"
+          th:object="${contacto}" method="post" class="space-y-4">
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nombre *</label>
+          <input type="text" th:field="*{nombre}" required
+                 class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-400"/>
+          <p th:if="${#fields.hasErrors('nombre')}" th:errors="*{nombre}"
+             class="text-red-500 text-xs mt-1"></p>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Apellidos</label>
+          <input type="text" th:field="*{apellidos}"
+                 class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-400"/>
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
+        <input type="email" th:field="*{email}"
+               class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-400"/>
+        <p th:if="${#fields.hasErrors('email')}" th:errors="*{email}"
+           class="text-red-500 text-xs mt-1"></p>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Teléfono</label>
+        <input type="text" th:field="*{telefono}"
+               class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-400"/>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Notas</label>
+        <textarea th:field="*{notas}" rows="3"
+                  class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-400"></textarea>
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button type="submit"
+                class="bg-gray-900 text-white px-6 py-2 rounded-lg hover:bg-gray-700 transition">
+          Guardar
+        </button>
+        <a th:href="@{/agenda}"
+           class="px-6 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition">
+          Cancelar
+        </a>
+      </div>
+    </form>
+  </div>
+</section>
+</body>
+</html>
+
+--- src/main/resources/templates/agenda/list.html ---
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: layout(~{::title}, ~{::section})}">
+<head><title>Agenda — FASI</title></head>
+<body>
+<section>
+  <div class="flex justify-between items-center mb-4">
+    <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100">📇 Agenda</h2>
+    <a th:href="@{/agenda/nuevo}"
+       class="bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition text-sm">
+      + Nuevo contacto
+    </a>
+  </div>
+  <form th:action="@{/agenda}" method="get" class="mb-4 flex gap-2">
+    <input type="text" name="q" th:value="${q}" placeholder="Buscar por nombre o apellidos..."
+           class="border border-gray-300 rounded-lg px-3 py-2 text-sm w-72 focus:outline-none focus:ring-2 focus:ring-gray-800"/>
+    <button type="submit"
+            class="bg-gray-200 px-4 py-2 rounded-lg text-sm hover:bg-gray-300 transition">
+      Buscar
+    </button>
+    <a th:href="@{/agenda}"
+   class="px-4 py-2 rounded-lg text-sm border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition">
+  Limpiar
+</a>
+  </form>
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 uppercase text-xs">
+        <tr>
+          <th class="px-4 py-3 text-left">Nombre</th>
+          <th class="px-4 py-3 text-left">Apellidos</th>
+          <th class="px-4 py-3 text-left">Email</th>
+          <th class="px-4 py-3 text-left">Teléfono</th>
+          <th class="px-4 py-3 text-left">Acciones</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+        <tr th:each="c : ${contactos}" class="hover:bg-gray-50 dark:hover:bg-gray-700">
+          <td class="px-4 py-3 font-medium" th:text="${c.nombre}"></td>
+          <td class="px-4 py-3" th:text="${c.apellidos}"></td>
+          <td class="px-4 py-3 text-gray-500" th:text="${c.email}"></td>
+          <td class="px-4 py-3 text-gray-500" th:text="${c.telefono}"></td>
+          <td class="px-4 py-3 flex gap-2">
+            <a th:href="@{/agenda/{id}/editar(id=${c.id})}"
+               class="text-blue-600 hover:underline text-xs">Editar</a>
+            <form th:action="@{/agenda/{id}/eliminar(id=${c.id})}" method="post"
+                  onsubmit="return confirm('¿Eliminar contacto?')">
+              <button type="submit" class="text-red-500 hover:underline text-xs">Eliminar</button>
+            </form>
+          </td>
+        </tr>
+        <tr th:if="${#lists.isEmpty(contactos)}">
+          <td colspan="5" class="px-4 py-8 text-center text-gray-400">
+            No hay contactos. ¡Añade el primero!
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+</body>
+</html>
+
+--- src/main/resources/templates/contabilidad/form.html ---
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: layout(~{::title}, ~{::section})}">
+<head><title>Movimiento — FASI</title></head>
+<body>
+<section>
+  <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6"
+      th:text="${movimiento.id == null} ? 'Nuevo movimiento' : 'Editar movimiento'"></h2>
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-8 max-w-lg">
+    <form th:action="${movimiento.id == null} ? @{/contabilidad} : @{/contabilidad/{id}(id=${movimiento.id})}"
+          th:object="${movimiento}" method="post" class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Concepto *</label>
+        <input type="text" th:field="*{concepto}" required
+               class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-400"/>
+        <p th:if="${#fields.hasErrors('concepto')}" th:errors="*{concepto}"
+           class="text-red-500 text-xs mt-1"></p>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Importe (€) *</label>
+          <input type="number" th:field="*{importe}" step="0.01" min="0.01" required
+                 class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-400"/>
+          <p th:if="${#fields.hasErrors('importe')}" th:errors="*{importe}"
+             class="text-red-500 text-xs mt-1"></p>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tipo *</label>
+          <select th:field="*{tipo}" required
+                  class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+            <option th:each="t : ${tipos}" th:value="${t}" th:text="${t}"></option>
+          </select>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Categoría</label>
+          <input type="text" th:field="*{categoria}"
+                 class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-400"/>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fecha *</label>
+          <input type="date" th:field="*{fecha}" required
+                 class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-400"/>
+          <p th:if="${#fields.hasErrors('fecha')}" th:errors="*{fecha}"
+             class="text-red-500 text-xs mt-1"></p>
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Notas</label>
+        <textarea th:field="*{notas}" rows="2"
+                  class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-400"></textarea>
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button type="submit"
+                class="bg-gray-900 text-white px-6 py-2 rounded-lg hover:bg-gray-700 transition">
+          Guardar
+        </button>
+        <a th:href="@{/contabilidad}"
+           class="px-6 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition">
+          Cancelar
+        </a>
+      </div>
+    </form>
+  </div>
+</section>
+</body>
+</html>
+
+--- src/main/resources/templates/contabilidad/list.html ---
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: layout(~{::title}, ~{::section})}">
+<head><title>Contabilidad — FASI</title></head>
+<body>
+<section>
+  <div class="flex justify-between items-center mb-6">
+    <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100">💰 Contabilidad</h2>
+    <a th:href="@{/contabilidad/nuevo}"
+       class="bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition text-sm">
+      + Nuevo movimiento
+    </a>
+  </div>
+  <div class="grid grid-cols-3 gap-4 mb-6">
+    <div class="bg-green-50 border border-green-200 rounded-xl p-4">
+      <p class="text-xs text-green-600 font-semibold uppercase mb-1">Ingresos</p>
+      <p class="text-2xl font-bold text-green-700"
+         th:text="${#numbers.formatDecimal(resumen['ingresos'], 1, 2)} + ' €'"></p>
+    </div>
+    <div class="bg-red-50 border border-red-200 rounded-xl p-4">
+      <p class="text-xs text-red-600 font-semibold uppercase mb-1">Gastos</p>
+      <p class="text-2xl font-bold text-red-700"
+         th:text="${#numbers.formatDecimal(resumen['gastos'], 1, 2)} + ' €'"></p>
+    </div>
+    <div class="bg-blue-50 border border-blue-200 rounded-xl p-4">
+      <p class="text-xs text-blue-600 font-semibold uppercase mb-1">Saldo</p>
+      <p class="text-2xl font-bold"
+         th:classappend="${resumen['saldo'] >= 0} ? 'text-blue-700' : 'text-red-700'"
+         th:text="${#numbers.formatDecimal(resumen['saldo'], 1, 2)} + ' €'"></p>
+    </div>
+  </div>
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 uppercase text-xs">
+        <tr>
+          <th class="px-4 py-3 text-left">Fecha</th>
+          <th class="px-4 py-3 text-left">Concepto</th>
+          <th class="px-4 py-3 text-left">Categoría</th>
+          <th class="px-4 py-3 text-left">Tipo</th>
+          <th class="px-4 py-3 text-right">Importe</th>
+          <th class="px-4 py-3 text-left">Acciones</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+        <tr th:each="m : ${movimientos}" class="hover:bg-gray-50 dark:hover:bg-gray-700">
+          <td class="px-4 py-3 text-gray-500" th:text="${m.fecha}"></td>
+          <td class="px-4 py-3 font-medium" th:text="${m.concepto}"></td>
+          <td class="px-4 py-3 text-gray-500" th:text="${m.categoria}"></td>
+          <td class="px-4 py-3">
+            <span th:text="${m.tipo}"
+                  th:classappend="${m.tipo.name() == 'INGRESO'} ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'"
+                  class="px-2 py-1 rounded-full text-xs font-semibold"></span>
+          </td>
+          <td class="px-4 py-3 text-right font-semibold"
+              th:classappend="${m.tipo.name() == 'INGRESO'} ? 'text-green-600' : 'text-red-600'"
+              th:text="${#numbers.formatDecimal(m.importe, 1, 2)} + ' €'"></td>
+          <td class="px-4 py-3 flex gap-2">
+            <a th:href="@{/contabilidad/{id}/editar(id=${m.id})}"
+               class="text-blue-600 hover:underline text-xs">Editar</a>
+            <form th:action="@{/contabilidad/{id}/eliminar(id=${m.id})}" method="post"
+                  onsubmit="return confirm('¿Eliminar movimiento?')">
+              <button type="submit" class="text-red-500 hover:underline text-xs">Eliminar</button>
+            </form>
+          </td>
+        </tr>
+        <tr th:if="${#lists.isEmpty(movimientos)}">
+          <td colspan="6" class="px-4 py-8 text-center text-gray-400">
+            No hay movimientos registrados.
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+</body>
+</html>
+
+--- src/main/resources/templates/desarrollo/form.html ---
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: layout(~{::title}, ~{::section})}">
+<head><title>Desarrollo — FASI</title></head>
+<body>
+<section>
+  <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6"
+      th:text="${desarrollo.id == null} ? 'Nueva entrada de desarrollo' : 'Editar entrada'"></h2>
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-8 max-w-3xl">
+    <form th:action="${desarrollo.id == null} ? @{/desarrollo} : @{/desarrollo/{id}(id=${desarrollo.id})}"
+          th:object="${desarrollo}" method="post" class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Título *</label>
+        <input type="text" th:field="*{titulo}" required
+               class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-400"/>
+        <p th:if="${#fields.hasErrors('titulo')}" th:errors="*{titulo}"
+           class="text-red-500 text-xs mt-1"></p>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Descripción / Prompt</label>
+        <textarea th:field="*{descripcion}" rows="5"
+                  placeholder="Describe aquí qué cambios quieres implementar..."
+                  class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-800 font-mono text-sm"></textarea>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estado</label>
+        <select th:field="*{estado}"
+                class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+          <option th:each="e : ${estados}" th:value="${e}" th:text="${e}"></option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Script generado</label>
+        <textarea th:field="*{scriptGenerado}" rows="12"
+                  placeholder="#!/bin/bash&#10;# Pega aquí el script generado por la IA..."
+                  class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-800 font-mono text-xs bg-gray-50"></textarea>
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button type="submit"
+                class="bg-gray-900 text-white px-6 py-2 rounded-lg hover:bg-gray-700 transition">
+          Guardar
+        </button>
+        <a th:href="@{/desarrollo}"
+           class="px-6 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition">
+          Cancelar
+        </a>
+      </div>
+    </form>
+  </div>
+</section>
+</body>
+</html>
+
+--- src/main/resources/templates/desarrollo/list.html ---
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: layout(~{::title}, ~{::section})}">
+<head><title>Desarrollo — FASI</title></head>
+<body>
+<section>
+  <div class="flex justify-between items-center mb-6">
+    <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100">🛠️ Desarrollo</h2>
+    <a th:href="@{/desarrollo/nuevo}"
+       class="bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition text-sm">
+      + Nueva entrada
+    </a>
+  </div>
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 uppercase text-xs">
+        <tr>
+          <th class="px-4 py-3 text-left">Título</th>
+          <th class="px-4 py-3 text-left">Estado</th>
+          <th class="px-4 py-3 text-left">Creado</th>
+          <th class="px-4 py-3 text-left">Aplicado</th>
+          <th class="px-4 py-3 text-left">Acciones</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+        <tr th:each="d : ${desarrollos}" class="hover:bg-gray-50 dark:hover:bg-gray-700">
+          <td class="px-4 py-3 font-medium" th:text="${d.titulo}"></td>
+          <td class="px-4 py-3">
+            <span th:text="${d.estado}"
+                  th:classappend="${d.estado.name() == 'APLICADO'}    ? 'bg-green-100 text-green-700'  :
+                                  (${d.estado.name() == 'DESCARTADO'} ? 'bg-red-100 text-red-700'      :
+                                  'bg-yellow-100 text-yellow-700')"
+                  class="px-2 py-1 rounded-full text-xs font-semibold"></span>
+          </td>
+          <td class="px-4 py-3 text-gray-500"
+              th:text="${#temporals.format(d.createdAt, 'dd/MM/yyyy HH:mm')}"></td>
+          <td class="px-4 py-3 text-gray-500"
+              th:text="${d.fechaAplicado != null} ? ${#temporals.format(d.fechaAplicado, 'dd/MM/yyyy HH:mm')} : '-'"></td>
+          <td class="px-4 py-3">
+            <div class="flex flex-wrap gap-2">
+              <a th:href="@{/desarrollo/{id}/editar(id=${d.id})}"
+                 class="text-blue-600 hover:underline text-xs">Editar</a>
+              <a th:if="${d.scriptGenerado != null and !#strings.isEmpty(d.scriptGenerado)}"
+                 th:href="@{/desarrollo/{id}/descargar(id=${d.id})}"
+                 class="text-indigo-600 hover:underline text-xs">⬇ Script</a>
+              <form th:if="${d.estado.name() == 'PENDIENTE'}"
+                    th:action="@{/desarrollo/{id}/aplicar(id=${d.id})}" method="post">
+                <button type="submit" class="text-green-600 hover:underline text-xs">✔ Aplicado</button>
+              </form>
+              <form th:if="${d.estado.name() == 'PENDIENTE'}"
+                    th:action="@{/desarrollo/{id}/descartar(id=${d.id})}" method="post"
+                    onsubmit="return confirm('¿Descartar este cambio?')">
+                <button type="submit" class="text-orange-500 hover:underline text-xs">✖ Descartar</button>
+              </form>
+              <form th:action="@{/desarrollo/{id}/eliminar(id=${d.id})}" method="post"
+                    onsubmit="return confirm('¿Eliminar entrada?')">
+                <button type="submit" class="text-red-500 hover:underline text-xs">Eliminar</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        <tr th:if="${#lists.isEmpty(desarrollos)}">
+          <td colspan="5" class="px-4 py-8 text-center text-gray-400">
+            No hay entradas de desarrollo todavía.
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+</body>
+</html>
+
+--- src/main/resources/templates/documentos/form.html ---
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: layout(~{::title}, ~{::section})}">
+<head><title>Subir documento — FASI</title></head>
+<body>
+<section>
+  <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6">📄 Subir documento</h2>
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-8 max-w-lg">
+    <form th:action="@{/documentos/subir}" method="post"
+          enctype="multipart/form-data" class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nombre *</label>
+        <input type="text" name="nombre" required
+               class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-400"/>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Descripción</label>
+        <textarea name="descripcion" rows="2"
+                  class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-400"></textarea>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Categoría</label>
+        <input type="text" name="categoria"
+               class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-400"/>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fichero *</label>
+        <input type="file" name="file" required
+               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"/>
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button type="submit"
+                class="bg-gray-900 text-white px-6 py-2 rounded-lg hover:bg-gray-700 transition">
+          Subir
+        </button>
+        <a th:href="@{/documentos}"
+           class="px-6 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition">
+          Cancelar
+        </a>
+      </div>
+    </form>
+  </div>
+</section>
+</body>
+</html>
+
+--- src/main/resources/templates/documentos/list.html ---
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: layout(~{::title}, ~{::section})}">
+<head><title>Documentos — FASI</title></head>
+<body>
+<section>
+  <div class="flex justify-between items-center mb-6">
+    <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100">📄 Documentos</h2>
+    <a th:href="@{/documentos/subir}"
+       class="bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition text-sm">
+      + Subir documento
+    </a>
+  </div>
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 uppercase text-xs">
+        <tr>
+          <th class="px-4 py-3 text-left">Nombre</th>
+          <th class="px-4 py-3 text-left">Categoría</th>
+          <th class="px-4 py-3 text-left">Tipo</th>
+          <th class="px-4 py-3 text-left">Tamaño</th>
+          <th class="px-4 py-3 text-left">Fecha</th>
+          <th class="px-4 py-3 text-left">Acciones</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+        <tr th:each="d : ${documentos}" class="hover:bg-gray-50 dark:hover:bg-gray-700">
+          <td class="px-4 py-3 font-medium" th:text="${d.nombre}"></td>
+          <td class="px-4 py-3 text-gray-500" th:text="${d.categoria}"></td>
+          <td class="px-4 py-3 text-gray-500 text-xs" th:text="${d.tipo}"></td>
+          <td class="px-4 py-3 text-gray-500 text-xs"
+              th:text="${d.tamanioBytes != null} ? ${#numbers.formatDecimal(d.tamanioBytes / 1024.0, 1, 1)} + ' KB' : '-'"></td>
+          <td class="px-4 py-3 text-gray-500"
+              th:text="${#temporals.format(d.createdAt, 'dd/MM/yyyy')}"></td>
+          <td class="px-4 py-3 flex gap-2">
+            <a th:href="@{/documentos/{id}/descargar(id=${d.id})}"
+               class="text-blue-600 hover:underline text-xs">Descargar</a>
+            <form th:action="@{/documentos/{id}/eliminar(id=${d.id})}" method="post"
+                  onsubmit="return confirm('¿Eliminar documento?')">
+              <button type="submit" class="text-red-500 hover:underline text-xs">Eliminar</button>
+            </form>
+          </td>
+        </tr>
+        <tr th:if="${#lists.isEmpty(documentos)}">
+          <td colspan="6" class="px-4 py-8 text-center text-gray-400">
+            No hay documentos. ¡Sube el primero!
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+</body>
+</html>
+
+--- src/main/resources/templates/error/404.html ---
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: layout(~{::title}, ~{::section})}">
+<head><title>404 — FASI</title></head>
+<body>
+<section class="text-center py-20">
+  <p class="text-8xl mb-4">🔍</p>
+  <h2 class="text-3xl font-bold text-gray-800 dark:text-gray-100 mb-2">Página no encontrada</h2>
+  <p class="text-gray-500 mb-6" th:text="${error}">El recurso solicitado no existe.</p>
+  <a th:href="@{/}"
+     class="bg-gray-900 text-white px-6 py-2 rounded-lg hover:bg-gray-700 transition">
+    Volver al inicio
+  </a>
+</section>
+</body>
+</html>
+
+--- src/main/resources/templates/error/500.html ---
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: layout(~{::title}, ~{::section})}">
+<head><title>500 — FASI</title></head>
+<body>
+<section class="text-center py-20">
+  <p class="text-8xl mb-4">💥</p>
+  <h2 class="text-3xl font-bold text-gray-800 dark:text-gray-100 mb-2">Error interno</h2>
+  <p class="text-gray-500 mb-6" th:text="${error}">Algo salió mal.</p>
+  <a th:href="@{/}"
+     class="bg-gray-900 text-white px-6 py-2 rounded-lg hover:bg-gray-700 transition">
+    Volver al inicio
+  </a>
+</section>
+</body>
+</html>
+
+--- src/main/resources/templates/fotos/stub.html ---
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: layout(~{::title}, ~{::section})}">
+<head><title>Fotos — FASI</title></head>
+<body>
+<section>
+  <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6">🖼️ Fotos</h2>
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-12 text-center">
+    <p class="text-6xl mb-4">☁️</p>
+    <p class="text-gray-500 text-lg" th:text="${mensaje}"></p>
+  </div>
+</section>
+</body>
+</html>
+
+--- src/main/resources/templates/index.html ---
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: layout(~{::title}, ~{::section})}">
+<head><title>Dashboard — FASI</title></head>
+<body>
+<section>
+  <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6">Dashboard</h2>
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+    <a th:href="@{/agenda}"
+       class="bg-white dark:bg-gray-800 rounded-xl shadow p-6 hover:shadow-md transition flex items-center gap-4">
+      <span class="text-4xl">📇</span>
+      <div><p class="font-semibold text-gray-800 dark:text-gray-100">Agenda</p><p class="text-sm text-gray-500 dark:text-gray-400">Gestión de contactos</p></div>
+    </a>
+    <a th:href="@{/tareas}"
+       class="bg-white dark:bg-gray-800 rounded-xl shadow p-6 hover:shadow-md transition flex items-center gap-4">
+      <span class="text-4xl">✅</span>
+      <div><p class="font-semibold text-gray-800 dark:text-gray-100">Tareas</p><p class="text-sm text-gray-500 dark:text-gray-400">Pendientes y en curso</p></div>
+    </a>
+    <a th:href="@{/contabilidad}"
+       class="bg-white dark:bg-gray-800 rounded-xl shadow p-6 hover:shadow-md transition flex items-center gap-4">
+      <span class="text-4xl">💰</span>
+      <div><p class="font-semibold text-gray-800 dark:text-gray-100">Contabilidad</p><p class="text-sm text-gray-500 dark:text-gray-400">Ingresos y gastos</p></div>
+    </a>
+    <a th:href="@{/documentos}"
+       class="bg-white dark:bg-gray-800 rounded-xl shadow p-6 hover:shadow-md transition flex items-center gap-4">
+      <span class="text-4xl">📄</span>
+      <div><p class="font-semibold text-gray-800 dark:text-gray-100">Documentos</p><p class="text-sm text-gray-500 dark:text-gray-400">Repositorio de ficheros</p></div>
+    </a>
+    <a th:href="@{/fotos}"
+       class="bg-white dark:bg-gray-800 rounded-xl shadow p-6 hover:shadow-md transition flex items-center gap-4">
+      <span class="text-4xl">🖼️</span>
+      <div><p class="font-semibold text-gray-800 dark:text-gray-100">Fotos</p><p class="text-sm text-gray-500 dark:text-gray-400">Próximamente ☁️</p></div>
+    </a>
+  </div>
+</section>
+</body>
+</html>
+
+--- src/main/resources/templates/layout/base.html ---
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security"
+      th:fragment="layout(title, content)">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title th:replace="${title}">FASI</title>
+  <script th:src="@{/js/tailwind.min.js}"></script>
+  <script th:src="@{/js/htmx.min.js}"></script>
+  <script>
+    // Tailwind dark mode config — debe ir ANTES de que Tailwind procese clases
+    tailwind.config = { darkMode: 'class' };
+  </script>
+  <style>
+    /* Transición suave al cambiar de modo */
+    *, *::before, *::after {
+      transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-950 min-h-screen">
+
+  <!-- ═══ TOPBAR MÓVIL ═══ -->
+  <header class="lg:hidden bg-gray-900 dark:bg-gray-800 text-white sticky top-0 z-50 relative">
+    <div class="flex items-center justify-between px-4 py-3">
+      <span class="text-xl font-bold">⚡ FASI</span>
+      <div class="flex items-center gap-3">
+
+        <!-- 🌙 DARK MODE TOGGLE -->
+        <button id="dark-toggle"
+                onclick="toggleDark()"
+                title="Cambiar modo oscuro/claro"
+                class="text-xl focus:outline-none hover:scale-110 transition-transform">
+          <span id="dark-icon">🌙</span>
+        </button>
+
+        <button id="menu-btn"
+                class="text-white text-2xl focus:outline-none">☰</button>
+      </div>
+    </div>
+
+    <!-- Menú flotante móvil -->
+    <nav id="mobile-menu"
+         class="hidden absolute left-0 right-0 bg-gray-800 dark:bg-gray-900 px-4 pb-4 space-y-1 shadow-xl z-50">
+      <a th:href="@{/}"             class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">🏠 <span>Dashboard</span></a>
+      <a th:href="@{/agenda}"       class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">📇 <span>Agenda</span></a>
+      <a th:href="@{/tareas}"       class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">✅ <span>Tareas</span></a>
+      <a th:href="@{/contabilidad}" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">💰 <span>Contabilidad</span></a>
+      <a th:href="@{/documentos}"   class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">📄 <span>Documentos</span></a>
+      <a th:href="@{/fotos}"        class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">🖼️ <span>Fotos</span></a>
+      <a th:href="@{/desarrollo}"   class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">🛠️ <span>Desarrollo</span></a>
+      <div class="border-t border-gray-700 pt-2 mt-2 text-sm text-gray-400">
+        <span sec:authentication="name">usuario</span>
+        <form th:action="@{/logout}" method="post" class="inline ml-2">
+          <button type="submit" class="text-red-400 hover:text-red-300">salir</button>
+        </form>
+      </div>
+    </nav>
+  </header>
+
+  <!-- Overlay para cerrar menú móvil -->
+  <div id="menu-overlay"
+       class="hidden fixed inset-0 z-40 lg:hidden"
+       onclick="cerrarMenu()"></div>
+
+  <div class="flex">
+
+    <!-- ═══ SIDEBAR DESKTOP ═══ -->
+    <aside class="hidden lg:flex lg:flex-col w-64 bg-gray-900 dark:bg-gray-800 text-white min-h-screen fixed top-0 left-0 z-40">
+      <div class="p-6 border-b border-gray-700 flex items-center justify-between">
+        <div>
+          <span class="text-2xl font-bold tracking-wide">⚡ FASI</span>
+          <p class="text-xs text-gray-400 mt-1">Full Assistant</p>
+        </div>
+        <!-- 🌙 DARK MODE TOGGLE DESKTOP -->
+        <button onclick="toggleDark()"
+                title="Cambiar modo oscuro/claro"
+                class="text-2xl focus:outline-none hover:scale-110 transition-transform ml-2">
+          <span id="dark-icon-desktop">🌙</span>
+        </button>
+      </div>
+      <nav class="flex-1 p-4 space-y-1">
+        <a th:href="@{/}"             class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">🏠 <span>Dashboard</span></a>
+        <a th:href="@{/agenda}"       class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">📇 <span>Agenda</span></a>
+        <a th:href="@{/tareas}"       class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">✅ <span>Tareas</span></a>
+        <a th:href="@{/contabilidad}" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">💰 <span>Contabilidad</span></a>
+        <a th:href="@{/documentos}"   class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">📄 <span>Documentos</span></a>
+        <a th:href="@{/fotos}"        class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">🖼️ <span>Fotos</span></a>
+        <a th:href="@{/desarrollo}"   class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">🛠️ <span>Desarrollo</span></a>
+      </nav>
+      <div class="p-4 border-t border-gray-700 text-sm text-gray-400">
+        <span sec:authentication="name">usuario</span>
+        <form th:action="@{/logout}" method="post" class="inline ml-2">
+          <button type="submit" class="text-red-400 hover:text-red-300">salir</button>
+        </form>
+      </div>
+    </aside>
+
+    <!-- ═══ CONTENIDO PRINCIPAL ═══ -->
+    <main class="flex-1 lg:ml-64 p-4 lg:p-8 w-full">
+      <th:block th:replace="${content}"/>
+    </main>
+
+  </div>
+
+  <script>
+    // ── Menú móvil ──────────────────────────────────────────
+    const menuBtn    = document.getElementById('menu-btn');
+    const mobileMenu = document.getElementById('mobile-menu');
+    const overlay    = document.getElementById('menu-overlay');
+
+    function abrirMenu() {
+      mobileMenu.classList.remove('hidden');
+      overlay.classList.remove('hidden');
+    }
+
+    function cerrarMenu() {
+      mobileMenu.classList.add('hidden');
+      overlay.classList.add('hidden');
+    }
+
+    menuBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      mobileMenu.classList.contains('hidden') ? abrirMenu() : cerrarMenu();
+    });
+
+    // ── Dark Mode ────────────────────────────────────────────
+    const htmlEl        = document.documentElement;
+    const iconMobile    = document.getElementById('dark-icon');
+    const iconDesktop   = document.getElementById('dark-icon-desktop');
+
+    function applyDark(isDark) {
+      if (isDark) {
+        htmlEl.classList.add('dark');
+        if (iconMobile)  iconMobile.textContent  = '☀️';
+        if (iconDesktop) iconDesktop.textContent = '☀️';
+      } else {
+        htmlEl.classList.remove('dark');
+        if (iconMobile)  iconMobile.textContent  = '🌙';
+        if (iconDesktop) iconDesktop.textContent = '🌙';
+      }
+    }
+
+    function toggleDark() {
+      const isDark = !htmlEl.classList.contains('dark');
+      localStorage.setItem('fasi-dark', isDark ? '1' : '0');
+      applyDark(isDark);
+    }
+
+    // Aplicar preferencia guardada (o preferencia del sistema si no hay nada guardado)
+    (function () {
+      const saved = localStorage.getItem('fasi-dark');
+      if (saved !== null) {
+        applyDark(saved === '1');
+      } else {
+        applyDark(window.matchMedia('(prefers-color-scheme: dark)').matches);
+      }
+    })();
+  </script>
+
+</body>
+</html>
+
+--- src/main/resources/templates/login.html ---
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FASI — Login</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 min-h-screen flex items-center justify-center">
+  <div class="bg-white rounded-2xl shadow-xl p-10 w-full max-w-sm">
+    <h1 class="text-3xl font-bold text-center mb-2">⚡ FASI</h1>
+    <p class="text-center text-gray-500 mb-8 text-sm">Full Assistant</p>
+    <div th:if="${param.error}" class="bg-red-50 text-red-600 text-sm rounded-lg p-3 mb-4">
+      Usuario o contraseña incorrectos.
+    </div>
+    <div th:if="${param.logout}" class="bg-green-50 text-green-600 text-sm rounded-lg p-3 mb-4">
+      Sesión cerrada correctamente.
+    </div>
+    <form th:action="@{/login}" method="post" class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Usuario</label>
+        <input type="text" name="username" required autofocus
+               class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-gray-800"/>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
+        <input type="password" name="password" required
+               class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-gray-800"/>
+      </div>
+      <button type="submit"
+              class="w-full bg-gray-900 text-white py-2 rounded-lg font-semibold hover:bg-gray-700 transition">
+        Entrar
+      </button>
+    </form>
+  </div>
+</body>
+</html>
+
+--- src/main/resources/templates/tareas/form.html ---
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: layout(~{::title}, ~{::section})}">
+<head><title>Tarea — FASI</title></head>
+<body>
+<section>
+  <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6"
+      th:text="${tarea.id == null} ? 'Nueva tarea' : 'Editar tarea'"></h2>
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-8 max-w-lg">
+    <form th:action="${tarea.id == null} ? @{/tareas} : @{/tareas/{id}(id=${tarea.id})}"
+          th:object="${tarea}" method="post" class="space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Título *</label>
+        <input type="text" th:field="*{titulo}" required
+               class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-400"/>
+        <p th:if="${#fields.hasErrors('titulo')}" th:errors="*{titulo}"
+           class="text-red-500 text-xs mt-1"></p>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Descripción</label>
+        <textarea th:field="*{descripcion}" rows="3"
+                  class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-400"></textarea>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estado *</label>
+          <select th:field="*{estado}" required
+                  class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+            <option th:each="e : ${estados}" th:value="${e}" th:text="${e}"></option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Prioridad *</label>
+          <select th:field="*{prioridad}" required
+                  class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+            <option th:each="p : ${prioridades}" th:value="${p}" th:text="${p}"></option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fecha de vencimiento</label>
+        <input type="date" th:field="*{fechaVencimiento}"
+               class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"/>
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button type="submit"
+                class="bg-gray-900 text-white px-6 py-2 rounded-lg hover:bg-gray-700 transition">
+          Guardar
+        </button>
+        <a th:href="@{/tareas}"
+           class="px-6 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition">
+          Cancelar
+        </a>
+      </div>
+    </form>
+  </div>
+</section>
+</body>
+</html>
+
+--- src/main/resources/templates/tareas/list.html ---
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: layout(~{::title}, ~{::section})}">
+<head><title>Tareas — FASI</title></head>
+<body>
+<section>
+  <div class="flex justify-between items-center mb-6">
+    <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100">✅ Tareas</h2>
+    <a th:href="@{/tareas/nueva}"
+       class="bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition text-sm">
+      + Nueva tarea
+    </a>
+  </div>
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 uppercase text-xs">
+        <tr>
+          <th class="px-4 py-3 text-left">Título</th>
+          <th class="px-4 py-3 text-left">Estado</th>
+          <th class="px-4 py-3 text-left">Prioridad</th>
+          <th class="px-4 py-3 text-left">Vencimiento</th>
+          <th class="px-4 py-3 text-left">Acciones</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+        <tr th:each="t : ${tareas}" class="hover:bg-gray-50 dark:hover:bg-gray-700">
+          <td class="px-4 py-3 font-medium" th:text="${t.titulo}"></td>
+          <td class="px-4 py-3">
+            <span th:text="${t.estado}"
+                  th:classappend="${t.estado.name() == 'HECHA'} ? 'bg-green-100 text-green-700' :
+                                  (${t.estado.name() == 'EN_CURSO'} ? 'bg-blue-100 text-blue-700' :
+                                  'bg-yellow-100 text-yellow-700')"
+                  class="px-2 py-1 rounded-full text-xs font-semibold"></span>
+          </td>
+          <td class="px-4 py-3">
+            <span th:text="${t.prioridad}"
+                  th:classappend="${t.prioridad.name() == 'ALTA'} ? 'text-red-600 font-bold' :
+                                  (${t.prioridad.name() == 'MEDIA'} ? 'text-yellow-600' : 'text-gray-400')"
+                  class="text-xs font-semibold"></span>
+          </td>
+          <td class="px-4 py-3 text-gray-500" th:text="${t.fechaVencimiento}"></td>
+          <td class="px-4 py-3 flex gap-2">
+            <a th:href="@{/tareas/{id}/editar(id=${t.id})}"
+               class="text-blue-600 hover:underline text-xs">Editar</a>
+            <form th:action="@{/tareas/{id}/eliminar(id=${t.id})}" method="post"
+                  onsubmit="return confirm('¿Eliminar tarea?')">
+              <button type="submit" class="text-red-500 hover:underline text-xs">Eliminar</button>
+            </form>
+          </td>
+        </tr>
+        <tr th:if="${#lists.isEmpty(tareas)}">
+          <td colspan="5" class="px-4 py-8 text-center text-gray-400">
+            No hay tareas. ¡Crea la primera!
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+</body>
+</html>
+
+══ MIGRACIONES SQL — CONTENIDO COMPLETO ══
+
+--- src/main/resources/db/migration/V1__init_schema.sql ---
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+--- src/main/resources/db/migration/V2__agenda.sql ---
+CREATE TABLE contactos (
+    id          UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+    nombre      VARCHAR(100) NOT NULL,
+    apellidos   VARCHAR(100),
+    email       VARCHAR(150),
+    telefono    VARCHAR(30),
+    notas       TEXT,
+    created_at  TIMESTAMP    NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMP    NOT NULL DEFAULT now()
+);
+
+--- src/main/resources/db/migration/V3__tareas.sql ---
+CREATE TABLE tareas (
+    id                UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+    titulo            VARCHAR(200) NOT NULL,
+    descripcion       TEXT,
+    estado            VARCHAR(20)  NOT NULL DEFAULT 'PENDIENTE',
+    prioridad         VARCHAR(10)  NOT NULL DEFAULT 'MEDIA',
+    fecha_vencimiento DATE,
+    created_at        TIMESTAMP    NOT NULL DEFAULT now(),
+    updated_at        TIMESTAMP    NOT NULL DEFAULT now()
+);
+
+--- src/main/resources/db/migration/V4__contabilidad.sql ---
+CREATE TABLE movimientos (
+    id            UUID           PRIMARY KEY DEFAULT gen_random_uuid(),
+    concepto      VARCHAR(200)   NOT NULL,
+    importe       NUMERIC(12,2)  NOT NULL,
+    tipo          VARCHAR(10)    NOT NULL,
+    categoria     VARCHAR(100),
+    fecha         DATE           NOT NULL,
+    notas         TEXT,
+    created_at    TIMESTAMP      NOT NULL DEFAULT now(),
+    updated_at    TIMESTAMP      NOT NULL DEFAULT now()
+);
+
+--- src/main/resources/db/migration/V5__documentos.sql ---
+CREATE TABLE documentos (
+    id            UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    nombre        VARCHAR(200)  NOT NULL,
+    descripcion   TEXT,
+    tipo          VARCHAR(100),
+    ruta          VARCHAR(500)  NOT NULL,
+    tamanio_bytes BIGINT,
+    categoria     VARCHAR(100),
+    created_at    TIMESTAMP     NOT NULL DEFAULT now(),
+    updated_at    TIMESTAMP     NOT NULL DEFAULT now()
+);
+
+--- src/main/resources/db/migration/V6__desarrollo.sql ---
+CREATE TABLE desarrollos (
+    id               UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+    titulo           VARCHAR(200)  NOT NULL,
+    descripcion      TEXT,
+    estado           VARCHAR(20)   NOT NULL DEFAULT 'PENDIENTE',
+    script_generado  TEXT,
+    fecha_aplicado   TIMESTAMP,
+    created_at       TIMESTAMP     NOT NULL DEFAULT now(),
+    updated_at       TIMESTAMP     NOT NULL DEFAULT now()
+);
+
+══ FIN DEL CONTEXTO ══
