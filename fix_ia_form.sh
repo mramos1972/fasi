@@ -1,3 +1,10 @@
+#!/bin/bash
+set -e
+TMPL="src/main/resources/templates/ia"
+
+echo "🔧 Corrigiendo formulario IA..."
+
+cat > "$TMPL/chat.html" << 'EOF'
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org"
       th:replace="~{layout/base :: layout(~{::title}, ~{::section})}">
@@ -276,3 +283,9 @@ window.addEventListener('load', () => {
 
 </body>
 </html>
+EOF
+
+echo "✅ chat.html corregido — formulario sin <form> nativo"
+echo ""
+echo "🚀 Reinicia: ./mvnw spring-boot:run"
+echo "🌐 Prueba:   http://localhost:8091/ia"
