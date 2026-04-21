@@ -1,3 +1,8 @@
+#!/bin/bash
+set -e
+echo "🔧 Corrigiendo CSRF para /ia/api/**..."
+
+cat > src/main/java/com/miempresa/fasi/config/SecurityConfig.java << 'JAVAEOF'
 package com.miempresa.fasi.config;
 
 import org.springframework.context.annotation.Bean;
@@ -55,3 +60,11 @@ public class SecurityConfig {
         return new InMemoryUserDetailsManager(admin);
     }
 }
+JAVAEOF
+
+echo ""
+echo "════════════════════════════════════════"
+echo "✅ SecurityConfig.java actualizado"
+echo "   /ia/api/** excluido del CSRF"
+echo "🚀 Reinicia: ./mvnw spring-boot:run"
+echo "════════════════════════════════════════"
