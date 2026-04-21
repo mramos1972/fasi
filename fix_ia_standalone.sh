@@ -1,3 +1,8 @@
+#!/bin/bash
+set -e
+echo "🔧 Reescribiendo chat.html como página standalone..."
+
+cat > src/main/resources/templates/ia/chat.html << 'HTMLEOF'
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
 <head>
@@ -328,3 +333,11 @@
 
 </body>
 </html>
+HTMLEOF
+
+echo ""
+echo "════════════════════════════════════════"
+echo "✅ fix_ia_standalone.sh aplicado"
+echo "🚀 Reinicia: ./mvnw spring-boot:run"
+echo "🌐 Prueba:   http://localhost:8091/ia"
+echo "════════════════════════════════════════"
