@@ -1,3 +1,20 @@
+#!/bin/bash
+# fix_ia_context.sh — Corrige IaContextBuilder.java
+# Fix 1: Contactos completos en contexto general
+# Fix 2: Instrucciones estrictas para no inventar datos
+
+set -e
+
+FILE="src/main/java/com/miempresa/fasi/ia/IaContextBuilder.java"
+
+if [ ! -f "$FILE" ]; then
+  echo "❌ No se encuentra $FILE — ¿estás en la raíz del proyecto?"
+  exit 1
+fi
+
+echo "📝 Aplicando fixes en $FILE ..."
+
+cat > "$FILE" << 'JAVA_EOF'
 package com.miempresa.fasi.ia;
 
 import com.miempresa.fasi.agenda.ContactoRepository;
@@ -159,3 +176,9 @@ public class IaContextBuilder {
         return ctx.toString();
     }
 }
+JAVA_EOF
+
+echo "✅ $FILE actualizado correctamente."
+echo ""
+echo "🚀 Ahora redespliega con:"
+echo "   ./dev-redeploy.sh"
