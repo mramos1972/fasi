@@ -1,37 +1,7 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org"
-      th:replace="~{layout/base :: layout(~{::title}, ~{::section})}">
-<head><title>Dashboard — FASI</title></head>
-<body>
-<section>
-  <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6">Dashboard</h2>
-  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-    <a th:href="@{/agenda}"
-       class="bg-white dark:bg-gray-800 rounded-xl shadow p-6 hover:shadow-md transition flex items-center gap-4">
-      <span class="text-4xl">📇</span>
-      <div><p class="font-semibold text-gray-800 dark:text-gray-100">Agenda</p><p class="text-sm text-gray-500 dark:text-gray-400">Gestión de contactos</p></div>
-    </a>
-    <a th:href="@{/tareas}"
-       class="bg-white dark:bg-gray-800 rounded-xl shadow p-6 hover:shadow-md transition flex items-center gap-4">
-      <span class="text-4xl">✅</span>
-      <div><p class="font-semibold text-gray-800 dark:text-gray-100">Tareas</p><p class="text-sm text-gray-500 dark:text-gray-400">Pendientes y en curso</p></div>
-    </a>
-    <a th:href="@{/contabilidad}"
-       class="bg-white dark:bg-gray-800 rounded-xl shadow p-6 hover:shadow-md transition flex items-center gap-4">
-      <span class="text-4xl">💰</span>
-      <div><p class="font-semibold text-gray-800 dark:text-gray-100">Contabilidad</p><p class="text-sm text-gray-500 dark:text-gray-400">Ingresos y gastos</p></div>
-    </a>
-    <a th:href="@{/documentos}"
-       class="bg-white dark:bg-gray-800 rounded-xl shadow p-6 hover:shadow-md transition flex items-center gap-4">
-      <span class="text-4xl">📄</span>
-      <div><p class="font-semibold text-gray-800 dark:text-gray-100">Documentos</p><p class="text-sm text-gray-500 dark:text-gray-400">Repositorio de ficheros</p></div>
-    </a>
-    <a th:href="@{/fotos}"
-       class="bg-white dark:bg-gray-800 rounded-xl shadow p-6 hover:shadow-md transition flex items-center gap-4">
-      <span class="text-4xl">🖼️</span>
-      <div><p class="font-semibold text-gray-800 dark:text-gray-100">Fotos</p><p class="text-sm text-gray-500 dark:text-gray-400">Próximamente ☁️</p></div>
-    </a>
-  </div>
-</section>
-</body>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta http-equiv="refresh" content="0;url=/calendario"/>
+</head>
+<body></body>
 </html>

@@ -24,13 +24,11 @@ public class SecurityConfig {
                 .anyRequest().authenticated()
             )
             .csrf(csrf -> csrf
-                // Excluir la API REST de IA del CSRF
-                // (las llamadas fetch/JSON no pueden enviar cookie CSRF fácilmente)
-                .ignoringRequestMatchers("/ia/api/**")
+                .ignoringRequestMatchers("/ia/api/**", "/calendario/api/**")
             )
             .formLogin(form -> form
                 .loginPage("/login")
-                .defaultSuccessUrl("/", true)
+                .defaultSuccessUrl("/calendario", true)
                 .permitAll()
             )
             .logout(logout -> logout

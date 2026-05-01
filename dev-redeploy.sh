@@ -5,6 +5,7 @@
 # ══════════════════════════════════════════════
 
 set -e  # Para si hay error
+export DOCKER_BUILDKIT=0
 
 CONTAINER_NAME="fasi-desa"
 NETWORK="desa_desa_fasi_net"
