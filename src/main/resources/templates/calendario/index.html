@@ -9,23 +9,20 @@
   <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
     <div class="flex items-center gap-3">
       <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100">📅 Calendario</h2>
-      <!-- Navegación mes -->
       <a th:href="@{/calendario(year=${yearMonth.minusMonths(1).year},month=${yearMonth.minusMonths(1).monthValue})}"
-         class="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition">‹</a>
+         class="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition text-gray-700 dark:text-gray-200">‹</a>
       <span class="font-semibold text-gray-700 dark:text-gray-200"
             th:text="${#temporals.format(yearMonth.atDay(1),'MMMM yyyy')}"></span>
       <a th:href="@{/calendario(year=${yearMonth.plusMonths(1).year},month=${yearMonth.plusMonths(1).monthValue})}"
-         class="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition">›</a>
+         class="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition text-gray-700 dark:text-gray-200">›</a>
       <a th:href="@{/calendario}"
-         class="text-xs px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded-full hover:bg-gray-300 transition">Hoy</a>
+         class="text-xs px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-full hover:bg-gray-300 transition">Hoy</a>
     </div>
     <div class="flex gap-2">
-      <!-- Botón nueva entrada por voz -->
       <button onclick="abrirModalVoz()"
               class="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition text-sm font-semibold">
         🎤 Voz
       </button>
-      <!-- Botón nuevo evento manual -->
       <a th:href="@{/calendario/nuevo}"
          class="flex items-center gap-2 bg-gray-900 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition text-sm font-semibold">
         + Nuevo evento
@@ -40,33 +37,25 @@
                   bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
                   focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
     <button onclick="buscarEventos()"
-            class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-indigo-700 transition">
-      Buscar
-    </button>
+            class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-indigo-700 transition">Buscar</button>
     <button onclick="limpiarBusqueda()"
-            class="border border-gray-300 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition">
-      Limpiar
-    </button>
+            class="border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition">Limpiar</button>
   </div>
 
-  <!-- RESULTADOS BÚSQUEDA (ocultos por defecto) -->
+  <!-- RESULTADOS BÚSQUEDA -->
   <div id="resultados-busqueda" class="hidden mb-4 bg-white dark:bg-gray-800 rounded-xl shadow p-4">
-    <h3 class="font-semibold text-gray-700 dark:text-gray-200 mb-3">Resultados de búsqueda:</h3>
+    <h3 class="font-semibold text-gray-700 dark:text-gray-200 mb-3">Resultados:</h3>
     <div id="lista-resultados" class="space-y-2"></div>
   </div>
 
-  <!-- GRID CALENDARIO MENSUAL -->
+  <!-- GRID CALENDARIO -->
   <div class="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
-    <!-- Cabecera días semana -->
     <div class="grid grid-cols-7 bg-gray-50 dark:bg-gray-700">
       <div th:each="dia : ${ {'Lun','Mar','Mié','Jue','Vie','Sáb','Dom'} }"
            class="px-2 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase"
            th:text="${dia}"></div>
     </div>
-    <!-- Celdas del mes -->
-    <div id="grid-calendario" class="grid grid-cols-7 border-t border-gray-100 dark:border-gray-700">
-      <!-- Renderizado por JavaScript -->
-    </div>
+    <div id="grid-calendario" class="grid grid-cols-7 border-t border-gray-100 dark:border-gray-700"></div>
   </div>
 
   <!-- PRÓXIMOS EVENTOS -->
@@ -74,7 +63,8 @@
     <h3 class="font-semibold text-gray-700 dark:text-gray-200 mb-3">📌 Próximos eventos</h3>
     <div class="space-y-2">
       <div th:each="e : ${proximos}"
-           class="flex items-center gap-3 bg-white dark:bg-gray-800 rounded-lg shadow px-4 py-3">
+           class="flex items-center gap-3 bg-white dark:bg-gray-800 rounded-lg shadow px-4 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+           th:onclick="|window.location='@{/calendario/{id}/editar(id=${e.id})}'|">
         <span class="text-xl" th:text="${e.tipo.emoji}"></span>
         <div class="flex-1">
           <p class="font-medium text-sm text-gray-800 dark:text-gray-100" th:text="${e.titulo}"></p>
@@ -83,297 +73,347 @@
                       + (${e.horaInicio != null} ? ' · ' + ${e.horaInicio} : '')
                       + (${e.lugar != null} ? ' · ' + ${e.lugar} : '')"></p>
         </div>
-        <a th:href="@{/calendario/{id}/editar(id=${e.id})}"
-           class="text-blue-500 hover:underline text-xs">Editar</a>
+        <span class="text-xs px-2 py-1 rounded-full text-white font-semibold"
+              th:style="'background-color:' + ${e.tipo.color}"
+              th:text="${e.tipo.label}"></span>
       </div>
       <p th:if="${#lists.isEmpty(proximos)}"
          class="text-gray-400 text-sm text-center py-4">No hay eventos próximos.</p>
     </div>
   </div>
 
-</section>
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- MODAL VOZ                                               -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div id="modal-voz" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8 w-full max-w-lg mx-4 relative">
 
-<!-- MODAL VOZ / IA ──────────────────────────────────────── -->
-<div id="modal-voz" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-  <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8 w-full max-w-lg mx-4">
-    <h3 class="text-xl font-bold text-gray-800 dark:text-gray-100 mb-2">🎤 Nuevo evento por voz o texto</h3>
-    <p class="text-sm text-gray-500 mb-4">Habla o escribe de forma natural. Ejemplos:<br/>
-      <em>"El martes cumpleaños de Alberto en Costaballena a las 4:30"</em><br/>
-      <em>"Cita médica el jueves para Rocío en consultas externas de Jerez"</em>
-    </p>
-
-    <!-- Área de texto -->
-    <textarea id="voz-texto" rows="3" placeholder="Pulsa el micrófono o escribe aquí..."
-              class="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3
-                     bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
-                     focus:outline-none focus:ring-2 focus:ring-red-400 text-sm resize-none mb-3"></textarea>
-
-    <!-- Botones -->
-    <div class="flex gap-3 mb-4">
-      <button id="btn-micro" onclick="toggleMicrofono()"
-              class="flex-1 flex items-center justify-center gap-2 bg-red-500 hover:bg-red-600
-                     text-white py-2 rounded-xl font-semibold transition">
-        🎤 <span id="micro-label">Iniciar grabación</span>
+      <!-- Botón cerrar (X) siempre visible -->
+      <button onclick="cerrarModalVoz()"
+              class="absolute top-4 right-4 w-8 h-8 flex items-center justify-center
+                     bg-gray-200 dark:bg-gray-600 hover:bg-red-100 dark:hover:bg-red-900
+                     text-gray-600 dark:text-gray-200 rounded-full text-lg font-bold transition">
+        ✕
       </button>
-      <button onclick="interpretarTexto()"
-              class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-xl
-                     font-semibold transition">
-        ✨ Interpretar con IA
-      </button>
-    </div>
 
-    <!-- Preview del evento interpretado -->
-    <div id="preview-evento" class="hidden bg-gray-50 dark:bg-gray-700 rounded-xl p-4 mb-4">
-      <h4 class="font-semibold text-sm text-gray-700 dark:text-gray-200 mb-2">Vista previa del evento:</h4>
-      <div id="preview-contenido" class="text-sm space-y-1"></div>
-      <div class="flex gap-2 mt-3">
-        <button onclick="confirmarEvento()"
-                class="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg
-                       font-semibold transition text-sm">
-          ✅ Confirmar y guardar
+      <h3 class="text-xl font-bold text-gray-800 dark:text-gray-100 mb-2">🎤 Nuevo evento por voz o texto</h3>
+      <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+        Habla o escribe de forma natural. Ejemplos:<br/>
+        <em>"El martes cumpleaños de Alberto en Costaballena a las 4:30"</em><br/>
+        <em>"Cita médica el jueves para Rocío en consultas externas de Jerez"</em>
+      </p>
+
+      <!-- Área de texto -->
+      <textarea id="voz-texto" rows="3" placeholder="Pulsa el micrófono o escribe aquí..."
+                class="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3
+                       bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
+                       focus:outline-none focus:ring-2 focus:ring-red-400 text-sm resize-none mb-3"></textarea>
+
+      <!-- Botones acción -->
+      <div class="flex gap-3 mb-4">
+        <button id="btn-micro" onclick="toggleMicrofono()"
+                class="flex-1 flex items-center justify-center gap-2 bg-red-500 hover:bg-red-600
+                       text-white py-2 rounded-xl font-semibold transition">
+          🎤 <span id="micro-label">Iniciar grabación</span>
         </button>
-        <button onclick="editarManual()"
-                class="flex-1 border border-gray-300 py-2 rounded-lg text-sm hover:bg-gray-50
-                       dark:hover:bg-gray-700 transition">
-          ✏️ Editar manualmente
+        <button onclick="interpretarTexto()"
+                class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-xl font-semibold transition">
+          ✨ Interpretar con IA
         </button>
       </div>
-    </div>
 
-    <!-- Spinner IA -->
-    <div id="ia-spinner" class="hidden flex items-center gap-2 text-sm text-gray-500 mb-3">
-      <div class="w-2 h-2 bg-indigo-400 rounded-full animate-bounce"></div>
-      <div class="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:150ms"></div>
-      <div class="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:300ms"></div>
-      <span>La IA está interpretando...</span>
-    </div>
+      <!-- Spinner IA -->
+      <div id="ia-spinner" style="display:none"
+           class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-3">
+        <div class="w-2 h-2 bg-indigo-400 rounded-full animate-bounce"></div>
+        <div class="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:150ms"></div>
+        <div class="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:300ms"></div>
+        <span>La IA está interpretando...</span>
+      </div>
 
-    <button onclick="cerrarModalVoz()"
-            class="w-full text-gray-400 hover:text-gray-600 text-sm mt-1">Cancelar</button>
+      <!-- Preview evento interpretado -->
+      <div id="preview-evento" style="display:none"
+           class="bg-gray-50 dark:bg-gray-700 rounded-xl p-4 mb-4">
+        <h4 class="font-semibold text-sm text-gray-700 dark:text-gray-200 mb-2">Vista previa del evento:</h4>
+        <div id="preview-contenido" class="text-sm space-y-1 text-gray-700 dark:text-gray-200"></div>
+        <div class="flex gap-2 mt-3">
+          <button onclick="confirmarEvento()"
+                  class="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-semibold transition text-sm">
+            ✅ Confirmar y guardar
+          </button>
+          <button onclick="editarManual()"
+                  class="flex-1 border border-gray-300 dark:border-gray-500 text-gray-700 dark:text-gray-200 py-2 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-gray-600 transition">
+            ✏️ Editar manualmente
+          </button>
+        </div>
+      </div>
+
+    </div>
   </div>
-</div>
 
-<script th:inline="javascript">
-  // ── Datos del servidor ───────────────────────────────────
-  const EVENTOS_MES   = /*[[${eventos}]]*/ [];
-  const YEAR_MONTH    = /*[[${yearMonth.toString()}]]*/ '';
-  const HOY           = /*[[${hoy.toString()}]]*/ '';
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- SCRIPTS                                                 -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <script th:inline="javascript">
+    const EVENTOS_MES = /*[[${eventos}]]*/ [];
+    const YEAR_MONTH  = /*[[${yearMonth.toString()}]]*/ '';
+    const HOY         = /*[[${hoy.toString()}]]*/ '';
 
-  // ── Renderizar grid del calendario ──────────────────────
-  function renderCalendario() {
-    const [year, month] = YEAR_MONTH.split('-').map(Number);
-    const primerDia     = new Date(year, month - 1, 1);
-    const ultimoDia     = new Date(year, month, 0).getDate();
-    // Lunes=0 ... Domingo=6
-    let diaSemana = primerDia.getDay() - 1;
-    if (diaSemana < 0) diaSemana = 6;
+    // ── Renderizar grid ──────────────────────────────────────
+    function renderCalendario() {
+      const [year, month] = YEAR_MONTH.split('-').map(Number);
+      const primerDia     = new Date(year, month - 1, 1);
+      const ultimoDia     = new Date(year, month, 0).getDate();
+      let diaSemana = primerDia.getDay() - 1;
+      if (diaSemana < 0) diaSemana = 6;
 
-    const grid = document.getElementById('grid-calendario');
-    grid.innerHTML = '';
+      const grid = document.getElementById('grid-calendario');
+      grid.innerHTML = '';
 
-    // Celdas vacías iniciales
-    for (let i = 0; i < diaSemana; i++) {
-      grid.insertAdjacentHTML('beforeend',
-        '<div class="min-h-24 border-b border-r border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/20"></div>');
-    }
-
-    // Celdas de días
-    for (let dia = 1; dia <= ultimoDia; dia++) {
-      const fechaStr  = `${year}-${String(month).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
-      const esHoy     = fechaStr === HOY;
-      const eventosDia = EVENTOS_MES.filter(e => e.fechaInicio === fechaStr);
-
-      let html = `
-        <div class="min-h-24 border-b border-r border-gray-100 dark:border-gray-700 p-1 cursor-pointer
-                    hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition"
-             onclick="window.location='/calendario/dia/${fechaStr}'">
-          <div class="flex justify-between items-start mb-1">
-            <span class="text-sm font-semibold ${esHoy
-              ? 'bg-indigo-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs'
-              : 'text-gray-700 dark:text-gray-300'}">${dia}</span>
-            <a href="/calendario/nuevo?fecha=${fechaStr}"
-               onclick="event.stopPropagation()"
-               class="text-gray-300 hover:text-indigo-500 text-lg leading-none">+</a>
-          </div>`;
-
-      eventosDia.slice(0, 3).forEach(e => {
-        html += `<div class="text-xs px-1 py-0.5 rounded mb-0.5 truncate text-white font-medium"
-                      style="background-color:${e.tipo.color}"
-                      title="${e.titulo}">
-                   ${e.tipo.emoji} ${e.titulo}
-                 </div>`;
-      });
-
-      if (eventosDia.length > 3) {
-        html += `<div class="text-xs text-gray-400">+${eventosDia.length - 3} más</div>`;
+      // Celdas vacías
+      for (let i = 0; i < diaSemana; i++) {
+        grid.insertAdjacentHTML('beforeend',
+          '<div class="min-h-28 border-b border-r border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/20"></div>');
       }
 
-      html += '</div>';
-      grid.insertAdjacentHTML('beforeend', html);
+      // Celdas de días
+      for (let dia = 1; dia <= ultimoDia; dia++) {
+        const fechaStr   = `${year}-${String(month).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
+        const esHoy      = fechaStr === HOY;
+        const eventosDia = EVENTOS_MES.filter(e => e.fechaInicio === fechaStr);
+
+        let html = `
+          <div class="min-h-28 border-b border-r border-gray-100 dark:border-gray-700 p-1 cursor-pointer
+                      hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition"
+               onclick="window.location='/calendario/dia/${fechaStr}'">
+            <div class="flex justify-between items-start mb-1">
+              <span class="${esHoy
+                ? 'bg-indigo-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold'
+                : 'text-sm font-semibold text-gray-700 dark:text-gray-300'}">${dia}</span>
+              <a href="/calendario/nuevo?fecha=${fechaStr}"
+                 onclick="event.stopPropagation()"
+                 class="text-gray-300 hover:text-indigo-500 text-lg leading-none">+</a>
+            </div>`;
+
+        eventosDia.slice(0, 3).forEach(e => {
+          const label = (e.tipo && e.tipo.label) ? e.tipo.label : (e.tipo || '');
+          const emoji = (e.tipo && e.tipo.emoji) ? e.tipo.emoji : '📅';
+          const color = (e.tipo && e.tipo.color) ? e.tipo.color : '#6366f1';
+          html += `
+            <div class="text-xs px-1.5 py-0.5 rounded mb-0.5 truncate text-white font-semibold shadow-sm cursor-pointer"
+                 style="background-color:${color}"
+                 title="${e.titulo}"
+                 onclick="event.stopPropagation(); window.location='/calendario/${e.id}/editar'">
+              ${emoji} ${e.titulo}
+            </div>`;
+        });
+
+        if (eventosDia.length > 3) {
+          html += `<div class="text-xs text-gray-400 dark:text-gray-500">+${eventosDia.length - 3} más</div>`;
+        }
+
+        html += '</div>';
+        grid.insertAdjacentHTML('beforeend', html);
+      }
     }
-  }
 
-  // ── Buscador full-text ───────────────────────────────────
-  async function buscarEventos() {
-    const q = document.getElementById('buscador-input').value.trim();
-    if (!q) return;
-
-    const resp = await fetch(`/calendario/api/buscar?q=${encodeURIComponent(q)}`);
-    const data = await resp.json();
-
-    const contenedor = document.getElementById('lista-resultados');
-    contenedor.innerHTML = '';
-
-    if (data.length === 0) {
-      contenedor.innerHTML = '<p class="text-gray-400 text-sm">No se encontraron eventos.</p>';
-    } else {
-      data.forEach(e => {
-        contenedor.insertAdjacentHTML('beforeend', `
-          <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">
-            <span class="text-lg">${e.tipo.emoji}</span>
-            <div class="flex-1">
-              <p class="font-medium text-sm">${e.titulo}</p>
-              <p class="text-xs text-gray-500">${e.fechaInicio}
-                 ${e.lugar ? '· ' + e.lugar : ''}
-                 ${e.personasRelacionadas ? '· ' + e.personasRelacionadas : ''}</p>
-            </div>
-            <a href="/calendario/${e.id}/editar" class="text-blue-500 text-xs hover:underline">Ver</a>
-          </div>`);
-      });
-    }
-
-    document.getElementById('resultados-busqueda').classList.remove('hidden');
-  }
-
-  function limpiarBusqueda() {
-    document.getElementById('buscador-input').value = '';
-    document.getElementById('resultados-busqueda').classList.add('hidden');
-  }
-
-  document.getElementById('buscador-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter') buscarEventos();
-  });
-
-  // ── Modal de voz ─────────────────────────────────────────
-  let recognition  = null;
-  let grabando     = false;
-  let eventoActual = null;
-
-  function abrirModalVoz()  { document.getElementById('modal-voz').classList.remove('hidden'); }
-  function cerrarModalVoz() {
-    document.getElementById('modal-voz').classList.add('hidden');
-    document.getElementById('preview-evento').classList.add('hidden');
-    document.getElementById('voz-texto').value = '';
-    if (grabando) pararMicrofono();
-  }
-
-  function toggleMicrofono() {
-    grabando ? pararMicrofono() : iniciarMicrofono();
-  }
-
-  function iniciarMicrofono() {
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      alert('Tu navegador no soporta reconocimiento de voz. Usa Chrome.');
-      return;
-    }
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    recognition = new SR();
-    recognition.lang = 'es-ES';
-    recognition.continuous = false;
-    recognition.interimResults = true;
-
-    recognition.onresult = (event) => {
-      const transcript = Array.from(event.results)
-        .map(r => r[0].transcript).join('');
-      document.getElementById('voz-texto').value = transcript;
-    };
-
-    recognition.onend = () => {
-      grabando = false;
-      document.getElementById('micro-label').textContent = 'Iniciar grabación';
-      document.getElementById('btn-micro').classList.remove('bg-red-700');
-      document.getElementById('btn-micro').classList.add('bg-red-500');
-    };
-
-    recognition.start();
-    grabando = true;
-    document.getElementById('micro-label').textContent = '⏹ Parar grabación';
-    document.getElementById('btn-micro').classList.add('bg-red-700');
-    document.getElementById('btn-micro').classList.remove('bg-red-500');
-  }
-
-  function pararMicrofono() {
-    if (recognition) recognition.stop();
-  }
-
-  async function interpretarTexto() {
-    const texto = document.getElementById('voz-texto').value.trim();
-    if (!texto) return;
-
-    document.getElementById('ia-spinner').classList.remove('hidden');
-    document.getElementById('preview-evento').classList.add('hidden');
-
-    try {
-      const resp = await fetch('/calendario/api/interpretar', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ texto, fechaContexto: HOY })
-      });
+    // ── Buscador ─────────────────────────────────────────────
+    async function buscarEventos() {
+      const q = document.getElementById('buscador-input').value.trim();
+      if (!q) return;
+      const resp = await fetch(`/calendario/api/buscar?q=${encodeURIComponent(q)}`);
       const data = await resp.json();
-
-      if (data.exito && data.eventoPreview) {
-        eventoActual = data.eventoPreview;
-        mostrarPreview(data.eventoPreview);
+      const contenedor = document.getElementById('lista-resultados');
+      contenedor.innerHTML = '';
+      if (data.length === 0) {
+        contenedor.innerHTML = '<p class="text-gray-400 text-sm">No se encontraron eventos.</p>';
       } else {
-        alert('❌ ' + (data.mensajeError || 'Error al interpretar'));
+        data.forEach(e => {
+          const emoji = (e.tipo && e.tipo.emoji) ? e.tipo.emoji : '📅';
+          const color = (e.tipo && e.tipo.color) ? e.tipo.color : '#6366f1';
+          contenedor.insertAdjacentHTML('beforeend', `
+            <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+                 onclick="window.location='/calendario/${e.id}/editar'">
+              <span class="text-lg">${emoji}</span>
+              <div class="flex-1">
+                <p class="font-medium text-sm text-gray-800 dark:text-gray-100">${e.titulo}</p>
+                <p class="text-xs text-gray-500">${e.fechaInicio}
+                   ${e.lugar ? '· ' + e.lugar : ''}
+                   ${e.personasRelacionadas ? '· ' + e.personasRelacionadas : ''}</p>
+              </div>
+              <span class="text-xs px-2 py-0.5 rounded-full text-white" style="background-color:${color}"
+                    th:text="${e.tipo?.label}"></span>
+            </div>`);
+        });
       }
-    } catch (err) {
-      alert('Error de conexión: ' + err.message);
-    } finally {
-      document.getElementById('ia-spinner').classList.add('hidden');
+      document.getElementById('resultados-busqueda').classList.remove('hidden');
     }
-  }
 
-  function mostrarPreview(evento) {
-    const c = document.getElementById('preview-contenido');
-    c.innerHTML = `
-      <p><strong>Tipo:</strong> ${evento.tipo?.emoji || ''} ${evento.tipo?.label || evento.tipo}</p>
-      <p><strong>Título:</strong> ${evento.titulo}</p>
-      <p><strong>Fecha:</strong> ${evento.fechaInicio}${evento.horaInicio ? ' a las ' + evento.horaInicio : ''}</p>
-      ${evento.lugar ? `<p><strong>Lugar:</strong> ${evento.lugar}</p>` : ''}
-      ${evento.personasRelacionadas ? `<p><strong>Personas:</strong> ${evento.personasRelacionadas}</p>` : ''}
-      ${evento.descripcion ? `<p><strong>Notas:</strong> ${evento.descripcion}</p>` : ''}
-    `;
-    document.getElementById('preview-evento').classList.remove('hidden');
-  }
-
-  async function confirmarEvento() {
-    if (!eventoActual) return;
-    try {
-      const resp = await fetch('/calendario/api/confirmar', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(eventoActual)
-      });
-      if (resp.ok) {
-        cerrarModalVoz();
-        window.location.reload();
-      }
-    } catch (err) {
-      alert('Error al guardar: ' + err.message);
+    function limpiarBusqueda() {
+      document.getElementById('buscador-input').value = '';
+      document.getElementById('resultados-busqueda').classList.add('hidden');
     }
-  }
 
-  function editarManual() {
-    if (!eventoActual) return;
-    const params = new URLSearchParams({
-      fecha: eventoActual.fechaInicio || HOY
+    document.getElementById('buscador-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') buscarEventos();
     });
-    window.location = '/calendario/nuevo?' + params.toString();
-  }
 
-  // ── Init ─────────────────────────────────────────────────
-  renderCalendario();
-</script>
+    // ── Modal voz ────────────────────────────────────────────
+    let recognition  = null;
+    let grabando     = false;
+    let eventoActual = null;
+
+    function abrirModalVoz() {
+      document.getElementById('modal-voz').classList.remove('hidden');
+      document.getElementById('preview-evento').style.display = 'none';
+      document.getElementById('ia-spinner').style.display     = 'none';
+      document.getElementById('voz-texto').value              = '';
+    }
+
+    function cerrarModalVoz() {
+      document.getElementById('modal-voz').classList.add('hidden');
+      if (grabando) pararMicrofono();
+      eventoActual = null;
+    }
+
+    function toggleMicrofono() {
+      grabando ? pararMicrofono() : iniciarMicrofono();
+    }
+
+    function iniciarMicrofono() {
+      if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        alert('Tu navegador no soporta reconocimiento de voz. Usa Chrome.');
+        return;
+      }
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SR();
+      recognition.lang            = 'es-ES';
+      recognition.continuous      = true;
+      recognition.interimResults  = true;
+
+      recognition.onresult = (event) => {
+        const transcript = Array.from(event.results).map(r => r[0].transcript).join('');
+        document.getElementById('voz-texto').value = transcript;
+      };
+
+      recognition.onend = () => {
+        // Solo reiniciar si el usuario no paró manualmente Y hay silencio breve
+        if (grabando) {
+          setTimeout(() => {
+            if (grabando) {
+              try { recognition.start(); } catch(e) { /* ya iniciado */ }
+            }
+          }, 300);
+        }
+      };
+
+      recognition.onerror = (e) => {
+        console.warn('Speech error:', e.error);
+        // 'no-speech' es normal (silencio), no parar
+        if (e.error === 'no-speech') return;
+        // Para cualquier otro error real, detener limpiamente
+        grabando = false;
+        actualizarBotonMicro(false);
+      };
+
+      recognition.start();
+      grabando = true;
+      actualizarBotonMicro(true);
+    }
+
+    function pararMicrofono() {
+      grabando = false;
+      if (recognition) recognition.stop();
+      actualizarBotonMicro(false);
+    }
+
+    function actualizarBotonMicro(activo) {
+      const btn   = document.getElementById('btn-micro');
+      const label = document.getElementById('micro-label');
+      if (activo) {
+        label.textContent = '⏹ Parar grabación';
+        btn.classList.add('bg-red-700');
+        btn.classList.remove('bg-red-500');
+      } else {
+        label.textContent = '🎤 Iniciar grabación';
+        btn.classList.remove('bg-red-700');
+        btn.classList.add('bg-red-500');
+      }
+    }
+
+    async function interpretarTexto() {
+      const texto = document.getElementById('voz-texto').value.trim();
+      if (!texto) { alert('Escribe o dicta algo primero.'); return; }
+
+      const spinner = document.getElementById('ia-spinner');
+      const preview = document.getElementById('preview-evento');
+      spinner.style.display = 'flex';
+      preview.style.display = 'none';
+
+      try {
+        const resp = await fetch('/calendario/api/interpretar', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ texto, fechaContexto: HOY })
+        });
+        const data = await resp.json();
+
+        if (data.exito && data.eventoPreview) {
+          eventoActual = data.eventoPreview;
+          mostrarPreview(data.eventoPreview);
+        } else {
+          alert('❌ ' + (data.mensajeError || 'Error al interpretar'));
+        }
+      } catch (err) {
+        alert('Error de conexión: ' + err.message);
+      } finally {
+        spinner.style.display = 'none';
+      }
+    }
+
+    function mostrarPreview(evento) {
+      const c = document.getElementById('preview-contenido');
+      const tipoLabel = (evento.tipo && evento.tipo.label) ? evento.tipo.label : (evento.tipo || '');
+      const tipoEmoji = (evento.tipo && evento.tipo.emoji) ? evento.tipo.emoji : '📅';
+      c.innerHTML = `
+        <p><strong>Tipo:</strong> ${tipoEmoji} ${tipoLabel}</p>
+        <p><strong>Título:</strong> ${evento.titulo || '-'}</p>
+        <p><strong>Fecha:</strong> ${evento.fechaInicio || '-'}${evento.horaInicio ? ' a las ' + evento.horaInicio : ''}</p>
+        ${evento.lugar ? `<p><strong>Lugar:</strong> ${evento.lugar}</p>` : ''}
+        ${evento.personasRelacionadas ? `<p><strong>Personas:</strong> ${evento.personasRelacionadas}</p>` : ''}
+        ${evento.descripcion ? `<p><strong>Notas:</strong> ${evento.descripcion}</p>` : ''}
+      `;
+      document.getElementById('preview-evento').style.display = 'block';
+    }
+
+    async function confirmarEvento() {
+      if (!eventoActual) return;
+      try {
+        const resp = await fetch('/calendario/api/confirmar', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify(eventoActual)
+        });
+        if (resp.ok) {
+          cerrarModalVoz();
+          window.location.reload();
+        } else {
+          alert('Error al guardar el evento.');
+        }
+      } catch (err) {
+        alert('Error de conexión: ' + err.message);
+      }
+    }
+
+    function editarManual() {
+      if (!eventoActual) return;
+      window.location = '/calendario/nuevo?fecha=' + (eventoActual.fechaInicio || HOY);
+    }
+
+    // ── Init ─────────────────────────────────────────────────
+    renderCalendario();
+  </script>
+
+</section>
 </body>
 </html>
