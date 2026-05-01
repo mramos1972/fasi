@@ -69,6 +69,7 @@ public class Evento extends BaseEntity {
     private String textoOriginalVoz;
 
     // ── Enum de tipos ────────────────────────────────────────
+    @com.fasterxml.jackson.annotation.JsonFormat(shape = com.fasterxml.jackson.annotation.JsonFormat.Shape.OBJECT)
     public enum TipoEvento {
         CUMPLEANOS,
         CITA_MEDICA,
@@ -128,6 +129,22 @@ public class Evento extends BaseEntity {
                 case COMPRAS      -> "Compras";
                 case OTRO         -> "Otro";
             };
+        }
+
+        /** Necesario para que el DTO pueda resolver el tipo por nombre */
+        public String getName() { return this.name(); }
+
+        @com.fasterxml.jackson.annotation.JsonCreator
+        public static TipoEvento fromValue(Object value) {
+            if (value instanceof String s) {
+                try { return TipoEvento.valueOf(s.trim().toUpperCase()); }
+                catch (IllegalArgumentException ignored) {}
+                // Buscar por label
+                for (TipoEvento t : values()) {
+                    if (t.getLabel().equalsIgnoreCase(s.trim())) return t;
+                }
+            }
+            return OTRO;
         }
     }
 }

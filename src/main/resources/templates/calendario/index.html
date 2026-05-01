@@ -180,7 +180,18 @@
       for (let dia = 1; dia <= ultimoDia; dia++) {
         const fechaStr   = `${year}-${String(month).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
         const esHoy      = fechaStr === HOY;
-        const eventosDia = EVENTOS_MES.filter(e => e.fechaInicio === fechaStr);
+        const eventosDia = EVENTOS_MES.filter(e => {
+          // Evento puntual o inicio del rango
+          if (e.fechaInicio === fechaStr) return true;
+          // Evento con rango: pintar en todos los días intermedios y fin
+          if (e.fechaFin && e.fechaFin !== e.fechaInicio) {
+            const dInicio = new Date(e.fechaInicio + 'T00:00:00');
+            const dFin    = new Date(e.fechaFin    + 'T00:00:00');
+            const dCelda  = new Date(fechaStr       + 'T00:00:00');
+            return dCelda > dInicio && dCelda <= dFin;
+          }
+          return false;
+        });
 
         let html = `
           <div class="min-h-28 border-b border-r border-gray-100 dark:border-gray-700 p-1 cursor-pointer

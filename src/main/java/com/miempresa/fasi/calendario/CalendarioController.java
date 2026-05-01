@@ -119,7 +119,8 @@ public class CalendarioController {
     // ── API: Confirmar y guardar evento interpretado por IA ──
     @PostMapping("/api/confirmar")
     @ResponseBody
-    public ResponseEntity<Evento> confirmarEvento(@RequestBody Evento evento) {
+    public ResponseEntity<Evento> confirmarEvento(@RequestBody EventoConfirmarRequest dto) {
+        Evento evento = dto.toEvento();
         return ResponseEntity.ok(eventoService.save(evento));
     }
 
