@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -25,23 +26,68 @@ public class EventoIaService {
     public EventoIaResponse interpretar(EventoIaRequest request) {
         long inicio = System.currentTimeMillis();
         try {
-            String prompt = buildPromptInterpretar(request);
-            String json   = ollamaClient.generate(prompt);
-
-            // Extraer el JSON de la respuesta (la IA puede añadir texto extra)
+            String prompt    = buildPromptInterpretar(request);
+            String json      = ollamaClient.generate(prompt);
             String jsonLimpio = extraerJson(json);
-            Evento evento     = objectMapper.readValue(jsonLimpio, Evento.class);
+
+            log.debug("JSON recibido de IA: {}", jsonLimpio);
+
+            // Parsear con ObjectMapper tolerante (ignora campos desconocidos)
+            com.fasterxml.jackson.databind.node.ObjectNode node =
+                (com.fasterxml.jackson.databind.node.ObjectNode)
+                objectMapper.readTree(jsonLimpio);
+
+            // Normalizar horaInicio/horaFin: "16:00" → "16:00:00"
+            normalizarHora(node, "horaInicio");
+            normalizarHora(node, "horaFin");
+
+            // Extraer flag de recurrencia ANTES de deserializar Evento
+            boolean esRecurrente = node.has("recurrente") && node.get("recurrente").asBoolean(false);
+            String  patron       = node.has("patron")     ? node.get("patron").asText(null) : null;
+
+            // Eliminar campos que Evento no tiene para evitar error de deserialización
+            node.remove("recurrente");
+            node.remove("patron");
+            node.remove("diasSemana");
+
+            Evento evento = objectMapper.treeToValue(node, Evento.class);
             evento.setTextoOriginalVoz(request.getTexto());
+
+            // Si es recurrente, guardar info en datosExtra
+            if (esRecurrente && patron != null) {
+                java.util.Map<String, Object> extra = evento.getDatosExtra() != null
+                    ? new java.util.HashMap<>(evento.getDatosExtra())
+                    : new java.util.HashMap<>();
+                extra.put("recurrente", true);
+                extra.put("patron", patron);
+                // Guardar texto original para que el frontend pueda mostrar aviso
+                extra.put("textoRecurrencia", request.getTexto());
+                evento.setDatosExtra(extra);
+            }
 
             return new EventoIaResponse(true, null, evento,
                     System.currentTimeMillis() - inicio);
 
         } catch (Exception e) {
-            log.error("Error interpretando texto de voz", e);
+            log.error("Error interpretando texto de voz: {}", e.getMessage());
             return new EventoIaResponse(false,
                     "No pude interpretar el texto. Inténtalo de nuevo o crea el evento manualmente.",
                     null, System.currentTimeMillis() - inicio);
         }
+    }
+
+    /** Normaliza "16:00" o "16:00 H" a "16:00:00" para que LocalTime lo acepte */
+    private void normalizarHora(com.fasterxml.jackson.databind.node.ObjectNode node, String campo) {
+        if (!node.has(campo) || node.get(campo).isNull()) return;
+        String val = node.get(campo).asText("").trim()
+                         .replaceAll("(?i)\s*[Hh].*$", "") // quitar " H", " h", " horas"
+                         .trim();
+        if (val.isEmpty() || val.equals("null")) { node.putNull(campo); return; }
+        // "16:00" → "16:00:00"
+        if (val.matches("\d{1,2}:\d{2}$")) val = val + ":00";
+        // "16" → "16:00:00"
+        if (val.matches("\d{1,2}$")) val = val + ":00:00";
+        node.put(campo, val);
     }
 
     // ── Consulta en lenguaje natural sobre el calendario ─────
@@ -59,33 +105,64 @@ public class EventoIaService {
                 : LocalDate.now().format(DateTimeFormatter.ISO_DATE);
 
         return """
-            Eres un asistente de calendario inteligente. Tu tarea es convertir texto en lenguaje natural a un evento de calendario en formato JSON.
-            
+            Eres un asistente de calendario. Convierte texto en lenguaje natural a JSON de evento de calendario.
+
             FECHA DE HOY: %s
-            
-            TIPOS DE EVENTO DISPONIBLES (usa exactamente estos valores):
-            CUMPLEANOS, CITA_MEDICA, TUTORIA, CLAUSTRO, CURSO, EXTRAESCOLAR, VIAJE, VACACIONES, COMIDA, COMPRAS, OTRO
-            
-            REGLAS ESTRICTAS:
-            1. Responde ÚNICAMENTE con el JSON, sin texto adicional, sin markdown, sin explicaciones.
-            2. Las fechas deben estar en formato ISO: YYYY-MM-DD
-            3. Las horas en formato HH:mm:ss
-            4. Si no se menciona hora, deja horaInicio como null
-            5. Si no se menciona lugar, deja lugar como null
-            6. Infiere el tipo de evento del contexto
-            7. El título debe ser descriptivo y conciso (máximo 60 caracteres)
-            8. En personasRelacionadas pon los nombres mencionados separados por coma
-            9. Si hay cancelación o cambio, refléjalo en la descripción
-            10. datosExtra debe contener campos específicos del tipo de evento
-            
-            EJEMPLOS DE datosExtra por tipo:
-            - CITA_MEDICA: {"especialidad":"cabecera","medico":null,"centro":"consultas externas","paciente":"Rocio"}
-            - CUMPLEANOS: {"nombre_persona":"Alberto de Martín","lugar_celebracion":"Costaballena"}
-            - EXTRAESCOLAR: {"actividad":"teatro","alumno":"Alicia","motivo_cancelacion":"tiene que estudiar"}
-            
-            TEXTO A INTERPRETAR: "%s"
-            
-            JSON DE RESPUESTA (solo el JSON, nada más):
+
+            TIPOS DISPONIBLES — elige el más adecuado al contexto:
+            - CUMPLEANOS   → cumpleaños, aniversario, celebración de nacimiento
+            - CITA_MEDICA  → médico, consulta, hospital, dentista, revisión
+            - TUTORIA      → tutoría, reunión con profesor, entrevista escolar
+            - CLAUSTRO     → claustro, reunión de profesores, junta escolar
+            - CURSO        → curso, formación, clase, taller
+            - EXTRAESCOLAR → extraescolar, actividad, teatro, deporte, música, ballet
+            - VIAJE        → viaje, excursión, desplazamiento
+            - VACACIONES   → vacaciones, días libres, puente
+            - COMIDA       → comida, cena, almuerzo, restaurante
+            - COMPRAS      → compras, supermercado, recado
+            - OTRO         → cualquier otra cosa
+
+            REGLAS CRÍTICAS:
+            1. Responde SOLO con JSON válido, sin texto extra, sin markdown, sin ```
+            2. fechaInicio y fechaFin: formato YYYY-MM-DD obligatorio
+            3. horaInicio y horaFin: formato HH:mm:ss (ej: "16:00:00"). Si no hay hora → null
+            4. "16:00 H", "las 4 de la tarde", "a las 16h" → "16:00:00"
+            5. "las 7" sin contexto AM/PM en evento de tarde → "19:00:00"
+            6. Si el evento es recurrente (todos los martes, cada semana...) → recurrente:true, patron:"WEEKLY", diasSemana:["TUESDAY"] o similar
+            7. Si no hay recurrencia → recurrente:false
+            8. tipo: usa EXACTAMENTE uno de los valores en mayúsculas de la lista anterior
+            9. titulo: máximo 60 caracteres, descriptivo
+            10. lugar: null si no se menciona
+            11. personasRelacionadas: nombres separados por coma, null si no hay
+
+            ESTRUCTURA JSON REQUERIDA:
+            {
+              "tipo": "CUMPLEANOS",
+              "titulo": "Cumpleaños de Noa",
+              "fechaInicio": "2026-05-30",
+              "fechaFin": null,
+              "horaInicio": "16:00:00",
+              "horaFin": "19:00:00",
+              "todoDia": false,
+              "lugar": "Costaballena",
+              "personasRelacionadas": "Noa",
+              "descripcion": null,
+              "recurrente": false,
+              "patron": null,
+              "diasSemana": null,
+              "datosExtra": {"nombre_persona": "Noa", "lugar_celebracion": "Costaballena"}
+            }
+
+            EJEMPLOS DE TIPOS CORRECTOS:
+            - "cumpleaños de Noa" → tipo: "CUMPLEANOS"
+            - "teatro de Alicia" / "extraescolar" → tipo: "EXTRAESCOLAR"
+            - "claustro de Rocío" / "reunión profesores" → tipo: "CLAUSTRO"
+            - "cita médica" / "médico" → tipo: "CITA_MEDICA"
+            - "vacaciones" → tipo: "VACACIONES"
+
+            TEXTO: "%s"
+
+            JSON:
             """.formatted(fechaHoy, req.getTexto());
     }
 

@@ -138,4 +138,28 @@ public class CalendarioController {
             @RequestParam int year, @RequestParam int month) {
         return ResponseEntity.ok(eventoService.findByMes(year, month));
     }
+
+    // ── API: Eliminar evento individual (desde el grid) ───────
+    @DeleteMapping("/api/eliminar/{id}")
+    @ResponseBody
+    public ResponseEntity<Void> eliminarApi(@PathVariable UUID id) {
+        eventoService.delete(id);
+        return ResponseEntity.ok().build();
+    }
+
+    // ── API: Vaciar todos los eventos (solo para pruebas) ─────
+    @DeleteMapping("/api/vaciar")
+    @ResponseBody
+    public ResponseEntity<Void> vaciarEventos() {
+        eventoService.deleteAll();
+        return ResponseEntity.ok().build();
+    }
+
+    // ── API: Confirmar evento recurrente → genera todos los eventos ──
+    @PostMapping("/api/confirmar-recurrente")
+    @ResponseBody
+    public ResponseEntity<List<Evento>> confirmarRecurrente(
+            @RequestBody EventoConfirmarRequest dto) {
+        return ResponseEntity.ok(eventoService.saveRecurrente(dto));
+    }
 }

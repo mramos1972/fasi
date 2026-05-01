@@ -27,6 +27,11 @@
          class="flex items-center gap-2 bg-gray-900 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition text-sm font-semibold">
         + Nuevo evento
       </a>
+      <button onclick="borrarTodosEventos()"
+              class="flex items-center gap-2 bg-red-700 hover:bg-red-800 text-white px-4 py-2 rounded-lg transition text-sm font-semibold"
+              title="Solo para pruebas — elimina TODOS los eventos">
+        🗑️ Vaciar BD
+      </button>
     </div>
   </div>
 
@@ -211,11 +216,20 @@
           const emoji = (e.tipo && e.tipo.emoji) ? e.tipo.emoji : '📅';
           const color = (e.tipo && e.tipo.color) ? e.tipo.color : '#6366f1';
           html += `
-            <div class="text-xs px-1.5 py-0.5 rounded mb-0.5 truncate text-white font-semibold shadow-sm cursor-pointer"
-                 style="background-color:${color}"
-                 title="${e.titulo}"
-                 onclick="event.stopPropagation(); window.location='/calendario/${e.id}/editar'">
-              ${emoji} ${e.titulo}
+            <div class="text-xs px-1.5 py-0.5 rounded mb-0.5 text-white font-semibold shadow-sm
+                        flex items-center gap-1 group"
+                 style="background-color:${color}">
+              <span class="flex-1 truncate cursor-pointer"
+                    title="${e.titulo}"
+                    onclick="event.stopPropagation(); window.location='/calendario/${e.id}/editar'">
+                ${emoji} ${e.titulo}
+              </span>
+              <button class="opacity-0 group-hover:opacity-100 transition-opacity
+                             hover:bg-black/20 rounded px-0.5 leading-none flex-shrink-0"
+                      title="Eliminar evento"
+                      onclick="event.stopPropagation(); eliminarEvento('${e.id}', '${e.titulo.replace(/'/g, '\'')}')">
+                ✕
+              </button>
             </div>`;
         });
 
@@ -386,26 +400,65 @@
       const c = document.getElementById('preview-contenido');
       const tipoLabel = (evento.tipo && evento.tipo.label) ? evento.tipo.label : (evento.tipo || '');
       const tipoEmoji = (evento.tipo && evento.tipo.emoji) ? evento.tipo.emoji : '📅';
+
+      // Fecha: mostrar rango si hay fechaFin distinta
+      let fechaStr = evento.fechaInicio || '-';
+      if (evento.fechaFin && evento.fechaFin !== evento.fechaInicio) {
+        fechaStr += ' → ' + evento.fechaFin;
+        const d1   = new Date(evento.fechaInicio + 'T00:00:00');
+        const d2   = new Date(evento.fechaFin    + 'T00:00:00');
+        const dias = Math.round((d2 - d1) / 86400000) + 1;
+        fechaStr  += ` (${dias} días)`;
+      }
+      if (evento.horaInicio) fechaStr += ' a las ' + evento.horaInicio.substring(0,5);
+
+      // Detectar si es recurrente
+      const esRecurrente = evento.datosExtra && evento.datosExtra.recurrente === true;
+      const patron       = esRecurrente ? evento.datosExtra.patron : null;
+
       c.innerHTML = `
         <p><strong>Tipo:</strong> ${tipoEmoji} ${tipoLabel}</p>
         <p><strong>Título:</strong> ${evento.titulo || '-'}</p>
-        <p><strong>Fecha:</strong> ${evento.fechaInicio || '-'}${evento.horaInicio ? ' a las ' + evento.horaInicio : ''}</p>
-        ${evento.lugar ? `<p><strong>Lugar:</strong> ${evento.lugar}</p>` : ''}
+        <p><strong>Fecha:</strong> ${fechaStr}</p>
+        ${evento.lugar ? `<p><strong>Lugar:</strong> 📍 ${evento.lugar}</p>` : ''}
         ${evento.personasRelacionadas ? `<p><strong>Personas:</strong> ${evento.personasRelacionadas}</p>` : ''}
         ${evento.descripcion ? `<p><strong>Notas:</strong> ${evento.descripcion}</p>` : ''}
+        ${esRecurrente ? `<p class="mt-2 text-indigo-600 font-semibold">🔁 Evento recurrente detectado (${patron || 'periódico'})<br>
+          <span class="font-normal text-xs text-gray-500">Se generarán todos los eventos del patrón</span></p>` : ''}
       `;
+
+      // Mostrar botón especial si es recurrente
+      const btnConfirmar = document.querySelector('#preview-evento button[onclick="confirmarEvento()"]');
+      if (btnConfirmar) {
+        if (esRecurrente) {
+          btnConfirmar.textContent = '🔁 Confirmar todos los eventos';
+          btnConfirmar.classList.replace('bg-green-600', 'bg-indigo-600');
+          btnConfirmar.classList.replace('hover:bg-green-700', 'hover:bg-indigo-700');
+        } else {
+          btnConfirmar.textContent = '✅ Confirmar y guardar';
+          btnConfirmar.classList.replace('bg-indigo-600', 'bg-green-600');
+          btnConfirmar.classList.replace('hover:bg-indigo-700', 'hover:bg-green-700');
+        }
+      }
+
       document.getElementById('preview-evento').style.display = 'block';
     }
 
     async function confirmarEvento() {
       if (!eventoActual) return;
+      const esRecurrente = eventoActual.datosExtra && eventoActual.datosExtra.recurrente === true;
+      const endpoint     = esRecurrente ? '/calendario/api/confirmar-recurrente' : '/calendario/api/confirmar';
       try {
-        const resp = await fetch('/calendario/api/confirmar', {
+        const resp = await fetch(endpoint, {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
           body:    JSON.stringify(eventoActual)
         });
         if (resp.ok) {
+          const data = await resp.json();
+          if (esRecurrente && Array.isArray(data)) {
+            alert(`✅ Se crearon ${data.length} eventos recurrentes.`);
+          }
           cerrarModalVoz();
           window.location.reload();
         } else {
@@ -419,6 +472,37 @@
     function editarManual() {
       if (!eventoActual) return;
       window.location = '/calendario/nuevo?fecha=' + (eventoActual.fechaInicio || HOY);
+    }
+
+    // ── Eliminar evento individual ───────────────────────────
+    async function eliminarEvento(id, titulo) {
+      if (!confirm(`¿Eliminar "${titulo}"?\nSi tiene rango de fechas se borrará de todos los días.`)) return;
+      try {
+        const resp = await fetch(`/calendario/api/eliminar/${id}`, { method: 'DELETE' });
+        if (resp.ok) {
+          window.location.reload();
+        } else {
+          alert('Error al eliminar el evento.');
+        }
+      } catch (err) {
+        alert('Error de conexión: ' + err.message);
+      }
+    }
+
+    // ── Borrar TODOS los eventos (solo para pruebas) ──────────
+    async function borrarTodosEventos() {
+      if (!confirm('⚠️ ¿Borrar TODOS los eventos de la base de datos?\nEsta acción no se puede deshacer.')) return;
+      if (!confirm('¿Estás seguro? Se eliminarán TODOS los eventos permanentemente.')) return;
+      try {
+        const resp = await fetch('/calendario/api/vaciar', { method: 'DELETE' });
+        if (resp.ok) {
+          window.location.reload();
+        } else {
+          alert('Error al vaciar los eventos.');
+        }
+      } catch (err) {
+        alert('Error de conexión: ' + err.message);
+      }
     }
 
     // ── Init ─────────────────────────────────────────────────

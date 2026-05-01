@@ -69,7 +69,6 @@ public class Evento extends BaseEntity {
     private String textoOriginalVoz;
 
     // ── Enum de tipos ────────────────────────────────────────
-    @com.fasterxml.jackson.annotation.JsonFormat(shape = com.fasterxml.jackson.annotation.JsonFormat.Shape.OBJECT)
     public enum TipoEvento {
         CUMPLEANOS,
         CITA_MEDICA,
@@ -131,17 +130,33 @@ public class Evento extends BaseEntity {
             };
         }
 
-        /** Necesario para que el DTO pueda resolver el tipo por nombre */
-        public String getName() { return this.name(); }
+        /** Serializar siempre como objeto con todos los campos para el frontend */
+        @com.fasterxml.jackson.annotation.JsonValue
+        public java.util.Map<String, String> toJson() {
+            return java.util.Map.of(
+                "name",  this.name(),
+                "label", this.getLabel(),
+                "emoji", this.getEmoji(),
+                "color", this.getColor()
+            );
+        }
 
+        /** Deserializar desde String "CUMPLEANOS" o desde objeto {name:"CUMPLEANOS",...} */
         @com.fasterxml.jackson.annotation.JsonCreator
         public static TipoEvento fromValue(Object value) {
             if (value instanceof String s) {
-                try { return TipoEvento.valueOf(s.trim().toUpperCase()); }
+                String v = s.trim().toUpperCase();
+                try { return TipoEvento.valueOf(v); }
                 catch (IllegalArgumentException ignored) {}
-                // Buscar por label
                 for (TipoEvento t : values()) {
                     if (t.getLabel().equalsIgnoreCase(s.trim())) return t;
+                }
+            }
+            if (value instanceof java.util.Map<?,?> m) {
+                Object n = m.get("name");
+                if (n instanceof String s) {
+                    try { return TipoEvento.valueOf(s.trim().toUpperCase()); }
+                    catch (IllegalArgumentException ignored) {}
                 }
             }
             return OTRO;

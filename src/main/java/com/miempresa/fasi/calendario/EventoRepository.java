@@ -13,6 +13,17 @@ import java.util.UUID;
 public interface EventoRepository extends JpaRepository<Evento, UUID> {
 
     // ── Consultas por rango de fechas (para la vista mensual/semanal) ──
+    // Incluye eventos que EMPIEZAN en el mes O cuyo rango SOLAPA con el mes
+    @Query("""
+        SELECT e FROM Evento e
+        WHERE e.fechaInicio <= :hasta
+          AND (e.fechaFin IS NULL OR e.fechaFin >= :desde)
+        ORDER BY e.fechaInicio ASC, e.horaInicio ASC
+        """)
+    List<Evento> findByMesConRango(@Param("desde") LocalDate desde,
+                                   @Param("hasta") LocalDate hasta);
+
+    // Mantener el original para compatibilidad
     List<Evento> findByFechaInicioBetweenOrderByFechaInicioAscHoraInicioAsc(
             LocalDate desde, LocalDate hasta);
 

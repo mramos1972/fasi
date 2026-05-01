@@ -6,6 +6,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.DayOfWeek;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -21,7 +23,7 @@ public class EventoService {
     public List<Evento> findByMes(int year, int month) {
         LocalDate inicio = LocalDate.of(year, month, 1);
         LocalDate fin    = inicio.withDayOfMonth(inicio.lengthOfMonth());
-        return repo.findByFechaInicioBetweenOrderByFechaInicioAscHoraInicioAsc(inicio, fin);
+        return repo.findByMesConRango(inicio, fin);
     }
 
     public List<Evento> findBySemana(LocalDate lunesSemana) {
@@ -76,5 +78,60 @@ public class EventoService {
     @Transactional
     public void delete(UUID id) {
         repo.deleteById(id);
+    }
+
+    @Transactional
+    public void deleteAll() {
+        repo.deleteAll();
+    }
+
+    /**
+     * Genera todos los eventos de un patrón recurrente.
+     * Soporta: WEEKLY (semanal), DAILY (diario), MONTHLY (mensual).
+     * Por defecto genera durante 3 meses desde fechaInicio.
+     */
+    @Transactional
+    public List<Evento> saveRecurrente(EventoConfirmarRequest dto) {
+        Evento base = dto.toEvento();
+
+        // Leer patrón de datosExtra
+        String patron = "WEEKLY";
+        if (base.getDatosExtra() != null && base.getDatosExtra().containsKey("patron")) {
+            patron = base.getDatosExtra().get("patron").toString().toUpperCase();
+        }
+
+        LocalDate inicio = base.getFechaInicio();
+        LocalDate limite = inicio.plusMonths(3); // generar 3 meses
+
+        List<Evento> generados = new ArrayList<>();
+        LocalDate cursor = inicio;
+
+        while (!cursor.isAfter(limite)) {
+            Evento e = new Evento();
+            e.setTipo(base.getTipo());
+            e.setTitulo(base.getTitulo());
+            e.setFechaInicio(cursor);
+            e.setFechaFin(base.getFechaFin() != null
+                ? cursor.plusDays(java.time.temporal.ChronoUnit.DAYS.between(inicio, base.getFechaFin()))
+                : null);
+            e.setHoraInicio(base.getHoraInicio());
+            e.setHoraFin(base.getHoraFin());
+            e.setTodoDia(base.isTodoDia());
+            e.setLugar(base.getLugar());
+            e.setPersonasRelacionadas(base.getPersonasRelacionadas());
+            e.setDescripcion(base.getDescripcion());
+            e.setRecordatorioMinutos(base.getRecordatorioMinutos());
+            e.setDatosExtra(base.getDatosExtra());
+            e.setTextoOriginalVoz(base.getTextoOriginalVoz());
+            generados.add(repo.save(e));
+
+            cursor = switch (patron) {
+                case "DAILY"   -> cursor.plusDays(1);
+                case "MONTHLY" -> cursor.plusMonths(1);
+                default        -> cursor.plusWeeks(1); // WEEKLY
+            };
+        }
+
+        return generados;
     }
 }
