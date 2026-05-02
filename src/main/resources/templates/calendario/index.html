@@ -401,9 +401,19 @@
       const tipoLabel = (evento.tipo && evento.tipo.label) ? evento.tipo.label : (evento.tipo || '');
       const tipoEmoji = (evento.tipo && evento.tipo.emoji) ? evento.tipo.emoji : '📅';
 
-      // Fecha: mostrar rango si hay fechaFin distinta
+      // Detectar si es recurrente ANTES de calcular fechaStr
+      const esRecurrente = evento.datosExtra && evento.datosExtra.recurrente === true;
+      const patron       = esRecurrente ? evento.datosExtra.patron : null;
+      const diaSemana    = esRecurrente && evento.datosExtra.diaSemana ? evento.datosExtra.diaSemana : null;
+
+      // Fecha: si es recurrente mostrar periodo, si no mostrar rango normal
       let fechaStr = evento.fechaInicio || '-';
-      if (evento.fechaFin && evento.fechaFin !== evento.fechaInicio) {
+      if (esRecurrente && evento.fechaFin) {
+        // Para recurrentes: mostrar "del DD/MM al DD/MM" sin contar días
+        const fi = evento.fechaInicio ? evento.fechaInicio.split('-').reverse().slice(0,2).join('/') : '-';
+        const ff = evento.fechaFin.split('-').reverse().slice(0,2).join('/');
+        fechaStr = `del ${fi} al ${ff}`;
+      } else if (evento.fechaFin && evento.fechaFin !== evento.fechaInicio) {
         fechaStr += ' → ' + evento.fechaFin;
         const d1   = new Date(evento.fechaInicio + 'T00:00:00');
         const d2   = new Date(evento.fechaFin    + 'T00:00:00');
@@ -412,10 +422,6 @@
       }
       if (evento.horaInicio) fechaStr += ' a las ' + evento.horaInicio.substring(0,5);
 
-      // Detectar si es recurrente
-      const esRecurrente = evento.datosExtra && evento.datosExtra.recurrente === true;
-      const patron       = esRecurrente ? evento.datosExtra.patron : null;
-
       c.innerHTML = `
         <p><strong>Tipo:</strong> ${tipoEmoji} ${tipoLabel}</p>
         <p><strong>Título:</strong> ${evento.titulo || '-'}</p>
@@ -423,8 +429,8 @@
         ${evento.lugar ? `<p><strong>Lugar:</strong> 📍 ${evento.lugar}</p>` : ''}
         ${evento.personasRelacionadas ? `<p><strong>Personas:</strong> ${evento.personasRelacionadas}</p>` : ''}
         ${evento.descripcion ? `<p><strong>Notas:</strong> ${evento.descripcion}</p>` : ''}
-        ${esRecurrente ? `<p class="mt-2 text-indigo-600 font-semibold">🔁 Evento recurrente detectado (${patron || 'periódico'})<br>
-          <span class="font-normal text-xs text-gray-500">Se generarán todos los eventos del patrón</span></p>` : ''}
+        ${esRecurrente ? `<p class="mt-2 text-indigo-600 font-semibold">🔁 Evento recurrente detectado (${patron || 'periódico'})${diaSemana ? ' · cada ' + diaSemana : ''}<br>
+          <span class="font-normal text-xs text-gray-500">Se generarán todos los eventos del patrón en el periodo indicado</span></p>` : ''}
       `;
 
       // Mostrar botón especial si es recurrente

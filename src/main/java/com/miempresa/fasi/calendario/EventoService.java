@@ -2,6 +2,7 @@ package com.miempresa.fasi.calendario;
 
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -11,6 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -88,7 +90,8 @@ public class EventoService {
     /**
      * Genera todos los eventos de un patrón recurrente.
      * Soporta: WEEKLY (semanal), DAILY (diario), MONTHLY (mensual).
-     * Por defecto genera durante 3 meses desde fechaInicio.
+     * Respeta fechaFin como límite si está definida; si no, usa 3 meses desde fechaInicio.
+     * Para WEEKLY: avanza de 7 en 7 días desde la fechaInicio (que ya debe ser el día correcto).
      */
     @Transactional
     public List<Evento> saveRecurrente(EventoConfirmarRequest dto) {
@@ -101,19 +104,44 @@ public class EventoService {
         }
 
         LocalDate inicio = base.getFechaInicio();
-        LocalDate limite = inicio.plusMonths(3); // generar 3 meses
+
+        // Límite: usar fechaFin si existe (la IA la calcula), si no 3 meses
+        LocalDate limite;
+        if (base.getFechaFin() != null && base.getFechaFin().isAfter(inicio)) {
+            limite = base.getFechaFin();
+        } else {
+            limite = inicio.plusMonths(3);
+        }
+
+        // Para WEEKLY: avanzar inicio hasta el primer día de semana correcto
+        // La IA puede equivocarse en la fecha exacta — el backend la corrige
+        if ("WEEKLY".equals(patron) && base.getDatosExtra() != null
+                && base.getDatosExtra().containsKey("diaSemana")) {
+            String diaNombre = base.getDatosExtra().get("diaSemana").toString().toUpperCase();
+            DayOfWeek diaObjetivo = parseDiaSemana(diaNombre);
+            if (diaObjetivo != null) {
+                // Retroceder al inicio del mes para no perder el primer día
+                inicio = inicio.withDayOfMonth(1);
+                // Avanzar hasta el primer día correcto del mes
+                while (inicio.getDayOfWeek() != diaObjetivo) {
+                    inicio = inicio.plusDays(1);
+                }
+            }
+        }
 
         List<Evento> generados = new ArrayList<>();
         LocalDate cursor = inicio;
+
+        // Guardar fechaFin original para no confundirla con la del rango recurrente
+        // (en eventos recurrentes fechaFin del base es el límite de la serie, no del evento)
+        LocalDate fechaFinEvento = null; // cada evento individual no tiene fechaFin (es de 1 día)
 
         while (!cursor.isAfter(limite)) {
             Evento e = new Evento();
             e.setTipo(base.getTipo());
             e.setTitulo(base.getTitulo());
             e.setFechaInicio(cursor);
-            e.setFechaFin(base.getFechaFin() != null
-                ? cursor.plusDays(java.time.temporal.ChronoUnit.DAYS.between(inicio, base.getFechaFin()))
-                : null);
+            e.setFechaFin(fechaFinEvento);   // cada ocurrencia es 1 día
             e.setHoraInicio(base.getHoraInicio());
             e.setHoraFin(base.getHoraFin());
             e.setTodoDia(base.isTodoDia());
@@ -128,10 +156,26 @@ public class EventoService {
             cursor = switch (patron) {
                 case "DAILY"   -> cursor.plusDays(1);
                 case "MONTHLY" -> cursor.plusMonths(1);
-                default        -> cursor.plusWeeks(1); // WEEKLY
+                default        -> cursor.plusWeeks(1); // WEEKLY: exactamente +7 días
             };
         }
 
+        log.info("Recurrencia {}: {} eventos generados entre {} y {}",
+                patron, generados.size(), inicio, limite);
         return generados;
+    }
+
+    /** Convierte nombre de día en español o inglés a DayOfWeek */
+    private DayOfWeek parseDiaSemana(String nombre) {
+        return switch (nombre.toUpperCase().trim()) {
+            case "LUNES",     "MONDAY"    -> DayOfWeek.MONDAY;
+            case "MARTES",    "TUESDAY"   -> DayOfWeek.TUESDAY;
+            case "MIERCOLES", "WEDNESDAY" -> DayOfWeek.WEDNESDAY;
+            case "JUEVES",    "THURSDAY"  -> DayOfWeek.THURSDAY;
+            case "VIERNES",   "FRIDAY"    -> DayOfWeek.FRIDAY;
+            case "SABADO",    "SATURDAY"  -> DayOfWeek.SATURDAY;
+            case "DOMINGO",   "SUNDAY"    -> DayOfWeek.SUNDAY;
+            default -> null;
+        };
     }
 }

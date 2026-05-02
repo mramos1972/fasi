@@ -48,7 +48,7 @@ public class EventoIaService {
             // Eliminar campos que Evento no tiene para evitar error de deserialización
             node.remove("recurrente");
             node.remove("patron");
-            node.remove("diasSemana");
+            // NO eliminar diaSemana — lo necesita saveRecurrente
 
             Evento evento = objectMapper.treeToValue(node, Evento.class);
             evento.setTextoOriginalVoz(request.getTexto());
@@ -62,6 +62,10 @@ public class EventoIaService {
                 extra.put("patron", patron);
                 // Guardar texto original para que el frontend pueda mostrar aviso
                 extra.put("textoRecurrencia", request.getTexto());
+                // Guardar diaSemana en datosExtra si la IA lo devolvió
+                if (node.has("diaSemana") && !node.get("diaSemana").isNull()) {
+                    extra.put("diaSemana", node.get("diaSemana").asText());
+                }
                 evento.setDatosExtra(extra);
             }
 
@@ -80,13 +84,13 @@ public class EventoIaService {
     private void normalizarHora(com.fasterxml.jackson.databind.node.ObjectNode node, String campo) {
         if (!node.has(campo) || node.get(campo).isNull()) return;
         String val = node.get(campo).asText("").trim()
-                         .replaceAll("(?i)\s*[Hh].*$", "") // quitar " H", " h", " horas"
+                         .replaceAll("(?i)\\s*[Hh].*$", "") // quitar " H", " h", " horas"
                          .trim();
         if (val.isEmpty() || val.equals("null")) { node.putNull(campo); return; }
         // "16:00" → "16:00:00"
-        if (val.matches("\d{1,2}:\d{2}$")) val = val + ":00";
+        if (val.matches("\\d{1,2}:\\d{2}$")) val = val + ":00";
         // "16" → "16:00:00"
-        if (val.matches("\d{1,2}$")) val = val + ":00:00";
+        if (val.matches("\\d{1,2}$")) val = val + ":00:00";
         node.put(campo, val);
     }
 
@@ -103,70 +107,50 @@ public class EventoIaService {
         String fechaHoy = req.getFechaContexto() != null
                 ? req.getFechaContexto()
                 : LocalDate.now().format(DateTimeFormatter.ISO_DATE);
+        String texto = req.getTexto();
 
-        return """
-            Eres un asistente de calendario. Convierte texto en lenguaje natural a JSON de evento de calendario.
-
-            FECHA DE HOY: %s
-
-            TIPOS DISPONIBLES — elige el más adecuado al contexto:
-            - CUMPLEANOS   → cumpleaños, aniversario, celebración de nacimiento
-            - CITA_MEDICA  → médico, consulta, hospital, dentista, revisión
-            - TUTORIA      → tutoría, reunión con profesor, entrevista escolar
-            - CLAUSTRO     → claustro, reunión de profesores, junta escolar
-            - CURSO        → curso, formación, clase, taller
-            - EXTRAESCOLAR → extraescolar, actividad, teatro, deporte, música, ballet
-            - VIAJE        → viaje, excursión, desplazamiento
-            - VACACIONES   → vacaciones, días libres, puente
-            - COMIDA       → comida, cena, almuerzo, restaurante
-            - COMPRAS      → compras, supermercado, recado
-            - OTRO         → cualquier otra cosa
-
-            REGLAS CRÍTICAS:
-            1. Responde SOLO con JSON válido, sin texto extra, sin markdown, sin ```
-            2. fechaInicio y fechaFin: formato YYYY-MM-DD obligatorio
-            3. horaInicio y horaFin: formato HH:mm:ss (ej: "16:00:00"). Si no hay hora → null
-            4. "16:00 H", "las 4 de la tarde", "a las 16h" → "16:00:00"
-            5. "las 7" sin contexto AM/PM en evento de tarde → "19:00:00"
-            6. Si el evento es recurrente (todos los martes, cada semana...) → recurrente:true, patron:"WEEKLY", diasSemana:["TUESDAY"] o similar
-            7. Si no hay recurrencia → recurrente:false
-            8. tipo: usa EXACTAMENTE uno de los valores en mayúsculas de la lista anterior
-            9. titulo: máximo 60 caracteres, descriptivo
-            10. lugar: null si no se menciona
-            11. personasRelacionadas: nombres separados por coma, null si no hay
-
-            ESTRUCTURA JSON REQUERIDA:
-            {
-              "tipo": "CUMPLEANOS",
-              "titulo": "Cumpleaños de Noa",
-              "fechaInicio": "2026-05-30",
-              "fechaFin": null,
-              "horaInicio": "16:00:00",
-              "horaFin": "19:00:00",
-              "todoDia": false,
-              "lugar": "Costaballena",
-              "personasRelacionadas": "Noa",
-              "descripcion": null,
-              "recurrente": false,
-              "patron": null,
-              "diasSemana": null,
-              "datosExtra": {"nombre_persona": "Noa", "lugar_celebracion": "Costaballena"}
-            }
-
-            EJEMPLOS DE TIPOS CORRECTOS:
-            - "cumpleaños de Noa" → tipo: "CUMPLEANOS"
-            - "teatro de Alicia" / "extraescolar" → tipo: "EXTRAESCOLAR"
-            - "claustro de Rocío" / "reunión profesores" → tipo: "CLAUSTRO"
-            - "cita médica" / "médico" → tipo: "CITA_MEDICA"
-            - "vacaciones" → tipo: "VACACIONES"
-
-            TEXTO: "%s"
-
-            JSON:
-            """.formatted(fechaHoy, req.getTexto());
+        StringBuilder sb = new StringBuilder();
+        sb.append("Eres un asistente de calendario. Convierte el texto en JSON.\n\n");
+        sb.append("FECHA HOY: ").append(fechaHoy).append("\n\n");
+        sb.append("TIPOS (elige el mas adecuado):\n");
+        sb.append("CUMPLEANOS, CITA_MEDICA, TUTORIA, CLAUSTRO, CURSO, EXTRAESCOLAR, VIAJE, VACACIONES, COMIDA, COMPRAS, OTRO\n\n");
+        sb.append("REGLAS:\n");
+        sb.append("1. Responde SOLO con JSON valido. Sin texto extra. Sin markdown.\n");
+        sb.append("2. fechaInicio: primer dia del mes/periodo indicado. Formato YYYY-MM-DD.\n");
+        sb.append("3. fechaFin: ultimo dia del mes/periodo indicado. Formato YYYY-MM-DD.\n");
+        sb.append("4. horaInicio: formato HH:mm:ss. Ejemplos: 11:00:00, 16:00:00, 09:00:00\n");
+        sb.append("5. Si dice sabado -> diaSemana: SABADO. Si dice martes -> MARTES. Etc.\n");
+        sb.append("6. Si es recurrente (todos los X, cada semana) -> recurrente: true, patron: WEEKLY\n");
+        sb.append("7. tipo: EXTRAESCOLAR para teatro, deporte, actividades. CUMPLEANOS para cumples.\n");
+        sb.append("8. titulo: maximo 60 caracteres.\n\n");
+        sb.append("EJEMPLOS DE INTERPRETACION:\n");
+        sb.append("- todos los sabados de junio y julio -> recurrente:true, diaSemana:SABADO, fechaInicio:2026-06-01, fechaFin:2026-07-31\n");
+        sb.append("- todos los martes de junio -> recurrente:true, diaSemana:MARTES, fechaInicio:2026-06-01, fechaFin:2026-06-30\n");
+        sb.append("- cumpleanos de Noa el 30 de mayo -> tipo:CUMPLEANOS, fechaInicio:2026-05-30, recurrente:false\n");
+        sb.append("- teatro de Alicia -> tipo:EXTRAESCOLAR\n\n");
+        sb.append("ESTRUCTURA JSON:\n");
+        sb.append("{\n");
+        sb.append("  \"tipo\": \"EXTRAESCOLAR\",\n");
+        sb.append("  \"titulo\": \"Teatro Alicia\",\n");
+        sb.append("  \"fechaInicio\": \"2026-06-01\",\n");
+        sb.append("  \"fechaFin\": \"2026-07-31\",\n");
+        sb.append("  \"horaInicio\": \"11:00:00\",\n");
+        sb.append("  \"horaFin\": null,\n");
+        sb.append("  \"todoDia\": false,\n");
+        sb.append("  \"lugar\": null,\n");
+        sb.append("  \"personasRelacionadas\": \"Alicia\",\n");
+        sb.append("  \"descripcion\": null,\n");
+        sb.append("  \"recurrente\": true,\n");
+        sb.append("  \"patron\": \"WEEKLY\",\n");
+        sb.append("  \"diaSemana\": \"SABADO\",\n");
+        sb.append("  \"datosExtra\": {}\n");
+        sb.append("}\n\n");
+        sb.append("TEXTO: \"").append(texto).append("\"\n\n");
+        sb.append("JSON:");
+        return sb.toString();
     }
 
-    // ── Prompt para consultas sobre el calendario ─────────────
+        // ── Prompt para consultas sobre el calendario ─────────────
     private String buildPromptConsulta(String pregunta, String contexto) {
         return """
             Eres FASI-IA, asistente inteligente del calendario FASI.
