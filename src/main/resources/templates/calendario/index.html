@@ -511,8 +511,103 @@
       }
     }
 
+    // ── Recordatorios (Web Notifications API) ───────────────
+    const RECORDATORIOS_DISPARADOS = new Set(); // evitar duplicados en la sesión
+
+    async function iniciarRecordatorios() {
+      // Pedir permiso si no está concedido
+      if (!('Notification' in window)) return;
+      if (Notification.permission === 'default') {
+        await Notification.requestPermission();
+      }
+      if (Notification.permission !== 'granted') return;
+
+      // Comprobar cada 60 segundos
+      comprobarRecordatorios();
+      setInterval(comprobarRecordatorios, 60000);
+    }
+
+    async function comprobarRecordatorios() {
+      if (Notification.permission !== 'granted') return;
+
+      try {
+        // Obtener próximos eventos (3 meses) desde la API
+        const ahora    = new Date();
+        const year     = ahora.getFullYear();
+        const month    = ahora.getMonth() + 1;
+        const resp     = await fetch(`/calendario/api/mes?year=${year}&month=${month}`);
+        const eventos  = await resp.json();
+
+        // También comprobar mes siguiente
+        const mesNext  = month === 12 ? 1 : month + 1;
+        const yearNext = month === 12 ? year + 1 : year;
+        const resp2    = await fetch(`/calendario/api/mes?year=${yearNext}&month=${mesNext}`);
+        const eventos2 = await resp2.json();
+
+        const todos = [...eventos, ...eventos2];
+
+        todos.forEach(e => {
+          if (!e.recordatorioMinutos || !e.fechaInicio) return;
+
+          // Construir fecha/hora del evento
+          const horaStr  = e.horaInicio ? e.horaInicio.substring(0, 5) : '00:00';
+          const eventoTs = new Date(`${e.fechaInicio}T${horaStr}:00`);
+          if (isNaN(eventoTs.getTime())) return;
+
+          // Momento en que debe dispararse el recordatorio
+          const dispararEn = new Date(eventoTs.getTime() - e.recordatorioMinutos * 60000);
+
+          // Ventana de disparo: ±90 segundos alrededor del momento exacto
+          const diff = Math.abs(ahora.getTime() - dispararEn.getTime());
+          if (diff > 90000) return;
+
+          // Clave única para no repetir en la misma sesión
+          const clave = `${e.id}-${e.recordatorioMinutos}`;
+          if (RECORDATORIOS_DISPARADOS.has(clave)) return;
+          RECORDATORIOS_DISPARADOS.add(clave);
+
+          // Calcular texto de tiempo restante
+          const minRestantes = Math.round((eventoTs.getTime() - ahora.getTime()) / 60000);
+          const tiempoTexto  = minRestantes <= 0
+            ? 'ahora mismo'
+            : minRestantes === 1
+              ? 'en 1 minuto'
+              : `en ${minRestantes} minutos`;
+
+          // Construir notificación
+          const tipoEmoji = (e.tipo && e.tipo.emoji) ? e.tipo.emoji : '📅';
+          const tipoLabel = (e.tipo && e.tipo.label) ? e.tipo.label : '';
+          const lugar     = e.lugar ? ` · 📍 ${e.lugar}` : '';
+          const personas  = e.personasRelacionadas ? ` · 👥 ${e.personasRelacionadas}` : '';
+
+          const notif = new Notification(
+            `${tipoEmoji} ${e.titulo} — ${tiempoTexto}`,
+            {
+              body:    `${tipoLabel} · ${e.fechaInicio} a las ${horaStr}${lugar}${personas}`,
+              icon:    '/favicon.ico',
+              badge:   '/favicon.ico',
+              tag:     clave,          // agrupa notificaciones del mismo evento
+              renotify: false,
+              requireInteraction: minRestantes <= 5  // persiste si es inminente
+            }
+          );
+
+          // Al hacer clic → abrir el evento en el calendario
+          notif.onclick = () => {
+            window.focus();
+            window.location = `/calendario/${e.id}/editar`;
+            notif.close();
+          };
+        });
+
+      } catch (err) {
+        console.warn('Error comprobando recordatorios:', err);
+      }
+    }
+
     // ── Init ─────────────────────────────────────────────────
     renderCalendario();
+    iniciarRecordatorios();
   </script>
 
 </section>
