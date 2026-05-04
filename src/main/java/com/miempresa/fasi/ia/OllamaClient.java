@@ -13,6 +13,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.Map;
 
 @Slf4j
 @Component
@@ -22,7 +23,7 @@ public class OllamaClient {
     @Value("${fasi.ollama.url:http://localhost:11434}")
     private String ollamaUrl;
 
-    @Value("${fasi.ollama.model:gemma3:4b}")
+    @Value("${fasi.ollama.model:qwen2.5:7b}")
     private String model;
 
     private final ObjectMapper objectMapper;
@@ -30,12 +31,22 @@ public class OllamaClient {
             .connectTimeout(Duration.ofSeconds(10))
             .build();
 
+    /** Genera una respuesta. keep_alive=-1 mantiene el modelo en RAM indefinidamente. */
     public String generate(String prompt) {
+        return generate(prompt, 1024);
+    }
+
+    public String generate(String prompt, int numCtx) {
         try {
             OllamaRequest req = new OllamaRequest();
             req.setModel(model);
             req.setPrompt(prompt);
             req.setStream(false);
+            req.setKeep_alive(-1);
+            req.setOptions(Map.of(
+                "num_ctx",     numCtx,
+                "temperature", 0
+            ));
 
             String body = objectMapper.writeValueAsString(req);
 
@@ -61,18 +72,46 @@ public class OllamaClient {
         }
     }
 
+    /** Precalienta el modelo: lo carga en RAM sin generar texto. */
+    public void warmup() {
+        try {
+            log.info("🔥 Precalentando modelo IA ({})...", model);
+            OllamaRequest req = new OllamaRequest();
+            req.setModel(model);
+            req.setPrompt("");
+            req.setStream(false);
+            req.setKeep_alive(-1);
+            req.setOptions(Map.of("num_ctx", 512, "temperature", 0));
+
+            String body = objectMapper.writeValueAsString(req);
+            HttpRequest httpReq = HttpRequest.newBuilder()
+                    .uri(URI.create(ollamaUrl + "/api/generate"))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(body))
+                    .timeout(Duration.ofSeconds(120))
+                    .build();
+
+            httpClient.send(httpReq, HttpResponse.BodyHandlers.ofString());
+            log.info("✅ Modelo IA listo en RAM.");
+        } catch (Exception e) {
+            log.warn("⚠️ No se pudo precalentar el modelo: {}", e.getMessage());
+        }
+    }
+
     // ── DTOs internos ────────────────────────────────────────
     @Data
     static class OllamaRequest {
-        private String  model;
-        private String  prompt;
-        private boolean stream;
+        private String              model;
+        private String              prompt;
+        private boolean             stream;
+        private int                 keep_alive;
+        private Map<String, Object> options;
     }
 
     @Data
     @JsonIgnoreProperties(ignoreUnknown = true)
     static class OllamaResponse {
-        private String response;
+        private String  response;
         private boolean done;
     }
 }

@@ -27,7 +27,7 @@ public class EventoIaService {
         long inicio = System.currentTimeMillis();
         try {
             String prompt    = buildPromptInterpretar(request);
-            String json      = ollamaClient.generate(prompt);
+            String json      = ollamaClient.generate(prompt, 512);
             String jsonLimpio = extraerJson(json);
 
             log.debug("JSON recibido de IA: {}", jsonLimpio);

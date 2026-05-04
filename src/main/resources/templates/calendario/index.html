@@ -367,6 +367,8 @@
     }
 
     async function interpretarTexto() {
+      const btnInterpretar = document.querySelector('button[onclick="interpretarTexto()"]');
+      if (btnInterpretar) { btnInterpretar.disabled = true; btnInterpretar.textContent = '⏳ Interpretando...'; }
       const texto = document.getElementById('voz-texto').value.trim();
       if (!texto) { alert('Escribe o dicta algo primero.'); return; }
 
@@ -393,6 +395,7 @@
         alert('Error de conexión: ' + err.message);
       } finally {
         spinner.style.display = 'none';
+      if (btnInterpretar) { btnInterpretar.disabled = false; btnInterpretar.textContent = '✨ Interpretar con IA'; }
       }
     }
 
