@@ -44,13 +44,13 @@
       pointer-events: none;
     }
     /* Contenido con padding para header y footer fijos */
-    .main-content {
+    .main-content { display:flex; flex-direction:column; flex:1; min-height:0; overflow-y:auto;
       padding-top: 56px;
       padding-bottom: 70px;
     }
   </style>
 </head>
-<body class="bg-gray-100 dark:bg-gray-950 min-h-screen">
+<body class="bg-gray-100 dark:bg-gray-950 h-screen flex flex-col overflow-hidden">
 
   <!-- ═══════════════════════════════════════════════════════ -->
   <!-- HEADER FIJO — Mobile-first                             -->
@@ -258,7 +258,7 @@
   <!-- ═══════════════════════════════════════════════════════ -->
   <!-- CONTENIDO PRINCIPAL                                     -->
   <!-- ═══════════════════════════════════════════════════════ -->
-  <main class="main-content w-full max-w-2xl mx-auto px-3 lg:px-6">
+  <main class="main-content w-full mx-auto px-3 lg:px-6">
     <th:block th:replace="${content}"/>
   </main>
 

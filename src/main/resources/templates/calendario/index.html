@@ -3,7 +3,7 @@
       th:replace="~{layout/base :: layout(~{::title}, ~{::section})}">
 <head><title>Calendario — FASI</title></head>
 <body>
-<section class="pb-2 flex flex-col h-full">
+<section class="pb-2 flex flex-col flex-1">
 
   <!-- NAVEGACIÓN DE MES -->
   <div class="flex items-center justify-between py-3">
@@ -36,7 +36,7 @@
 
   <!-- GRID CALENDARIO -->
   <div id="grid-calendario"
-       class="grid grid-cols-7 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden" style="grid-auto-rows: 1fr;"></div>
+       class="grid grid-cols-7 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden flex-1" style="grid-auto-rows: 1fr;"></div>
 
   <!-- MODAL VOZ -->
   <div id="modal-voz" class="hidden fixed inset-0 z-50 flex items-end justify-center
