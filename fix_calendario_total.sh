@@ -1,0 +1,483 @@
+#!/bin/bash
+# fix_calendario_total.sh — reescribe index.html completo y limpio
+set -e
+
+DEST="src/main/resources/templates/calendario/index.html"
+mkdir -p "$(dirname "$DEST")"
+
+cat > "$DEST" << 'HTMLEOF'
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: layout(~{::title}, ~{::section})}">
+<head><title>Calendario — FASI</title></head>
+<body>
+<section class="pb-2">
+
+  <!-- NAVEGACIÓN DE MES -->
+  <div class="flex items-center justify-between py-3">
+    <a th:href="@{/calendario(year=${yearMonth.minusMonths(1).year},month=${yearMonth.minusMonths(1).monthValue})}"
+       class="w-10 h-10 flex items-center justify-center rounded-full
+              hover:bg-gray-200 dark:hover:bg-gray-700 transition text-xl
+              text-gray-700 dark:text-gray-200 font-bold">
+      ‹
+    </a>
+    <div class="text-center">
+      <h2 class="text-lg font-bold text-gray-800 dark:text-gray-100 capitalize"
+          th:text="${#temporals.format(yearMonth.atDay(1),'MMMM yyyy')}"></h2>
+      <a th:href="@{/calendario}"
+         class="text-xs text-indigo-500 hover:underline">Hoy</a>
+    </div>
+    <a th:href="@{/calendario(year=${yearMonth.plusMonths(1).year},month=${yearMonth.plusMonths(1).monthValue})}"
+       class="w-10 h-10 flex items-center justify-center rounded-full
+              hover:bg-gray-200 dark:hover:bg-gray-700 transition text-xl
+              text-gray-700 dark:text-gray-200 font-bold">
+      ›
+    </a>
+  </div>
+
+  <!-- CABECERA DÍAS DE LA SEMANA -->
+  <div class="grid grid-cols-7 mb-1">
+    <div th:each="dia : ${ {'L','M','X','J','V','S','D'} }"
+         class="text-center text-xs font-semibold text-gray-400 dark:text-gray-500 py-1"
+         th:text="${dia}"></div>
+  </div>
+
+  <!-- GRID CALENDARIO -->
+  <div id="grid-calendario"
+       class="grid grid-cols-7 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden"></div>
+
+  <!-- MODAL VOZ -->
+  <div id="modal-voz" class="hidden fixed inset-0 z-50 flex items-end justify-center
+                              sm:items-center bg-black/60">
+    <div class="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl
+                p-6 w-full max-w-lg mx-0 sm:mx-4 relative">
+
+      <button onclick="cerrarModalVoz()"
+              class="absolute top-4 right-4 w-8 h-8 flex items-center justify-center
+                     bg-gray-200 dark:bg-gray-600 hover:bg-red-100 dark:hover:bg-red-900
+                     text-gray-600 dark:text-gray-200 rounded-full text-lg font-bold transition">
+        &#x2715;
+      </button>
+
+      <h3 class="text-lg font-bold text-gray-800 dark:text-gray-100 mb-1">
+        &#127908; Nuevo evento
+      </h3>
+      <p class="text-xs text-gray-400 mb-4">
+        Habla o escribe: <em>"Cita médica el jueves para Rocío a las 10"</em>
+      </p>
+
+      <textarea id="voz-texto" rows="3"
+                placeholder="Pulsa el micrófono o escribe aquí..."
+                class="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3
+                       bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
+                       focus:outline-none focus:ring-2 focus:ring-red-400 text-sm
+                       resize-none mb-3"></textarea>
+
+      <div class="flex gap-2 mb-3">
+        <button id="btn-micro" onclick="toggleMicrofono()"
+                class="flex-1 flex items-center justify-center gap-2 bg-red-500
+                       hover:bg-red-600 text-white py-2.5 rounded-xl font-semibold transition text-sm">
+          &#127908; <span id="micro-label">Grabar</span>
+        </button>
+        <button onclick="interpretarTexto()"
+                class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5
+                       rounded-xl font-semibold transition text-sm">
+          &#10024; Interpretar
+        </button>
+      </div>
+
+      <div id="ia-spinner" style="display:none"
+           class="flex items-center gap-2 text-xs text-gray-400 mb-3">
+        <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce"></div>
+        <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:150ms"></div>
+        <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:300ms"></div>
+        <span>La IA está interpretando...</span>
+      </div>
+
+      <div id="preview-evento" style="display:none"
+           class="bg-gray-50 dark:bg-gray-700 rounded-xl p-4 mb-3">
+        <h4 class="font-semibold text-sm text-gray-700 dark:text-gray-200 mb-2">Vista previa:</h4>
+        <div id="preview-contenido" class="text-sm space-y-1 text-gray-700 dark:text-gray-200"></div>
+        <div class="flex gap-2 mt-3">
+          <button id="btn-confirmar" onclick="confirmarEvento()"
+                  class="flex-1 bg-green-600 hover:bg-green-700 text-white py-2
+                         rounded-lg font-semibold transition text-sm">
+            &#9989; Confirmar
+          </button>
+          <button onclick="editarManual()"
+                  class="flex-1 border border-gray-300 dark:border-gray-500
+                         text-gray-700 dark:text-gray-200 py-2 rounded-lg text-sm
+                         hover:bg-gray-50 dark:hover:bg-gray-600 transition">
+            &#9999;&#65039; Editar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- SCRIPTS CALENDARIO                                      -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <script th:inline="javascript">
+    /*<![CDATA[*/
+    const EVENTOS_MES = /*[[${eventos}]]*/ [];
+    const YEAR_MONTH  = /*[[${yearMonth.toString()}]]*/ '';
+    const HOY         = /*[[${hoy.toString()}]]*/ '';
+
+    // ── Renderizar grid ──────────────────────────────────────
+    function renderCalendario() {
+      const parts  = YEAR_MONTH.split('-');
+      const year   = parseInt(parts[0], 10);
+      const month  = parseInt(parts[1], 10);
+      const primer = new Date(year, month - 1, 1);
+      const ultimo = new Date(year, month, 0).getDate();
+
+      let col0 = primer.getDay() - 1;
+      if (col0 < 0) col0 = 6;
+
+      const grid = document.getElementById('grid-calendario');
+      grid.innerHTML = '';
+
+      // Celdas vacías iniciales
+      for (let i = 0; i < col0; i++) {
+        const vacia = document.createElement('div');
+        vacia.className = 'min-h-14 sm:min-h-20 border-b border-r border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/20';
+        grid.appendChild(vacia);
+      }
+
+      // Celdas de días
+      for (let dia = 1; dia <= ultimo; dia++) {
+        const mm       = String(month).padStart(2, '0');
+        const dd       = String(dia).padStart(2, '0');
+        const fechaStr = year + '-' + mm + '-' + dd;
+        const esHoy    = (fechaStr === HOY);
+        const colIdx   = (col0 + dia - 1) % 7;
+        const esFinde  = (colIdx >= 5);
+
+        const eventosDia = EVENTOS_MES.filter(function(e) {
+          if (e.fechaInicio === fechaStr) return true;
+          if (e.fechaFin && e.fechaFin !== e.fechaInicio) {
+            var d1 = new Date(e.fechaInicio + 'T00:00:00');
+            var d2 = new Date(e.fechaFin    + 'T00:00:00');
+            var dc = new Date(fechaStr      + 'T00:00:00');
+            return dc > d1 && dc <= d2;
+          }
+          return false;
+        });
+
+        // Celda contenedor
+        const celda = document.createElement('div');
+        celda.className = 'min-h-14 sm:min-h-20 border-b border-r border-gray-100 dark:border-gray-700 p-1 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition'
+          + (esFinde ? ' bg-gray-50/80 dark:bg-gray-800/50' : '');
+        celda.addEventListener('click', function() {
+          window.location = '/calendario/dia/' + fechaStr;
+        });
+
+        // Fila superior: número + botón +
+        const fila = document.createElement('div');
+        fila.className = 'flex justify-between items-start';
+
+        const numSpan = document.createElement('span');
+        if (esHoy) {
+          numSpan.className = 'bg-indigo-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold';
+        } else {
+          numSpan.className = 'text-xs font-semibold ' + (esFinde ? 'text-indigo-400 dark:text-indigo-400' : 'text-gray-600 dark:text-gray-300');
+        }
+        numSpan.textContent = dia;
+
+        const btnNuevo = document.createElement('a');
+        btnNuevo.href = '/calendario/nuevo?fecha=' + fechaStr;
+        btnNuevo.className = 'text-gray-300 hover:text-indigo-500 text-base leading-none w-5 h-5 flex items-center justify-center';
+        btnNuevo.textContent = '+';
+        btnNuevo.addEventListener('click', function(ev) { ev.stopPropagation(); });
+
+        fila.appendChild(numSpan);
+        fila.appendChild(btnNuevo);
+        celda.appendChild(fila);
+
+        // Eventos del día (máx 2)
+        eventosDia.slice(0, 2).forEach(function(e) {
+          var emoji = (e.tipo && e.tipo.emoji) ? e.tipo.emoji : '';
+          var color = (e.tipo && e.tipo.color) ? e.tipo.color : '#6366f1';
+          var titulo = e.titulo || '';
+
+          var pill = document.createElement('div');
+          pill.className = 'text-xs px-1 py-0.5 rounded mb-0.5 text-white font-medium flex items-center gap-0.5 group truncate';
+          pill.style.backgroundColor = color;
+
+          var span = document.createElement('span');
+          span.className = 'flex-1 truncate';
+          span.title = titulo;
+          span.textContent = emoji + ' ';
+          var tituloSpan = document.createElement('span');
+          tituloSpan.className = 'hidden sm:inline';
+          tituloSpan.textContent = titulo;
+          span.appendChild(tituloSpan);
+          span.addEventListener('click', function(ev) {
+            ev.stopPropagation();
+            window.location = '/calendario/' + e.id + '/editar';
+          });
+
+          var btnDel = document.createElement('button');
+          btnDel.className = 'opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/20 rounded flex-shrink-0 px-0.5';
+          btnDel.title = 'Eliminar';
+          btnDel.textContent = '\u2715';
+          btnDel.addEventListener('click', function(ev) {
+            ev.stopPropagation();
+            eliminarEvento(e.id, titulo);
+          });
+
+          pill.appendChild(span);
+          pill.appendChild(btnDel);
+          celda.appendChild(pill);
+        });
+
+        // +N más
+        if (eventosDia.length > 2) {
+          var mas = document.createElement('div');
+          mas.className = 'text-xs text-gray-400 dark:text-gray-500 pl-1';
+          mas.textContent = '+' + (eventosDia.length - 2);
+          celda.appendChild(mas);
+        }
+
+        grid.appendChild(celda);
+      }
+
+      // Actualizar footer
+      var primerFecha = year + '-' + String(month).padStart(2,'0') + '-01';
+      if (window.actualizarFooterFecha) window.actualizarFooterFecha(primerFecha);
+    }
+
+    // ── Modal voz ────────────────────────────────────────────
+    var recognition  = null;
+    var grabando     = false;
+    var eventoActual = null;
+
+    window.abrirModalVoz = function() {
+      document.getElementById('modal-voz').classList.remove('hidden');
+      document.getElementById('preview-evento').style.display = 'none';
+      document.getElementById('ia-spinner').style.display     = 'none';
+      document.getElementById('voz-texto').value              = '';
+    };
+
+    function cerrarModalVoz() {
+      document.getElementById('modal-voz').classList.add('hidden');
+      if (grabando) pararMicrofono();
+      eventoActual = null;
+    }
+
+    function toggleMicrofono() { grabando ? pararMicrofono() : iniciarMicrofono(); }
+
+    function iniciarMicrofono() {
+      if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        alert('Tu navegador no soporta voz. Usa Chrome.'); return;
+      }
+      var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SR();
+      recognition.lang           = 'es-ES';
+      recognition.continuous     = true;
+      recognition.interimResults = true;
+      recognition.onresult = function(event) {
+        document.getElementById('voz-texto').value =
+          Array.from(event.results).map(function(r) { return r[0].transcript; }).join('');
+      };
+      recognition.onend = function() {
+        if (grabando) setTimeout(function() { try { recognition.start(); } catch(e){} }, 300);
+      };
+      recognition.onerror = function(e) {
+        if (e.error === 'no-speech') return;
+        grabando = false; actualizarBotonMicro(false);
+      };
+      recognition.start();
+      grabando = true;
+      actualizarBotonMicro(true);
+    }
+
+    function pararMicrofono() {
+      grabando = false;
+      if (recognition) recognition.stop();
+      actualizarBotonMicro(false);
+    }
+
+    function actualizarBotonMicro(activo) {
+      var label = document.getElementById('micro-label');
+      var btn   = document.getElementById('btn-micro');
+      label.textContent = activo ? 'Parar' : 'Grabar';
+      if (activo) { btn.classList.add('bg-red-700'); }
+      else        { btn.classList.remove('bg-red-700'); }
+    }
+
+    async function interpretarTexto() {
+      var texto = document.getElementById('voz-texto').value.trim();
+      if (!texto) { alert('Escribe o dicta algo primero.'); return; }
+      document.getElementById('ia-spinner').style.display     = 'flex';
+      document.getElementById('preview-evento').style.display = 'none';
+      try {
+        var resp = await fetch('/calendario/api/interpretar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ texto: texto, fechaContexto: HOY })
+        });
+        var data = await resp.json();
+        if (data.exito && data.eventoPreview) {
+          eventoActual = data.eventoPreview;
+          mostrarPreview(data.eventoPreview);
+        } else {
+          alert('Error: ' + (data.mensajeError || 'No se pudo interpretar'));
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      } finally {
+        document.getElementById('ia-spinner').style.display = 'none';
+      }
+    }
+
+    function mostrarPreview(evento) {
+      var c         = document.getElementById('preview-contenido');
+      var tipoLabel = (evento.tipo && evento.tipo.label) ? evento.tipo.label : (evento.tipo || '');
+      var tipoEmoji = (evento.tipo && evento.tipo.emoji) ? evento.tipo.emoji : '';
+      var esRec     = evento.datosExtra && evento.datosExtra.recurrente === true;
+      var patron    = esRec ? evento.datosExtra.patron : null;
+      var diaSem    = (esRec && evento.datosExtra.diaSemana) ? evento.datosExtra.diaSemana : null;
+
+      var fechaStr = evento.fechaInicio || '-';
+      if (esRec && evento.fechaFin) {
+        var fi = evento.fechaInicio.split('-').reverse().slice(0,2).join('/');
+        var ff = evento.fechaFin.split('-').reverse().slice(0,2).join('/');
+        fechaStr = 'del ' + fi + ' al ' + ff;
+      } else if (evento.fechaFin && evento.fechaFin !== evento.fechaInicio) {
+        var d1   = new Date(evento.fechaInicio + 'T00:00:00');
+        var d2   = new Date(evento.fechaFin    + 'T00:00:00');
+        var dias = Math.round((d2 - d1) / 86400000) + 1;
+        fechaStr += ' a ' + evento.fechaFin + ' (' + dias + ' dias)';
+      }
+      if (evento.horaInicio) fechaStr += ' a las ' + evento.horaInicio.substring(0,5);
+
+      var html = '<p><strong>Tipo:</strong> ' + tipoEmoji + ' ' + tipoLabel + '</p>'
+               + '<p><strong>Titulo:</strong> ' + (evento.titulo || '-') + '</p>'
+               + '<p><strong>Fecha:</strong> ' + fechaStr + '</p>';
+      if (evento.lugar)                html += '<p><strong>Lugar:</strong> ' + evento.lugar + '</p>';
+      if (evento.personasRelacionadas) html += '<p><strong>Personas:</strong> ' + evento.personasRelacionadas + '</p>';
+      if (evento.descripcion)          html += '<p><strong>Notas:</strong> ' + evento.descripcion + '</p>';
+      if (esRec) html += '<p class="mt-2 text-indigo-600 font-semibold text-xs">Recurrente (' + (patron || 'periodico') + ')' + (diaSem ? ' cada ' + diaSem : '') + '</p>';
+      c.innerHTML = html;
+
+      var btnConf = document.getElementById('btn-confirmar');
+      if (btnConf) {
+        btnConf.textContent = esRec ? 'Confirmar todos' : 'Confirmar';
+        btnConf.className = btnConf.className
+          .replace('bg-green-600','').replace('hover:bg-green-700','')
+          .replace('bg-indigo-600','').replace('hover:bg-indigo-700','');
+        btnConf.className += esRec ? ' bg-indigo-600 hover:bg-indigo-700' : ' bg-green-600 hover:bg-green-700';
+      }
+      document.getElementById('preview-evento').style.display = 'block';
+    }
+
+    async function confirmarEvento() {
+      if (!eventoActual) return;
+      var esRec    = eventoActual.datosExtra && eventoActual.datosExtra.recurrente === true;
+      var endpoint = esRec ? '/calendario/api/confirmar-recurrente' : '/calendario/api/confirmar';
+      try {
+        var resp = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(eventoActual)
+        });
+        if (resp.ok) {
+          var data = await resp.json();
+          if (esRec && Array.isArray(data)) alert(data.length + ' eventos creados.');
+          cerrarModalVoz();
+          window.location.reload();
+        } else {
+          alert('Error al guardar.');
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+
+    function editarManual() {
+      if (!eventoActual) return;
+      window.location = '/calendario/nuevo?fecha=' + (eventoActual.fechaInicio || HOY);
+    }
+
+    async function eliminarEvento(id, titulo) {
+      if (!confirm('Eliminar "' + titulo + '"?')) return;
+      var resp = await fetch('/calendario/api/eliminar/' + id, { method: 'DELETE' });
+      if (resp.ok) window.location.reload();
+      else alert('Error al eliminar.');
+    }
+
+    // ── Recordatorios ────────────────────────────────────────
+    var DISPARADOS = new Set();
+
+    async function iniciarRecordatorios() {
+      if (!('Notification' in window)) return;
+      if (Notification.permission === 'default') await Notification.requestPermission();
+      if (Notification.permission !== 'granted') return;
+      comprobarRecordatorios();
+      setInterval(comprobarRecordatorios, 60000);
+    }
+
+    async function comprobarRecordatorios() {
+      if (Notification.permission !== 'granted') return;
+      try {
+        var ahora  = new Date();
+        var parts2 = YEAR_MONTH.split('-');
+        var y = parseInt(parts2[0],10);
+        var m = parseInt(parts2[1],10);
+        var r1 = await fetch('/calendario/api/mes?year=' + y + '&month=' + m);
+        var eventos = await r1.json();
+        eventos.forEach(function(e) {
+          if (!e.recordatorioMinutos || !e.fechaInicio) return;
+          var horaStr  = e.horaInicio ? e.horaInicio.substring(0,5) : '00:00';
+          var eventoTs = new Date(e.fechaInicio + 'T' + horaStr + ':00');
+          if (isNaN(eventoTs.getTime())) return;
+          var dispararEn = new Date(eventoTs.getTime() - e.recordatorioMinutos * 60000);
+          if (Math.abs(ahora - dispararEn) > 90000) return;
+          var clave = e.id + '-' + e.recordatorioMinutos;
+          if (DISPARADOS.has(clave)) return;
+          DISPARADOS.add(clave);
+          var minRest = Math.round((eventoTs - ahora) / 60000);
+          var tiempo  = minRest <= 0 ? 'ahora' : 'en ' + minRest + ' min';
+          var emoji   = (e.tipo && e.tipo.emoji) ? e.tipo.emoji : '';
+          var label   = (e.tipo && e.tipo.label) ? e.tipo.label : '';
+          var notif   = new Notification(
+            emoji + ' ' + e.titulo + ' - ' + tiempo,
+            { body: label + ' ' + e.fechaInicio + ' ' + horaStr + (e.lugar ? ' ' + e.lugar : ''),
+              tag: clave, requireInteraction: minRest <= 5 }
+          );
+          notif.onclick = function() {
+            window.focus();
+            window.location = '/calendario/' + e.id + '/editar';
+            notif.close();
+          };
+        });
+      } catch(err) {
+        console.warn('Recordatorios:', err);
+      }
+    }
+
+    // ── Init ─────────────────────────────────────────────────
+    renderCalendario();
+    iniciarRecordatorios();
+    /*]]>*/
+  </script>
+
+</section>
+</body>
+</html>
+HTMLEOF
+
+echo "✅ calendario/index.html reescrito"
+
+# ── base.html: corregir botones abrirModalVoz ────────────────
+sed -i \
+  's|onclick="abrirModalVoz()"|onclick="if(typeof window.abrirModalVoz==='\''function'\'')window.abrirModalVoz();else window.location='\''\/calendario\/nuevo'\''"|g' \
+  src/main/resources/templates/layout/base.html
+
+echo "✅ base.html corregido"
+echo ""
+echo "══════════════════════════════════"
+echo "  Ahora ejecuta: ./dev-redeploy.sh"
+echo "══════════════════════════════════"
