@@ -24,7 +24,12 @@ public class SecurityConfig {
                 .anyRequest().authenticated()
             )
             .csrf(csrf -> csrf
-                .ignoringRequestMatchers("/ia/api/**", "/calendario/api/**")
+                .ignoringRequestMatchers(
+                    "/ia/api/**",
+                    "/calendario/api/**",
+                    "/contexto/prompt",
+                    "/contexto/guardar"
+                )
             )
             .formLogin(form -> form
                 .loginPage("/login")

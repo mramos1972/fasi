@@ -13,118 +13,332 @@
     *, *::before, *::after {
       transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
     }
+    /* Footer tab bar deslizable */
+    .footer-tabs {
+      display: flex;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      gap: 0;
+    }
+    .footer-tabs::-webkit-scrollbar { display: none; }
+    .footer-tab {
+      scroll-snap-align: start;
+      flex: 0 0 auto;
+      min-width: 120px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 6px 12px;
+      border-right: 1px solid rgba(255,255,255,0.1);
+    }
+    /* Menú hamburguesa overlay */
+    #hamburger-menu {
+      transition: transform 0.3s ease, opacity 0.3s ease;
+    }
+    #hamburger-menu.hidden-menu {
+      transform: translateX(100%);
+      opacity: 0;
+      pointer-events: none;
+    }
+    /* Contenido con padding para header y footer fijos */
+    .main-content {
+      padding-top: 56px;
+      padding-bottom: 70px;
+    }
   </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-950 min-h-screen">
 
-  <!-- TOPBAR MÓVIL -->
-  <header class="lg:hidden bg-gray-900 dark:bg-gray-800 text-white sticky top-0 z-50">
-    <div class="flex items-center justify-between px-4 py-3">
-      <span class="text-xl font-bold">⚡ FASI</span>
-      <div class="flex items-center gap-3">
-        <button onclick="toggleDark()" class="text-xl focus:outline-none">
-          <span id="dark-icon">🌙</span>
-        </button>
-        <button id="menu-btn" class="text-2xl focus:outline-none">☰</button>
-      </div>
-    </div>
-    <nav id="mobile-menu"
-         class="hidden absolute left-0 right-0 bg-gray-800 dark:bg-gray-900
-                px-4 pb-4 space-y-1 shadow-xl z-50">
-      <a th:href="@{/calendario}"
-         class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">
-        📅 <span>Calendario</span>
-      </a>
-      <a th:href="@{/ia}"
-         class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">
-        🤖 <span>Asistente IA</span>
-      </a>
-      <div class="border-t border-gray-700 pt-2 mt-2 text-sm text-gray-400">
-        <span sec:authentication="name">usuario</span>
-        <form th:action="@{/logout}" method="post" class="inline ml-2">
-          <button type="submit" class="text-red-400 hover:text-red-300">salir</button>
-        </form>
-      </div>
-    </nav>
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- HEADER FIJO — Mobile-first                             -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <header class="fixed top-0 left-0 right-0 z-50 bg-gray-900 dark:bg-gray-800
+                 text-white h-14 flex items-center px-4 gap-3 shadow-lg">
+
+    <!-- Logo -->
+    <span class="text-xl font-bold tracking-wide flex-shrink-0">⚡ FASI</span>
+
+    <!-- Spacer -->
+    <div class="flex-1"></div>
+
+    <!-- Botón + (nuevo evento con voz/texto) -->
+    <button onclick="abrirModalVoz()"
+            class="w-9 h-9 flex items-center justify-center rounded-full
+                   bg-indigo-600 hover:bg-indigo-500 transition text-lg font-bold"
+            title="Nuevo evento">
+      +
+    </button>
+
+    <!-- Lupa — buscador IA -->
+    <button onclick="abrirBuscadorIA()"
+            class="w-9 h-9 flex items-center justify-center rounded-full
+                   hover:bg-gray-700 transition text-lg"
+            title="Buscar / Preguntar a la IA">
+      🔍
+    </button>
+
+    <!-- Modo noche/día -->
+    <button onclick="toggleDark()"
+            class="w-9 h-9 flex items-center justify-center rounded-full
+                   hover:bg-gray-700 transition text-lg"
+            id="dark-btn" title="Modo noche/día">
+      🌙
+    </button>
+
+    <!-- Hamburguesa -->
+    <button onclick="toggleMenu()"
+            class="w-9 h-9 flex items-center justify-center rounded-full
+                   hover:bg-gray-700 transition text-xl"
+            title="Menú">
+      ☰
+    </button>
   </header>
 
-  <div id="menu-overlay" class="hidden fixed inset-0 z-40 lg:hidden"
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- MENÚ HAMBURGUESA — Slide desde la derecha              -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div id="menu-overlay" class="hidden fixed inset-0 z-40 bg-black/50"
        onclick="cerrarMenu()"></div>
 
-  <div class="flex">
-    <!-- SIDEBAR DESKTOP -->
-    <aside class="hidden lg:flex lg:flex-col w-64 bg-gray-900 dark:bg-gray-800
-                  text-white min-h-screen fixed top-0 left-0 z-40">
-      <div class="p-6 border-b border-gray-700 flex items-center justify-between">
-        <div>
-          <span class="text-2xl font-bold tracking-wide">⚡ FASI</span>
-          <p class="text-xs text-gray-400 mt-1">Calendario Inteligente</p>
+  <nav id="hamburger-menu"
+       class="hidden-menu fixed top-0 right-0 bottom-0 z-50 w-72
+              bg-gray-900 dark:bg-gray-800 text-white shadow-2xl
+              flex flex-col">
+
+    <!-- Cabecera del menú -->
+    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-700">
+      <span class="font-bold text-lg">⚡ FASI</span>
+      <button onclick="cerrarMenu()"
+              class="w-8 h-8 flex items-center justify-center rounded-full
+                     hover:bg-gray-700 transition text-gray-400 hover:text-white">
+        ✕
+      </button>
+    </div>
+
+    <!-- Usuario actual -->
+    <div class="px-5 py-3 border-b border-gray-700 bg-gray-800/50">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center
+                    text-sm font-bold">
+          <span sec:authentication="name" class="uppercase">U</span>
         </div>
-        <button onclick="toggleDark()"
-                class="text-2xl focus:outline-none hover:scale-110 transition-transform ml-2">
-          <span id="dark-icon-desktop">🌙</span>
+        <div>
+          <p class="text-sm font-semibold" sec:authentication="name">usuario</p>
+          <p class="text-xs text-gray-400">Administrador</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Opciones del menú -->
+    <div class="flex-1 py-3 space-y-1 px-3">
+
+      <a th:href="@{/calendario}"
+         onclick="cerrarMenu()"
+         class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-700 transition">
+        📅 <span>Calendario</span>
+      </a>
+
+      <button onclick="cerrarMenu(); abrirModalVoz();"
+              class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-700 transition text-left">
+        ➕ <span>Nuevo evento</span>
+      </button>
+
+      <button onclick="cerrarMenu(); abrirBuscadorIA();"
+              class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-700 transition text-left">
+        🔍 <span>Buscar</span>
+      </button>
+
+      <a th:href="@{/contexto}"
+         onclick="cerrarMenu()"
+         class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-700 transition">
+        🧠 <span>Carga de Datos</span>
+      </a>
+
+      <a th:href="@{/ia}"
+         onclick="cerrarMenu()"
+         class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-700 transition">
+        🤖 <span>Asistente IA</span>
+      </a>
+
+      <!-- Separador -->
+      <div class="border-t border-gray-700 my-2"></div>
+
+      <!-- Cambio de usuario (base) -->
+      <div class="px-4 py-3 rounded-xl bg-gray-800/50">
+        <p class="text-xs text-gray-400 mb-2 font-semibold uppercase tracking-wide">Cambio de usuario</p>
+        <p class="text-xs text-gray-500">Próximamente — multiusuario en desarrollo</p>
+      </div>
+
+      <!-- Vaciar BD — solo pruebas -->
+      <button onclick="cerrarMenu(); confirmarVaciarBD();"
+              class="w-full flex items-center gap-3 px-4 py-3 rounded-xl
+                     hover:bg-red-900/50 text-red-400 transition text-left text-sm">
+        🗑️ <span>Vaciar BD <span class="text-xs text-gray-500">(pruebas)</span></span>
+      </button>
+    </div>
+
+    <!-- Footer del menú -->
+    <div class="px-5 py-4 border-t border-gray-700">
+      <form th:action="@{/logout}" method="post">
+        <button type="submit"
+                class="w-full flex items-center justify-center gap-2 py-2 rounded-xl
+                       bg-red-600/20 hover:bg-red-600/40 text-red-400 transition text-sm">
+          🚪 Cerrar sesión
+        </button>
+      </form>
+    </div>
+  </nav>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- MODAL BUSCADOR IA                                       -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div id="modal-buscador"
+       class="hidden fixed inset-0 z-50 flex items-start justify-center pt-16 px-4 bg-black/60">
+    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg">
+
+      <!-- Header buscador -->
+      <div class="flex items-center gap-3 p-4 border-b border-gray-200 dark:border-gray-700">
+        <span class="text-xl">🔍</span>
+        <input type="text" id="ia-search-input"
+               placeholder="Pregunta algo... ¿Qué tengo el próximo fin de semana?"
+               class="flex-1 bg-transparent text-gray-900 dark:text-gray-100
+                      focus:outline-none text-sm placeholder-gray-400"/>
+        <button onclick="cerrarBuscadorIA()"
+                class="w-8 h-8 flex items-center justify-center rounded-full
+                       bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 text-gray-500 text-sm">
+          ✕
         </button>
       </div>
-      <nav class="flex-1 p-4 space-y-1">
-        <a th:href="@{/calendario}"
-           class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">
-          📅 <span>Calendario</span>
-        </a>
-        <a th:href="@{/ia}"
-           class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">
-          🤖 <span>Asistente IA</span>
-        </a>
 
-        <!-- Leyenda de tipos de evento -->
-        <div class="pt-4 mt-4 border-t border-gray-700">
-          <p class="text-xs text-gray-500 uppercase font-semibold mb-2 px-3">Tipos de evento</p>
-          <div class="space-y-1">
-            <a th:each="tipo : ${T(com.miempresa.fasi.calendario.Evento.TipoEvento).values()}"
-               th:href="@{/calendario(tipo=${tipo.name()})}"
-               class="flex items-center gap-2 px-3 py-1 rounded-lg hover:bg-gray-700
-                      transition text-sm text-gray-300">
-              <span class="w-2 h-2 rounded-full flex-shrink-0"
-                    th:style="'background-color:' + ${tipo.color}"></span>
-              <span th:text="${tipo.emoji + ' ' + tipo.label}"></span>
-            </a>
-          </div>
-        </div>
-      </nav>
-      <div class="p-4 border-t border-gray-700 text-sm text-gray-400">
-        <span sec:authentication="name">usuario</span>
-        <form th:action="@{/logout}" method="post" class="inline ml-2">
-          <button type="submit" class="text-red-400 hover:text-red-300">salir</button>
-        </form>
+      <!-- Sugerencias rápidas -->
+      <div class="p-3 flex flex-wrap gap-2 border-b border-gray-100 dark:border-gray-700">
+        <button onclick="buscarIA('¿Qué tengo esta semana?')"
+                class="text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600
+                       dark:text-indigo-300 px-3 py-1 rounded-full hover:bg-indigo-100 transition">
+          Esta semana
+        </button>
+        <button onclick="buscarIA('¿Qué eventos hay este mes?')"
+                class="text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600
+                       dark:text-indigo-300 px-3 py-1 rounded-full hover:bg-indigo-100 transition">
+          Este mes
+        </button>
+        <button onclick="buscarIA('¿Cuándo es el próximo cumpleaños?')"
+                class="text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600
+                       dark:text-indigo-300 px-3 py-1 rounded-full hover:bg-indigo-100 transition">
+          Próximo cumpleaños
+        </button>
+        <button onclick="buscarIA('Dame un resumen de los próximos 15 días')"
+                class="text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600
+                       dark:text-indigo-300 px-3 py-1 rounded-full hover:bg-indigo-100 transition">
+          Resumen 15 días
+        </button>
       </div>
-    </aside>
 
-    <!-- CONTENIDO PRINCIPAL -->
-    <main class="flex-1 lg:ml-64 p-4 lg:p-8 w-full">
-      <th:block th:replace="${content}"/>
-    </main>
+      <!-- Resultado -->
+      <div id="ia-search-result" class="p-4 min-h-24 max-h-80 overflow-y-auto">
+        <p class="text-sm text-gray-400 text-center pt-4">
+          Escribe una pregunta o elige una sugerencia 👆
+        </p>
+      </div>
+
+      <!-- Spinner -->
+      <div id="ia-search-spinner" style="display:none"
+           class="flex items-center gap-2 px-4 pb-4 text-sm text-gray-400">
+        <div class="w-2 h-2 bg-indigo-400 rounded-full animate-bounce"></div>
+        <div class="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:150ms"></div>
+        <div class="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:300ms"></div>
+        <span>Consultando a la IA...</span>
+      </div>
+    </div>
   </div>
 
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- CONTENIDO PRINCIPAL                                     -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <main class="main-content w-full max-w-2xl mx-auto px-3 lg:px-6">
+    <th:block th:replace="${content}"/>
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- FOOTER FIJO — Tab bar deslizable                       -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <footer class="fixed bottom-0 left-0 right-0 z-40
+                 bg-gray-900 dark:bg-gray-800 text-white
+                 h-16 shadow-[0_-2px_10px_rgba(0,0,0,0.3)]">
+    <div class="footer-tabs h-full" id="footer-tabs">
+
+      <!-- Tab 1: Usuario / sesión -->
+      <div class="footer-tab">
+        <span class="text-lg">👤</span>
+        <span class="text-xs text-gray-300 mt-0.5 truncate max-w-24"
+              sec:authentication="name">usuario</span>
+      </div>
+
+      <!-- Tab 2: Amanecer -->
+      <div class="footer-tab">
+        <span class="text-lg">🌅</span>
+        <span class="text-xs text-amber-300 font-semibold" id="footer-amanecer">--:--</span>
+        <span class="text-xs text-gray-500">amanecer</span>
+      </div>
+
+      <!-- Tab 3: Atardecer -->
+      <div class="footer-tab">
+        <span class="text-lg">🌇</span>
+        <span class="text-xs text-orange-300 font-semibold" id="footer-atardecer">--:--</span>
+        <span class="text-xs text-gray-500">atardecer</span>
+      </div>
+
+      <!-- Tab 4: Pleamar 1 -->
+      <div class="footer-tab">
+        <span class="text-lg">🌊</span>
+        <span class="text-xs text-blue-300 font-semibold" id="footer-pleamar1">--:--</span>
+        <span class="text-xs text-gray-500">pleamar</span>
+      </div>
+
+      <!-- Tab 5: Bajamar 1 -->
+      <div class="footer-tab">
+        <span class="text-lg">🏖️</span>
+        <span class="text-xs text-cyan-300 font-semibold" id="footer-bajamar1">--:--</span>
+        <span class="text-xs text-gray-500">bajamar</span>
+      </div>
+
+      <!-- Tab 6: Pleamar 2 -->
+      <div class="footer-tab">
+        <span class="text-lg">🌊</span>
+        <span class="text-xs text-blue-300 font-semibold" id="footer-pleamar2">--:--</span>
+        <span class="text-xs text-gray-500">pleamar 2ª</span>
+      </div>
+
+      <!-- Tab 7: Bajamar 2 -->
+      <div class="footer-tab">
+        <span class="text-lg">🏖️</span>
+        <span class="text-xs text-cyan-300 font-semibold" id="footer-bajamar2">--:--</span>
+        <span class="text-xs text-gray-500">bajamar 2ª</span>
+      </div>
+
+      <!-- Tab 8: Ciudad -->
+      <div class="footer-tab">
+        <span class="text-lg">📍</span>
+        <span class="text-xs text-gray-300 font-semibold" id="footer-ciudad">Sanlúcar</span>
+      </div>
+
+    </div>
+  </footer>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- SCRIPTS GLOBALES                                        -->
+  <!-- ═══════════════════════════════════════════════════════ -->
   <script>
-    const menuBtn    = document.getElementById('menu-btn');
-    const mobileMenu = document.getElementById('mobile-menu');
-    const overlay    = document.getElementById('menu-overlay');
-
-    function abrirMenu()  { mobileMenu.classList.remove('hidden'); overlay.classList.remove('hidden'); }
-    function cerrarMenu() { mobileMenu.classList.add('hidden');    overlay.classList.add('hidden'); }
-    if (menuBtn) menuBtn.addEventListener('click', e => {
-      e.stopPropagation();
-      mobileMenu.classList.contains('hidden') ? abrirMenu() : cerrarMenu();
-    });
-
-    const htmlEl      = document.documentElement;
-    const iconMobile  = document.getElementById('dark-icon');
-    const iconDesktop = document.getElementById('dark-icon-desktop');
+    // ── Dark mode ────────────────────────────────────────────
+    const htmlEl  = document.documentElement;
+    const darkBtn = document.getElementById('dark-btn');
 
     function applyDark(isDark) {
       isDark ? htmlEl.classList.add('dark') : htmlEl.classList.remove('dark');
-      const icon = isDark ? '☀️' : '🌙';
-      if (iconMobile)  iconMobile.textContent  = icon;
-      if (iconDesktop) iconDesktop.textContent = icon;
+      if (darkBtn) darkBtn.textContent = isDark ? '☀️' : '🌙';
     }
     function toggleDark() {
       const isDark = !htmlEl.classList.contains('dark');
@@ -136,6 +350,106 @@
       applyDark(saved !== null ? saved === '1'
                                : window.matchMedia('(prefers-color-scheme: dark)').matches);
     })();
+
+    // ── Menú hamburguesa ─────────────────────────────────────
+    const menuOverlay   = document.getElementById('menu-overlay');
+    const hamburgerMenu = document.getElementById('hamburger-menu');
+
+    function toggleMenu() {
+      const isHidden = hamburgerMenu.classList.contains('hidden-menu');
+      if (isHidden) {
+        hamburgerMenu.classList.remove('hidden-menu');
+        menuOverlay.classList.remove('hidden');
+      } else {
+        cerrarMenu();
+      }
+    }
+    function cerrarMenu() {
+      hamburgerMenu.classList.add('hidden-menu');
+      menuOverlay.classList.add('hidden');
+    }
+
+    // ── Buscador IA ──────────────────────────────────────────
+    function abrirBuscadorIA() {
+      document.getElementById('modal-buscador').classList.remove('hidden');
+      setTimeout(() => document.getElementById('ia-search-input').focus(), 100);
+    }
+    function cerrarBuscadorIA() {
+      document.getElementById('modal-buscador').classList.add('hidden');
+    }
+
+    document.getElementById('ia-search-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') buscarIA(e.target.value.trim());
+      if (e.key === 'Escape') cerrarBuscadorIA();
+    });
+
+    async function buscarIA(pregunta) {
+      if (!pregunta) pregunta = document.getElementById('ia-search-input').value.trim();
+      if (!pregunta) return;
+      document.getElementById('ia-search-input').value = pregunta;
+
+      const result  = document.getElementById('ia-search-result');
+      const spinner = document.getElementById('ia-search-spinner');
+      result.innerHTML  = '';
+      spinner.style.display = 'flex';
+
+      try {
+        const resp = await fetch('/calendario/api/consulta', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify(pregunta)
+        });
+        const texto = await resp.text();
+        result.innerHTML = `
+          <div class="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">
+            ${escapeHtml(texto)}
+          </div>`;
+      } catch (err) {
+        result.innerHTML = `<p class="text-sm text-red-500">Error: ${escapeHtml(err.message)}</p>`;
+      } finally {
+        spinner.style.display = 'none';
+      }
+    }
+
+    // ── Vaciar BD ────────────────────────────────────────────
+    async function confirmarVaciarBD() {
+      if (!confirm('⚠️ ¿Borrar TODOS los eventos?')) return;
+      if (!confirm('¿Seguro? Esta acción no se puede deshacer.')) return;
+      const resp = await fetch('/calendario/api/vaciar', { method: 'DELETE' });
+      if (resp.ok) window.location.reload();
+    }
+
+    // ── Footer: cargar datos contextuales ────────────────────
+    async function cargarDatosFooter(fecha) {
+      try {
+        const fechaStr = fecha || new Date().toISOString().split('T')[0];
+        const resp = await fetch(`/contexto/api/datos?fecha=${fechaStr}`);
+        const d    = await resp.json();
+        document.getElementById('footer-amanecer').textContent  = d.amanecer  || '--:--';
+        document.getElementById('footer-atardecer').textContent = d.atardecer || '--:--';
+        document.getElementById('footer-pleamar1').textContent  = d.pleamar1  || '--:--';
+        document.getElementById('footer-bajamar1').textContent  = d.bajamar1  || '--:--';
+        document.getElementById('footer-pleamar2').textContent  = d.pleamar2  || '--:--';
+        document.getElementById('footer-bajamar2').textContent  = d.bajamar2  || '--:--';
+        document.getElementById('footer-ciudad').textContent    = (d.ciudad || 'Sanlúcar').split(' ')[0];
+      } catch (e) {
+        console.warn('Footer datos contextuales no disponibles:', e.message);
+      }
+    }
+
+    // ── Escape HTML helper ───────────────────────────────────
+    function escapeHtml(text) {
+      const d = document.createElement('div');
+      d.appendChild(document.createTextNode(String(text)));
+      return d.innerHTML;
+    }
+
+    // ── Init ─────────────────────────────────────────────────
+    cargarDatosFooter();
+
+    // Exponer para que el calendario pueda actualizar el footer
+    // cuando el usuario cambia de mes
+    window.actualizarFooterFecha = cargarDatosFooter;
   </script>
 
 </body>

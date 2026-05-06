@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: layout(~{::title}, ~{::section})}">
+<head><title>Contexto Familiar — FASI</title></head>
+<body>
+<section>
+  <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-2">🧠 Carga de Datos</h2>
+  <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">
+    Aquí puedes meter información sobre tu familia, gustos, zona y rutinas.<br/>
+    La IA usará todo esto para darte sugerencias personalizadas.
+  </p>
+
+  <!-- Entrada libre por prompt -->
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-6 mb-6">
+    <h3 class="font-semibold text-gray-700 dark:text-gray-200 mb-3">✍️ Añadir información libre</h3>
+    <p class="text-xs text-gray-400 mb-3">
+      Escribe lo que quieras que sepa la IA sobre tu familia.<br/>
+      Ejemplos: <em>"Rocío tiene 8 años y va al colegio San José"</em>,
+      <em>"Los martes Alberto tiene fútbol a las 18h"</em>,
+      <em>"Preferimos la playa de Bajo de Guía"</em>
+    </p>
+    <textarea id="prompt-texto" rows="4"
+              placeholder="Escribe aquí información sobre tu familia, rutinas, preferencias..."
+              class="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3
+                     bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
+                     focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm resize-none mb-3"></textarea>
+    <button onclick="guardarPrompt()"
+            class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg font-semibold transition text-sm">
+      💾 Guardar contexto
+    </button>
+    <span id="prompt-ok" class="hidden ml-3 text-green-600 text-sm font-semibold">✅ Guardado</span>
+  </div>
+
+  <!-- Tabla de entradas actuales -->
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
+    <h3 class="font-semibold text-gray-700 dark:text-gray-200 mb-4">📋 Datos actuales</h3>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-gray-200 dark:border-gray-700">
+            <th class="text-left py-2 px-3 text-gray-500 font-semibold">Clave</th>
+            <th class="text-left py-2 px-3 text-gray-500 font-semibold">Valor</th>
+            <th class="text-left py-2 px-3 text-gray-500 font-semibold">Descripción</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr th:each="e : ${entradas}"
+              class="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
+            <td class="py-2 px-3 font-mono text-xs text-indigo-600 dark:text-indigo-400"
+                th:text="${e.clave}"></td>
+            <td class="py-2 px-3 text-gray-800 dark:text-gray-200 max-w-xs truncate"
+                th:text="${e.valor}"></td>
+            <td class="py-2 px-3 text-gray-400 text-xs"
+                th:text="${e.descripcion ?: '-'}"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    async function guardarPrompt() {
+      const texto = document.getElementById('prompt-texto').value.trim();
+      if (!texto) return;
+      const resp = await fetch('/contexto/prompt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texto })
+      });
+      if (resp.ok) {
+        const ok = document.getElementById('prompt-ok');
+        ok.classList.remove('hidden');
+        document.getElementById('prompt-texto').value = '';
+        setTimeout(() => ok.classList.add('hidden'), 3000);
+      }
+    }
+  </script>
+</section>
+</body>
+</html>
