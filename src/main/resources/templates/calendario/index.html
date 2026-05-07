@@ -261,9 +261,23 @@
     function toggleMicrofono() { grabando ? pararMicrofono() : iniciarMicrofono(); }
 
     function iniciarMicrofono() {
+      console.log('iniciarMicrofono llamado');
       if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-        alert('Tu navegador no soporta voz. Usa Chrome.'); return;
+        alert('Tu navegador no soporta reconocimiento de voz. Usa Chrome o Edge.'); return;
       }
+      if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+        alert('El micrófono requiere HTTPS. Accede via localhost o activa HTTPS.'); return;
+      }
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(function(stream) {
+          stream.getTracks().forEach(function(t){ t.stop(); });
+          _iniciarReconocimiento();
+        })
+        .catch(function(err) {
+          alert('Permiso de micrófono denegado: ' + err.message);
+        });
+    }
+    function _iniciarReconocimiento() {
       var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
       recognition = new SR();
       recognition.lang           = 'es-ES';
@@ -277,10 +291,28 @@
         if (grabando) setTimeout(function() { try { recognition.start(); } catch(e){} }, 300);
       };
       recognition.onerror = function(e) {
+        console.error('Speech error:', e.error);
         if (e.error === 'no-speech') return;
+        if (e.error === 'not-allowed') { alert('Permiso de micrófono denegado. Revisa la configuración del navegador.'); }
+        if (e.error === 'network')     { alert('Error de red en reconocimiento de voz.'); }
         grabando = false; actualizarBotonMicro(false);
       };
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'es-ES';
+      recognition.maxAlternatives = 1;
       recognition.start();
+      console.log('SpeechRecognition iniciado');
+      // Reintentar automaticamente si no-speech
+      recognition.onerror = function(e) {
+        console.error('Speech error:', e.error);
+        if (e.error === 'no-speech') {
+          grabando = false; actualizarBotonMicro(false);
+          return; // No alert, simplemente para
+        }
+        if (e.error === 'not-allowed') { alert('Permiso de micrófono denegado.'); }
+        grabando = false; actualizarBotonMicro(false);
+      };
       grabando = true;
       actualizarBotonMicro(true);
     }
