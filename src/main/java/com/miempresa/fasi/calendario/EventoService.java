@@ -178,4 +178,9 @@ public class EventoService {
             default -> null;
         };
     }
+
+    public List<Evento> getEventosPendientesDatos() {
+        return repo.findEventosPendientesDatos();
+    }
+
 }

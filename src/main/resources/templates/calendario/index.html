@@ -194,6 +194,8 @@
           var titulo = e.titulo || '';
 
           var pill = document.createElement('div');
+          // Badge pendiente de datos
+          var tienePendiente = ev.datosExtra && ev.datosExtra.pendienteHora;
           pill.className = 'text-xs px-1 py-0.5 rounded mb-0.5 text-white font-medium flex items-center gap-0.5 group truncate';
           pill.style.backgroundColor = color;
 
@@ -283,9 +285,25 @@
       recognition.lang           = 'es-ES';
       recognition.continuous     = true;
       recognition.interimResults = true;
+            var textoAcumulado = '';
       recognition.onresult = function(event) {
-        document.getElementById('voz-texto').value =
-          Array.from(event.results).map(function(r) { return r[0].transcript; }).join('');
+        var interino = '';
+        for (var i = event.resultIndex; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            textoAcumulado += event.results[i][0].transcript + ' ';
+          } else {
+            interino += event.results[i][0].transcript;
+          }
+        }
+        // Mostrar texto final acumulado + interino en gris
+        var textarea = document.getElementById('voz-texto');
+        textarea.value = textoAcumulado + interino;
+      };
+      recognition.onend = function() {
+        // Si estaba grabando, reiniciar para mantener continuo
+        if (grabando) {
+          try { recognition.start(); } catch(e) {}
+        }
       };
       recognition.onend = function() {
         if (grabando) setTimeout(function() { try { recognition.start(); } catch(e){} }, 300);
@@ -364,6 +382,10 @@
     }
 
     function mostrarPreview(evento) {
+      // Aviso si no tiene hora
+      var avisoHora = (!evento.horaInicio && !evento.todoDia)
+        ? '<div class="mt-2 p-2 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 rounded text-xs text-yellow-700 dark:text-yellow-300">⚠️ No se especificó hora — se guardará como <strong>pendiente de hora</strong></div>'
+        : '';
       var c         = document.getElementById('preview-contenido');
       var tipoLabel = (evento.tipo && evento.tipo.label) ? evento.tipo.label : (evento.tipo || '');
       var tipoEmoji = (evento.tipo && evento.tipo.emoji) ? evento.tipo.emoji : '';

@@ -162,4 +162,11 @@ public class CalendarioController {
             @RequestBody EventoConfirmarRequest dto) {
         return ResponseEntity.ok(eventoService.saveRecurrente(dto));
     }
+
+    @GetMapping("/api/pendientes-datos")
+    @ResponseBody
+    public List<Evento> getPendientesDatos() {
+        return eventoService.getEventosPendientesDatos();
+    }
+
 }

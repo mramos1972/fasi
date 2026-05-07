@@ -45,4 +45,12 @@ public interface EventoRepository extends JpaRepository<Evento, UUID> {
 
     // ── Eventos de un día concreto ──────────────────────────
     List<Evento> findByFechaInicioOrderByHoraInicioAsc(LocalDate fecha);
+
+    // Eventos con datos pendientes (sin hora, sin lugar, etc.)
+    @Query(value = "SELECT * FROM eventos WHERE datos_extra @> '{\"pendienteHora\": true}'::jsonb ORDER BY fecha_inicio ASC", nativeQuery = true)
+    List<Evento> findEventosPendientesHora();
+
+    @Query(value = "SELECT * FROM eventos WHERE datos_extra @> '{\"pendienteHora\": true}'::jsonb OR datos_extra @> '{\"pendienteLugar\": true}'::jsonb ORDER BY fecha_inicio ASC", nativeQuery = true)
+    List<Evento> findEventosPendientesDatos();
+
 }
