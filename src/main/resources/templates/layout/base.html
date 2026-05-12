@@ -59,7 +59,7 @@
                  text-white h-14 flex items-center px-4 gap-3 shadow-lg">
 
     <!-- Logo -->
-    <span class="text-xl font-bold tracking-wide flex-shrink-0">⚡ FASI</span>
+    <a th:href="@{/}" class="text-xl font-bold tracking-wide flex-shrink-0 hover:text-indigo-300 transition cursor-pointer" title="Inicio">⚡ FASI</a>
 
     <!-- Spacer -->
     <div class="flex-1"></div>
@@ -445,7 +445,11 @@
     }
 
     // ── Init ─────────────────────────────────────────────────
-    cargarDatosFooter();
+    // Detectar fecha desde URL /calendario/dia/YYYY-MM-DD
+    (function initFooterFecha() {
+      const m = window.location.pathname.match(/\/calendario\/dia\/(\d{4}-\d{2}-\d{2})/);
+      cargarDatosFooter(m ? m[1] : null);
+    })();
 
     // Exponer para que el calendario pueda actualizar el footer
     // cuando el usuario cambia de mes
