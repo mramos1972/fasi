@@ -4,37 +4,28 @@
       th:fragment="layout(title, content)">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
   <title th:replace="${title}">FASI</title>
+  
+  <!-- PWA Meta Tags -->
+  <link rel="manifest" href="/manifest.json"/>
+  <meta name="theme-color" content="#4f46e5"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="FASI"/>
+  <link rel="apple-touch-icon" href="/images/icon-192.png"/>
+  
   <script th:src="@{/js/tailwind.min.js}"></script>
   <script th:src="@{/js/htmx.min.js}"></script>
   <script>tailwind.config = { darkMode: 'class' };</script>
+  
   <style>
     *, *::before, *::after {
       transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
     }
-    /* Footer tab bar deslizable */
-    .footer-tabs {
-      display: flex;
-      overflow-x: auto;
-      scroll-snap-type: x mandatory;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: none;
-      gap: 0;
-    }
-    .footer-tabs::-webkit-scrollbar { display: none; }
-    .footer-tab {
-      scroll-snap-align: start;
-      flex: 0 0 auto;
-      min-width: 120px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 6px 12px;
-      border-right: 1px solid rgba(255,255,255,0.1);
-    }
-    /* Menú hamburguesa overlay */
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+    
     #hamburger-menu {
       transition: transform 0.3s ease, opacity 0.3s ease;
     }
@@ -43,62 +34,111 @@
       opacity: 0;
       pointer-events: none;
     }
-    /* Contenido con padding para header y footer fijos */
-    .main-content { display:flex; flex-direction:column; flex:1; min-height:0; overflow-y:auto;
+    
+    .main-content { 
+      display: flex; 
+      flex-direction: column; 
+      flex: 1; 
+      min-height: 0; 
+      overflow-y: auto;
       padding-top: 56px;
-      padding-bottom: 70px;
+      padding-bottom: 16px;
+    }
+    
+    /* Safe area para notch de iPhone */
+    @supports (padding: env(safe-area-inset-top)) {
+      header { padding-top: env(safe-area-inset-top); }
+      .main-content { padding-top: calc(56px + env(safe-area-inset-top)); }
     }
   </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-950 h-screen flex flex-col overflow-hidden">
 
   <!-- ═══════════════════════════════════════════════════════ -->
-  <!-- HEADER FIJO — Mobile-first                             -->
+  <!-- HEADER FIJO — Mobile-first con tabs integradas         -->
   <!-- ═══════════════════════════════════════════════════════ -->
   <header class="fixed top-0 left-0 right-0 z-50 bg-gray-900 dark:bg-gray-800
-                 text-white h-14 flex items-center px-4 gap-3 shadow-lg">
+                 text-white h-14 flex items-center shadow-lg">
 
-    <!-- Logo -->
-    <a th:href="@{/}" class="text-xl font-bold tracking-wide flex-shrink-0 hover:text-indigo-300 transition cursor-pointer" title="Inicio">⚡ FASI</a>
+    <!-- Logo (fijo izquierda) -->
+    <a th:href="@{/}" 
+       class="flex-shrink-0 w-12 h-full flex items-center justify-center text-2xl
+              hover:bg-gray-700 transition cursor-pointer" 
+       title="Inicio">
+      ⚡
+    </a>
 
-    <!-- Spacer -->
-    <div class="flex-1"></div>
+    <!-- Tabs deslizables (centro) -->
+    <div class="flex-1 overflow-x-auto scrollbar-hide">
+      <div class="flex gap-0 h-14" id="header-tabs">
+        
+        <div class="flex-shrink-0 flex flex-col items-center justify-center px-3 min-w-[80px]
+                    border-r border-gray-700">
+          <span class="text-base">🌅</span>
+          <span class="text-xs text-amber-300 font-semibold" id="header-amanecer">--:--</span>
+        </div>
 
-    <!-- Botón + (nuevo evento con voz/texto) -->
-    <button onclick="if(typeof window.abrirModalVoz==='function') window.abrirModalVoz(); else window.location='/calendario/nuevo'"
-            class="w-9 h-9 flex items-center justify-center rounded-full
-                   bg-indigo-600 hover:bg-indigo-500 transition text-lg font-bold"
-            title="Nuevo evento">
-      +
-    </button>
+        <div class="flex-shrink-0 flex flex-col items-center justify-center px-3 min-w-[80px]
+                    border-r border-gray-700">
+          <span class="text-base">🌇</span>
+          <span class="text-xs text-orange-300 font-semibold" id="header-atardecer">--:--</span>
+        </div>
 
-    <!-- Lupa — buscador IA -->
-    <button onclick="abrirBuscadorIA()"
-            class="w-9 h-9 flex items-center justify-center rounded-full
-                   hover:bg-gray-700 transition text-lg"
-            title="Buscar / Preguntar a la IA">
-      🔍
-    </button>
+        <div class="flex-shrink-0 flex flex-col items-center justify-center px-3 min-w-[80px]
+                    border-r border-gray-700">
+          <span class="text-base">🌊</span>
+          <span class="text-xs text-blue-300 font-semibold" id="header-pleamar1">--:--</span>
+        </div>
 
-    <!-- Modo noche/día -->
-    <button onclick="toggleDark()"
-            class="w-9 h-9 flex items-center justify-center rounded-full
-                   hover:bg-gray-700 transition text-lg"
-            id="dark-btn" title="Modo noche/día">
-      🌙
-    </button>
+        <div class="flex-shrink-0 flex flex-col items-center justify-center px-3 min-w-[80px]
+                    border-r border-gray-700">
+          <span class="text-base">🏖️</span>
+          <span class="text-xs text-cyan-300 font-semibold" id="header-bajamar1">--:--</span>
+        </div>
 
-    <!-- Hamburguesa -->
-    <button onclick="toggleMenu()"
-            class="w-9 h-9 flex items-center justify-center rounded-full
-                   hover:bg-gray-700 transition text-xl"
-            title="Menú">
-      ☰
-    </button>
+        <div class="flex-shrink-0 flex flex-col items-center justify-center px-3 min-w-[80px]
+                    border-r border-gray-700">
+          <span class="text-base">🌊</span>
+          <span class="text-xs text-blue-300 font-semibold" id="header-pleamar2">--:--</span>
+        </div>
+
+        <div class="flex-shrink-0 flex flex-col items-center justify-center px-3 min-w-[80px]
+                    border-r border-gray-700">
+          <span class="text-base">🏖️</span>
+          <span class="text-xs text-cyan-300 font-semibold" id="header-bajamar2">--:--</span>
+        </div>
+
+        <div class="flex-shrink-0 flex flex-col items-center justify-center px-3 min-w-[80px]">
+          <span class="text-base">📍</span>
+          <span class="text-xs text-gray-300 font-semibold" id="header-ciudad">Sanlúcar</span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Botones fijos derecha -->
+    <div class="flex-shrink-0 flex items-center gap-1 pr-2">
+      
+      <button onclick="if(typeof window.abrirModalVoz==='function') window.abrirModalVoz(); else window.location='/calendario/nuevo'"
+              class="w-10 h-10 flex items-center justify-center rounded-full
+                     bg-indigo-600 hover:bg-indigo-500 transition text-xl font-bold"
+              title="Nuevo evento">
+        +
+      </button>
+
+      <button onclick="toggleMenu()"
+              class="w-10 h-10 flex items-center justify-center rounded-full
+                     hover:bg-gray-700 transition text-2xl"
+              title="Menú">
+        ☰
+      </button>
+
+    </div>
+
   </header>
 
   <!-- ═══════════════════════════════════════════════════════ -->
-  <!-- MENÚ HAMBURGUESA — Slide desde la derecha              -->
+  <!-- MENÚ HAMBURGUESA                                        -->
   <!-- ═══════════════════════════════════════════════════════ -->
   <div id="menu-overlay" class="hidden fixed inset-0 z-40 bg-black/50"
        onclick="cerrarMenu()"></div>
@@ -108,7 +148,6 @@
               bg-gray-900 dark:bg-gray-800 text-white shadow-2xl
               flex flex-col">
 
-    <!-- Cabecera del menú -->
     <div class="flex items-center justify-between px-5 py-4 border-b border-gray-700">
       <span class="font-bold text-lg">⚡ FASI</span>
       <button onclick="cerrarMenu()"
@@ -118,7 +157,6 @@
       </button>
     </div>
 
-    <!-- Usuario actual -->
     <div class="px-5 py-3 border-b border-gray-700 bg-gray-800/50">
       <div class="flex items-center gap-3">
         <div class="w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center
@@ -132,7 +170,6 @@
       </div>
     </div>
 
-    <!-- Opciones del menú -->
     <div class="flex-1 py-3 space-y-1 px-3">
 
       <a th:href="@{/calendario}"
@@ -141,7 +178,7 @@
         📅 <span>Calendario</span>
       </a>
 
-      <button onclick="cerrarMenu(); abrirModalVoz();"
+      <button onclick="cerrarMenu(); if(typeof window.abrirModalVoz==='function') window.abrirModalVoz();"
               class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-700 transition text-left">
         ➕ <span>Nuevo evento</span>
       </button>
@@ -149,6 +186,11 @@
       <button onclick="cerrarMenu(); abrirBuscadorIA();"
               class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-700 transition text-left">
         🔍 <span>Buscar</span>
+      </button>
+
+      <button onclick="cerrarMenu(); toggleDark();"
+              class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-700 transition text-left">
+        <span id="menu-dark-icon">🌙</span> <span>Modo noche/día</span>
       </button>
 
       <a th:href="@{/contexto}"
@@ -163,16 +205,8 @@
         🤖 <span>Asistente IA</span>
       </a>
 
-      <!-- Separador -->
       <div class="border-t border-gray-700 my-2"></div>
 
-      <!-- Cambio de usuario (base) -->
-      <div class="px-4 py-3 rounded-xl bg-gray-800/50">
-        <p class="text-xs text-gray-400 mb-2 font-semibold uppercase tracking-wide">Cambio de usuario</p>
-        <p class="text-xs text-gray-500">Próximamente — multiusuario en desarrollo</p>
-      </div>
-
-      <!-- Vaciar BD — solo pruebas -->
       <button onclick="cerrarMenu(); confirmarVaciarBD();"
               class="w-full flex items-center gap-3 px-4 py-3 rounded-xl
                      hover:bg-red-900/50 text-red-400 transition text-left text-sm">
@@ -180,7 +214,6 @@
       </button>
     </div>
 
-    <!-- Footer del menú -->
     <div class="px-5 py-4 border-t border-gray-700">
       <form th:action="@{/logout}" method="post">
         <button type="submit"
@@ -199,7 +232,6 @@
        class="hidden fixed inset-0 z-50 flex items-start justify-center pt-16 px-4 bg-black/60">
     <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg">
 
-      <!-- Header buscador -->
       <div class="flex items-center gap-3 p-4 border-b border-gray-200 dark:border-gray-700">
         <span class="text-xl">🔍</span>
         <input type="text" id="ia-search-input"
@@ -213,7 +245,6 @@
         </button>
       </div>
 
-      <!-- Sugerencias rápidas -->
       <div class="p-3 flex flex-wrap gap-2 border-b border-gray-100 dark:border-gray-700">
         <button onclick="buscarIA('¿Qué tengo esta semana?')"
                 class="text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600
@@ -230,21 +261,14 @@
                        dark:text-indigo-300 px-3 py-1 rounded-full hover:bg-indigo-100 transition">
           Próximo cumpleaños
         </button>
-        <button onclick="buscarIA('Dame un resumen de los próximos 15 días')"
-                class="text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600
-                       dark:text-indigo-300 px-3 py-1 rounded-full hover:bg-indigo-100 transition">
-          Resumen 15 días
-        </button>
       </div>
 
-      <!-- Resultado -->
       <div id="ia-search-result" class="p-4 min-h-24 max-h-80 overflow-y-auto">
         <p class="text-sm text-gray-400 text-center pt-4">
           Escribe una pregunta o elige una sugerencia 👆
         </p>
       </div>
 
-      <!-- Spinner -->
       <div id="ia-search-spinner" style="display:none"
            class="flex items-center gap-2 px-4 pb-4 text-sm text-gray-400">
         <div class="w-2 h-2 bg-indigo-400 rounded-full animate-bounce"></div>
@@ -263,88 +287,24 @@
   </main>
 
   <!-- ═══════════════════════════════════════════════════════ -->
-  <!-- FOOTER FIJO — Tab bar deslizable                       -->
-  <!-- ═══════════════════════════════════════════════════════ -->
-  <footer class="fixed bottom-0 left-0 right-0 z-40
-                 bg-gray-900 dark:bg-gray-800 text-white
-                 h-16 shadow-[0_-2px_10px_rgba(0,0,0,0.3)]">
-    <div class="footer-tabs h-full" id="footer-tabs">
-
-      <!-- Tab 1: Usuario / sesión -->
-      <div class="footer-tab">
-        <span class="text-lg">👤</span>
-        <span class="text-xs text-gray-300 mt-0.5 truncate max-w-24"
-              sec:authentication="name">usuario</span>
-      </div>
-
-      <!-- Tab 2: Amanecer -->
-      <div class="footer-tab">
-        <span class="text-lg">🌅</span>
-        <span class="text-xs text-amber-300 font-semibold" id="footer-amanecer">--:--</span>
-        <span class="text-xs text-gray-500">amanecer</span>
-      </div>
-
-      <!-- Tab 3: Atardecer -->
-      <div class="footer-tab">
-        <span class="text-lg">🌇</span>
-        <span class="text-xs text-orange-300 font-semibold" id="footer-atardecer">--:--</span>
-        <span class="text-xs text-gray-500">atardecer</span>
-      </div>
-
-      <!-- Tab 4: Pleamar 1 -->
-      <div class="footer-tab">
-        <span class="text-lg">🌊</span>
-        <span class="text-xs text-blue-300 font-semibold" id="footer-pleamar1">--:--</span>
-        <span class="text-xs text-gray-500">pleamar</span>
-      </div>
-
-      <!-- Tab 5: Bajamar 1 -->
-      <div class="footer-tab">
-        <span class="text-lg">🏖️</span>
-        <span class="text-xs text-cyan-300 font-semibold" id="footer-bajamar1">--:--</span>
-        <span class="text-xs text-gray-500">bajamar</span>
-      </div>
-
-      <!-- Tab 6: Pleamar 2 -->
-      <div class="footer-tab">
-        <span class="text-lg">🌊</span>
-        <span class="text-xs text-blue-300 font-semibold" id="footer-pleamar2">--:--</span>
-        <span class="text-xs text-gray-500">pleamar 2ª</span>
-      </div>
-
-      <!-- Tab 7: Bajamar 2 -->
-      <div class="footer-tab">
-        <span class="text-lg">🏖️</span>
-        <span class="text-xs text-cyan-300 font-semibold" id="footer-bajamar2">--:--</span>
-        <span class="text-xs text-gray-500">bajamar 2ª</span>
-      </div>
-
-      <!-- Tab 8: Ciudad -->
-      <div class="footer-tab">
-        <span class="text-lg">📍</span>
-        <span class="text-xs text-gray-300 font-semibold" id="footer-ciudad">Sanlúcar</span>
-      </div>
-
-    </div>
-  </footer>
-
-  <!-- ═══════════════════════════════════════════════════════ -->
   <!-- SCRIPTS GLOBALES                                        -->
   <!-- ═══════════════════════════════════════════════════════ -->
   <script>
     // ── Dark mode ────────────────────────────────────────────
     const htmlEl  = document.documentElement;
-    const darkBtn = document.getElementById('dark-btn');
 
     function applyDark(isDark) {
       isDark ? htmlEl.classList.add('dark') : htmlEl.classList.remove('dark');
-      if (darkBtn) darkBtn.textContent = isDark ? '☀️' : '🌙';
+      const menuIcon = document.getElementById('menu-dark-icon');
+      if (menuIcon) menuIcon.textContent = isDark ? '☀️' : '🌙';
     }
+    
     function toggleDark() {
       const isDark = !htmlEl.classList.contains('dark');
       localStorage.setItem('fasi-dark', isDark ? '1' : '0');
       applyDark(isDark);
     }
+    
     (function() {
       const saved = localStorage.getItem('fasi-dark');
       applyDark(saved !== null ? saved === '1'
@@ -364,6 +324,7 @@
         cerrarMenu();
       }
     }
+    
     function cerrarMenu() {
       hamburgerMenu.classList.add('hidden-menu');
       menuOverlay.classList.add('hidden');
@@ -374,6 +335,7 @@
       document.getElementById('modal-buscador').classList.remove('hidden');
       setTimeout(() => document.getElementById('ia-search-input').focus(), 100);
     }
+    
     function cerrarBuscadorIA() {
       document.getElementById('modal-buscador').classList.add('hidden');
     }
@@ -425,19 +387,18 @@
         const fechaStr = fecha || new Date().toISOString().split('T')[0];
         const resp = await fetch(`/contexto/api/datos?fecha=${fechaStr}`);
         const d    = await resp.json();
-        document.getElementById('footer-amanecer').textContent  = d.amanecer  || '--:--';
-        document.getElementById('footer-atardecer').textContent = d.atardecer || '--:--';
-        document.getElementById('footer-pleamar1').textContent  = d.pleamar1  || '--:--';
-        document.getElementById('footer-bajamar1').textContent  = d.bajamar1  || '--:--';
-        document.getElementById('footer-pleamar2').textContent  = d.pleamar2  || '--:--';
-        document.getElementById('footer-bajamar2').textContent  = d.bajamar2  || '--:--';
-        document.getElementById('footer-ciudad').textContent    = (d.ciudad || 'Sanlúcar').split(' ')[0];
+        document.getElementById('header-amanecer').textContent  = d.amanecer  || '--:--';
+        document.getElementById('header-atardecer').textContent = d.atardecer || '--:--';
+        document.getElementById('header-pleamar1').textContent  = d.pleamar1  || '--:--';
+        document.getElementById('header-bajamar1').textContent  = d.bajamar1  || '--:--';
+        document.getElementById('header-pleamar2').textContent  = d.pleamar2  || '--:--';
+        document.getElementById('header-bajamar2').textContent  = d.bajamar2  || '--:--';
+        document.getElementById('header-ciudad').textContent    = (d.ciudad || 'Sanlúcar').split(' ')[0];
       } catch (e) {
-        console.warn('Footer datos contextuales no disponibles:', e.message);
+        console.warn('Header datos contextuales no disponibles:', e.message);
       }
     }
 
-    // ── Escape HTML helper ───────────────────────────────────
     function escapeHtml(text) {
       const d = document.createElement('div');
       d.appendChild(document.createTextNode(String(text)));
@@ -445,15 +406,19 @@
     }
 
     // ── Init ─────────────────────────────────────────────────
-    // Detectar fecha desde URL /calendario/dia/YYYY-MM-DD
     (function initFooterFecha() {
       const m = window.location.pathname.match(/\/calendario\/dia\/(\d{4}-\d{2}-\d{2})/);
       cargarDatosFooter(m ? m[1] : null);
     })();
 
-    // Exponer para que el calendario pueda actualizar el footer
-    // cuando el usuario cambia de mes
     window.actualizarFooterFecha = cargarDatosFooter;
+
+    // ── PWA Service Worker ───────────────────────────────────
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js')
+        .then(() => console.log('✅ PWA lista para instalar'))
+        .catch(e => console.warn('⚠️ PWA no disponible:', e));
+    }
   </script>
 
 </body>
