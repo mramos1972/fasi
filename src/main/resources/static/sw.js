@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fasi-v1';
+const CACHE_NAME = 'fasi-v20260513223714';
 const urlsToCache = [
   '/calendario',
   '/js/tailwind.min.js',
