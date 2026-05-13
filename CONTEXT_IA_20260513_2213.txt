@@ -1,10 +1,13 @@
 ======================================================
   FASI — CONTEXTO COMPLETO PARA IA
-  Generado: 2026-05-01 19:46
+  Generado: 2026-05-13 22:13
 ======================================================
 
 ══ ESTRUCTURA DEL PROYECTO ══
 .
+├── backups
+│   └── pwa_20260512_165625
+│       └── base.html
 ├── src
 │   ├── main
 │   │   ├── java
@@ -16,9 +19,12 @@
 │   │       ├── static
 │   │       │   ├── css
 │   │       │   ├── images
-│   │       │   └── js
+│   │       │   ├── js
+│   │       │   ├── manifest.json
+│   │       │   └── sw.js
 │   │       ├── templates
 │   │       │   ├── calendario
+│   │       │   ├── contexto
 │   │       │   ├── error
 │   │       │   ├── ia
 │   │       │   ├── layout
@@ -45,11 +51,19 @@
 │   │   │       ├── V5__documentos.sql
 │   │   │       ├── V6__desarrollo.sql
 │   │   │       ├── V7__ia.sql
-│   │   │       └── V8__calendario.sql
+│   │   │       ├── V8__calendario.sql
+│   │   │       └── V9__contexto_familiar.sql
 │   │   ├── static
-│   │   │   └── js
-│   │   │       ├── htmx.min.js
-│   │   │       └── tailwind.min.js
+│   │   │   ├── images
+│   │   │   │   ├── icon-192.png
+│   │   │   │   ├── icon-192.svg
+│   │   │   │   ├── icon-512.png
+│   │   │   │   └── icon-512.svg
+│   │   │   ├── js
+│   │   │   │   ├── htmx.min.js
+│   │   │   │   └── tailwind.min.js
+│   │   │   ├── manifest.json
+│   │   │   └── sw.js
 │   │   ├── templates
 │   │   │   ├── agenda
 │   │   │   │   ├── form.html
@@ -61,6 +75,8 @@
 │   │   │   ├── contabilidad
 │   │   │   │   ├── form.html
 │   │   │   │   └── list.html
+│   │   │   ├── contexto
+│   │   │   │   └── index.html
 │   │   │   ├── desarrollo
 │   │   │   │   ├── form.html
 │   │   │   │   └── list.html
@@ -75,7 +91,8 @@
 │   │   │   ├── ia
 │   │   │   │   └── chat.html
 │   │   │   ├── layout
-│   │   │   │   └── base.html
+│   │   │   │   ├── base.html
+│   │   │   │   └── base.html.bak.20260510_221016
 │   │   │   ├── tareas
 │   │   │   │   ├── form.html
 │   │   │   │   └── list.html
@@ -103,37 +120,20 @@
 │   ├── app.jar
 │   └── app.jar.original
 ├── CONTEXT_IA.txt
-├── CONTEXT_IA_20260417_0718.txt
-├── CONTEXT_IA_20260419_1848.txt
-├── CONTEXT_IA_20260421_1836.txt
-├── CONTEXT_IA_20260422_1716.txt
-├── CONTEXT_IA_20260424_1421.txt
-├── CONTEXT_IA_20260428_0712.txt
-├── CONTEXT_IA_20260429_1718.txt
-├── CONTEXT_IA_20260501_1629.txt
-├── CONTEXT_IA_20260501_1753.txt
-├── CONTEXT_IA_20260501_1852.txt
-├── CONTEXT_IA_20260501_1913.txt
-├── CONTEXT_IA_20260501_1946.txt
+├── CONTEXT_IA_20260512_0728.txt
+├── CONTEXT_IA_20260513_0818.txt
+├── CONTEXT_IA_20260513_2213.txt
 ├── Dockerfile
 ├── HELP.md
 ├── Jenkinsfile
-├── apply_changes.sh
-├── apply_changes_20260417_0718.sh
-├── apply_changes_ia.sh
+├── apply_pwa_redesign.sh
 ├── dev-redeploy.sh
-├── fix_csrf.sh
-├── fix_ia.sh
-├── fix_ia_context.sh
-├── fix_ia_form.sh
-├── fix_ia_standalone.sh
 ├── get-context.sh
-├── migrate_to_calendario.sh
 ├── mvnw
 ├── mvnw.cmd
 └── pom.xml
 
-56 directories, 71 files
+61 directories, 66 files
 
 ══ MIGRACIONES FLYWAY (estado BD) ══
 src/main/resources/db/migration/V1__init_schema.sql
@@ -144,8 +144,9 @@ src/main/resources/db/migration/V5__documentos.sql
 src/main/resources/db/migration/V6__desarrollo.sql
 src/main/resources/db/migration/V7__ia.sql
 src/main/resources/db/migration/V8__calendario.sql
+src/main/resources/db/migration/V9__contexto_familiar.sql
 --- Última migración:
-src/main/resources/db/migration/V8__calendario.sql
+src/main/resources/db/migration/V9__contexto_familiar.sql
 
 ══ FICHEROS DE CONFIGURACIÓN ══
 
@@ -281,7 +282,7 @@ fasi.upload.dir=${UPLOAD_DIR:./uploads}
 
 # ── Ollama / IA local ────────────────────────────────────────
 fasi.ollama.url=${OLLAMA_URL:http://localhost:11434}
-fasi.ollama.model=${OLLAMA_MODEL:gemma3:4b}
+fasi.ollama.model=${OLLAMA_MODEL:qwen2.5:7b}
 
 --- src/main/resources/application-dev.properties ---
 spring.datasource.url=jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:fasi_dev}
@@ -292,7 +293,7 @@ spring.jpa.show-sql=true
 spring.jpa.properties.hibernate.format_sql=true
 logging.level.com.miempresa.fasi=DEBUG
 server.address=0.0.0.0
-fasi.ollama.url=${OLLAMA_URL:http://172.20.77.35:11434}
+fasi.ollama.url=${OLLAMA_URL:http://host.docker.internal:11434}
 
 
 --- src/main/resources/application-prod.properties ---
@@ -505,8 +506,14 @@ public class CalendarioController {
             @RequestBody EventoConfirmarRequest dto) {
         return ResponseEntity.ok(eventoService.saveRecurrente(dto));
     }
-}
 
+    @GetMapping("/api/pendientes-datos")
+    @ResponseBody
+    public List<Evento> getPendientesDatos() {
+        return eventoService.getEventosPendientesDatos();
+    }
+
+}
 --- src/main/java/com/miempresa/fasi/calendario/Evento.java ---
 package com.miempresa.fasi.calendario;
 
@@ -680,71 +687,30 @@ package com.miempresa.fasi.calendario;
 import lombok.Data;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.HashMap;
 import java.util.Map;
 
-/**
- * DTO para recibir el evento interpretado por la IA desde el frontend.
- * El campo 'tipo' puede llegar como String ("CUMPLEANOS") o como objeto
- * con subcampos {label, emoji, color} — lo normalizamos aquí.
- */
 @Data
 public class EventoConfirmarRequest {
-
-    private Object tipo;   // puede ser String o Map<String,Object>
-
-    private String    titulo;
-    private LocalDate fechaInicio;
-    private LocalDate fechaFin;
-    private LocalTime horaInicio;
-    private LocalTime horaFin;
-    private boolean   todoDia;
-    private String    lugar;
-    private String    personasRelacionadas;
-    private String    descripcion;
-    private Integer   recordatorioMinutos;
+    private Evento.TipoEvento tipo;
+    private String            titulo;
+    private LocalDate         fechaInicio;
+    private LocalDate         fechaFin;
+    private LocalTime         horaInicio;
+    private LocalTime         horaFin;
+    private boolean           todoDia;
+    private String            lugar;
+    private String            personasRelacionadas;
+    private String            descripcion;
+    private Integer           recordatorioMinutos;
     private Map<String, Object> datosExtra;
-    private String    textoOriginalVoz;
+    private String            textoOriginalVoz;
 
-    /**
-     * Resuelve el tipo sea cual sea el formato que mande el frontend.
-     */
-    public Evento.TipoEvento resolverTipo() {
-        if (tipo == null) return Evento.TipoEvento.OTRO;
-
-        // Caso 1: llega como String puro → "CUMPLEANOS"
-        if (tipo instanceof String s) {
-            try { return Evento.TipoEvento.valueOf(s.trim().toUpperCase()); }
-            catch (IllegalArgumentException e) { return Evento.TipoEvento.OTRO; }
-        }
-
-        // Caso 2: llega como objeto {label:"Cumpleaños", emoji:"🎂", color:"#f59e0b"}
-        // Jackson lo deserializa como LinkedHashMap
-        if (tipo instanceof Map<?,?> m) {
-            // Intentar por nombre del enum si viene en el mapa
-            Object nombre = m.get("name");
-            if (nombre == null) nombre = m.get("nombre");
-            if (nombre instanceof String s) {
-                try { return Evento.TipoEvento.valueOf(s.trim().toUpperCase()); }
-                catch (IllegalArgumentException ignored) {}
-            }
-            // Intentar por label
-            Object label = m.get("label");
-            if (label instanceof String lbl) {
-                for (Evento.TipoEvento t : Evento.TipoEvento.values()) {
-                    if (t.getLabel().equalsIgnoreCase(lbl.trim())) return t;
-                }
-            }
-        }
-
-        return Evento.TipoEvento.OTRO;
-    }
-
-    /** Convierte el DTO a entidad lista para persistir. */
     public Evento toEvento() {
         Evento e = new Evento();
-        e.setTipo(resolverTipo());
-        e.setTitulo(titulo != null ? titulo : "Sin título");
-        e.setFechaInicio(fechaInicio != null ? fechaInicio : LocalDate.now());
+        e.setTipo(tipo != null ? tipo : Evento.TipoEvento.OTRO);
+        e.setTitulo(titulo);
+        e.setFechaInicio(fechaInicio);
         e.setFechaFin(fechaFin);
         e.setHoraInicio(horaInicio);
         e.setHoraFin(horaFin);
@@ -753,8 +719,18 @@ public class EventoConfirmarRequest {
         e.setPersonasRelacionadas(personasRelacionadas);
         e.setDescripcion(descripcion);
         e.setRecordatorioMinutos(recordatorioMinutos);
-        e.setDatosExtra(datosExtra);
         e.setTextoOriginalVoz(textoOriginalVoz);
+
+        Map<String, Object> extra = datosExtra != null
+            ? new HashMap<>(datosExtra)
+            : new HashMap<>();
+
+        // Si no tiene hora y no es todo el día → marcar pendiente
+        if (horaInicio == null && !todoDia) {
+            extra.put("pendienteHora", true);
+        }
+
+        e.setDatosExtra(extra.isEmpty() ? null : extra);
         return e;
     }
 }
@@ -775,24 +751,49 @@ public class EventoIaRequest {
 --- src/main/java/com/miempresa/fasi/calendario/EventoIaResponse.java ---
 package com.miempresa.fasi.calendario;
 
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
-@AllArgsConstructor
 public class EventoIaResponse {
-    private boolean exito;
-    private String  mensajeError;
-    private Evento  eventoPreview;  // evento parseado, pendiente de confirmación
-    private long    tiempoMs;
+    private boolean      exito;
+    private String       mensajeError;
+    private Evento       eventoPreview;
+    private List<Evento> eventosPreview;
+    private long         tiempoMs;
+
+    // Constructor evento único — compatibilidad hacia atrás
+    public EventoIaResponse(boolean exito, String mensajeError,
+                             Evento eventoPreview, long tiempoMs) {
+        this.exito         = exito;
+        this.mensajeError  = mensajeError;
+        this.eventoPreview = eventoPreview;
+        this.tiempoMs      = tiempoMs;
+    }
+
+    // Constructor múltiples eventos
+    public EventoIaResponse(boolean exito, String mensajeError,
+                             Evento eventoPreview, List<Evento> eventosPreview,
+                             long tiempoMs) {
+        this.exito          = exito;
+        this.mensajeError   = mensajeError;
+        this.eventoPreview  = eventoPreview;
+        this.eventosPreview = eventosPreview;
+        this.tiempoMs       = tiempoMs;
+    }
+
+    public boolean isMultiple() {
+        return eventosPreview != null && !eventosPreview.isEmpty();
+    }
 }
 
 --- src/main/java/com/miempresa/fasi/calendario/EventoIaService.java ---
 package com.miempresa.fasi.calendario;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.miempresa.fasi.ia.OllamaClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -800,232 +801,191 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.util.HashMap;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class EventoIaService {
 
-    private final OllamaClient      ollamaClient;
-    private final EventoRepository  repo;
-    private final ObjectMapper      objectMapper;
+    private final OllamaClient     ollamaClient;
+    private final EventoRepository repo;
+    private final ObjectMapper     objectMapper;
 
-    // ── Interpretar texto de voz → Evento (preview) ──────────
     public EventoIaResponse interpretar(EventoIaRequest request) {
         long inicio = System.currentTimeMillis();
         try {
-            String prompt    = buildPromptInterpretar(request);
-            String json      = ollamaClient.generate(prompt);
+            String prompt     = buildPromptInterpretar(request);
+            String json       = ollamaClient.generate(prompt, 768);
             String jsonLimpio = extraerJson(json);
 
             log.debug("JSON recibido de IA: {}", jsonLimpio);
 
-            // Parsear con ObjectMapper tolerante (ignora campos desconocidos)
-            com.fasterxml.jackson.databind.node.ObjectNode node =
-                (com.fasterxml.jackson.databind.node.ObjectNode)
-                objectMapper.readTree(jsonLimpio);
+            String trimmed = jsonLimpio.trim();
 
-            // Normalizar horaInicio/horaFin: "16:00" → "16:00:00"
+            // ── MÚLTIPLES EVENTOS ─────────────────────────────
+            if (trimmed.startsWith("[")) {
+                List<EventoConfirmarRequest> dtos = objectMapper.readValue(
+                    trimmed,
+                    objectMapper.getTypeFactory()
+                        .constructCollectionType(List.class, EventoConfirmarRequest.class)
+                );
+                List<Evento> previews = new ArrayList<>();
+                for (EventoConfirmarRequest dto : dtos) {
+                    Evento e = dto.toEvento();
+                    e.setTextoOriginalVoz(request.getTexto());
+                    previews.add(e);
+                }
+                log.info("IA detectó {} eventos múltiples", previews.size());
+                return new EventoIaResponse(true, null, null, previews,
+                        System.currentTimeMillis() - inicio);
+            }
+
+            // ── EVENTO ÚNICO ──────────────────────────────────
+            ObjectNode node = (ObjectNode) objectMapper.readTree(trimmed);
+
             normalizarHora(node, "horaInicio");
             normalizarHora(node, "horaFin");
 
-            // Extraer flag de recurrencia ANTES de deserializar Evento
             boolean esRecurrente = node.has("recurrente") && node.get("recurrente").asBoolean(false);
             String  patron       = node.has("patron")     ? node.get("patron").asText(null) : null;
 
-            // Eliminar campos que Evento no tiene para evitar error de deserialización
             node.remove("recurrente");
             node.remove("patron");
-            node.remove("diasSemana");
 
             Evento evento = objectMapper.treeToValue(node, Evento.class);
             evento.setTextoOriginalVoz(request.getTexto());
 
-            // Si es recurrente, guardar info en datosExtra
             if (esRecurrente && patron != null) {
                 java.util.Map<String, Object> extra = evento.getDatosExtra() != null
-                    ? new java.util.HashMap<>(evento.getDatosExtra())
-                    : new java.util.HashMap<>();
+                    ? new HashMap<>(evento.getDatosExtra())
+                    : new HashMap<>();
                 extra.put("recurrente", true);
                 extra.put("patron", patron);
-                // Guardar texto original para que el frontend pueda mostrar aviso
                 extra.put("textoRecurrencia", request.getTexto());
+                if (node.has("diaSemana") && !node.get("diaSemana").isNull()) {
+                    extra.put("diaSemana", node.get("diaSemana").asText());
+                }
                 evento.setDatosExtra(extra);
             }
 
-            return new EventoIaResponse(true, null, evento,
+            return new EventoIaResponse(true, null, evento, null,
                     System.currentTimeMillis() - inicio);
 
         } catch (Exception e) {
-            log.error("Error interpretando texto de voz: {}", e.getMessage());
+            log.error("Error interpretando texto: {}", e.getMessage());
             return new EventoIaResponse(false,
-                    "No pude interpretar el texto. Inténtalo de nuevo o crea el evento manualmente.",
+                    "No pude interpretar el texto. Inténtalo de nuevo.",
                     null, System.currentTimeMillis() - inicio);
         }
     }
 
-    /** Normaliza "16:00" o "16:00 H" a "16:00:00" para que LocalTime lo acepte */
-    private void normalizarHora(com.fasterxml.jackson.databind.node.ObjectNode node, String campo) {
+    private void normalizarHora(ObjectNode node, String campo) {
         if (!node.has(campo) || node.get(campo).isNull()) return;
         String val = node.get(campo).asText("").trim()
-                         .replaceAll("(?i)\s*[Hh].*$", "") // quitar " H", " h", " horas"
-                         .trim();
+                         .replaceAll("(?i)\\s*[Hh].*$", "").trim();
         if (val.isEmpty() || val.equals("null")) { node.putNull(campo); return; }
-        // "16:00" → "16:00:00"
-        if (val.matches("\d{1,2}:\d{2}$")) val = val + ":00";
-        // "16" → "16:00:00"
-        if (val.matches("\d{1,2}$")) val = val + ":00:00";
+        if (val.matches("\\d{1,2}:\\d{2}$")) val = val + ":00";
+        if (val.matches("\\d{1,2}$"))        val = val + ":00:00";
         node.put(campo, val);
     }
 
-    // ── Consulta en lenguaje natural sobre el calendario ─────
     @Transactional(readOnly = true)
     public String consultar(String pregunta) {
-        String contexto = buildContextoCalendario();
-        String prompt   = buildPromptConsulta(pregunta, contexto);
-        return ollamaClient.generate(prompt);
+        return ollamaClient.generate(buildPromptConsulta(pregunta, buildContextoCalendario()));
     }
 
-    // ── Prompt para interpretar voz → JSON evento ────────────
     private String buildPromptInterpretar(EventoIaRequest req) {
         String fechaHoy = req.getFechaContexto() != null
                 ? req.getFechaContexto()
                 : LocalDate.now().format(DateTimeFormatter.ISO_DATE);
 
-        return """
-            Eres un asistente de calendario. Convierte texto en lenguaje natural a JSON de evento de calendario.
-
-            FECHA DE HOY: %s
-
-            TIPOS DISPONIBLES — elige el más adecuado al contexto:
-            - CUMPLEANOS   → cumpleaños, aniversario, celebración de nacimiento
-            - CITA_MEDICA  → médico, consulta, hospital, dentista, revisión
-            - TUTORIA      → tutoría, reunión con profesor, entrevista escolar
-            - CLAUSTRO     → claustro, reunión de profesores, junta escolar
-            - CURSO        → curso, formación, clase, taller
-            - EXTRAESCOLAR → extraescolar, actividad, teatro, deporte, música, ballet
-            - VIAJE        → viaje, excursión, desplazamiento
-            - VACACIONES   → vacaciones, días libres, puente
-            - COMIDA       → comida, cena, almuerzo, restaurante
-            - COMPRAS      → compras, supermercado, recado
-            - OTRO         → cualquier otra cosa
-
-            REGLAS CRÍTICAS:
-            1. Responde SOLO con JSON válido, sin texto extra, sin markdown, sin ```
-            2. fechaInicio y fechaFin: formato YYYY-MM-DD obligatorio
-            3. horaInicio y horaFin: formato HH:mm:ss (ej: "16:00:00"). Si no hay hora → null
-            4. "16:00 H", "las 4 de la tarde", "a las 16h" → "16:00:00"
-            5. "las 7" sin contexto AM/PM en evento de tarde → "19:00:00"
-            6. Si el evento es recurrente (todos los martes, cada semana...) → recurrente:true, patron:"WEEKLY", diasSemana:["TUESDAY"] o similar
-            7. Si no hay recurrencia → recurrente:false
-            8. tipo: usa EXACTAMENTE uno de los valores en mayúsculas de la lista anterior
-            9. titulo: máximo 60 caracteres, descriptivo
-            10. lugar: null si no se menciona
-            11. personasRelacionadas: nombres separados por coma, null si no hay
-
-            ESTRUCTURA JSON REQUERIDA:
-            {
-              "tipo": "CUMPLEANOS",
-              "titulo": "Cumpleaños de Noa",
-              "fechaInicio": "2026-05-30",
-              "fechaFin": null,
-              "horaInicio": "16:00:00",
-              "horaFin": "19:00:00",
-              "todoDia": false,
-              "lugar": "Costaballena",
-              "personasRelacionadas": "Noa",
-              "descripcion": null,
-              "recurrente": false,
-              "patron": null,
-              "diasSemana": null,
-              "datosExtra": {"nombre_persona": "Noa", "lugar_celebracion": "Costaballena"}
-            }
-
-            EJEMPLOS DE TIPOS CORRECTOS:
-            - "cumpleaños de Noa" → tipo: "CUMPLEANOS"
-            - "teatro de Alicia" / "extraescolar" → tipo: "EXTRAESCOLAR"
-            - "claustro de Rocío" / "reunión profesores" → tipo: "CLAUSTRO"
-            - "cita médica" / "médico" → tipo: "CITA_MEDICA"
-            - "vacaciones" → tipo: "VACACIONES"
-
-            TEXTO: "%s"
-
-            JSON:
-            """.formatted(fechaHoy, req.getTexto());
+        StringBuilder sb = new StringBuilder();
+        sb.append("Eres un asistente de calendario. Convierte el texto en JSON.\n\n");
+        sb.append("FECHA HOY: ").append(fechaHoy).append("\n\n");
+        sb.append("TIPOS: CUMPLEANOS, CITA_MEDICA, TUTORIA, CLAUSTRO, CURSO, EXTRAESCOLAR, VIAJE, VACACIONES, COMIDA, COMPRAS, OTRO\n\n");
+        sb.append("REGLAS CRITICAS:\n");
+        sb.append("1. Si el usuario pide VARIOS eventos distintos -> devuelve ARRAY JSON: [{...},{...}]\n");
+        sb.append("2. Si el usuario pide UN solo evento -> devuelve OBJETO JSON: {...}\n");
+        sb.append("3. Responde SOLO con JSON valido. Sin texto extra. Sin markdown. Sin ```\n");
+        sb.append("4. fechaInicio formato YYYY-MM-DD. OBLIGATORIO siempre.\n");
+        sb.append("5. horaInicio formato HH:mm:ss. Si NO se menciona hora -> pon null. NUNCA inventes una hora.\n");
+        sb.append("6. todoDia: true SOLO si el usuario dice explicitamente todo el dia o es un cumpleanos sin hora.\n");
+        sb.append("7. Si es recurrente -> recurrente: true, patron: WEEKLY\n");
+        sb.append("8. titulo: maximo 60 caracteres.\n\n");
+        sb.append("EJEMPLO SIN HORA:\n");
+        sb.append("{\"tipo\":\"CITA_MEDICA\",\"titulo\":\"Cita medica\",\"fechaInicio\":\"2026-05-14\",\"horaInicio\":null,\"todoDia\":false,\"lugar\":null,\"personasRelacionadas\":null,\"descripcion\":null,\"datosExtra\":{}}\n\n");
+        sb.append("EJEMPLO CON HORA:\n");
+        sb.append("{\"tipo\":\"CITA_MEDICA\",\"titulo\":\"Cita medica\",\"fechaInicio\":\"2026-05-14\",\"horaInicio\":\"10:00:00\",\"todoDia\":false,\"lugar\":null,\"personasRelacionadas\":null,\"descripcion\":null,\"datosExtra\":{}}\n\n");
+        sb.append("EJEMPLO ARRAY:\n");
+        sb.append("[\n");
+        sb.append("  {\"tipo\":\"CUMPLEANOS\",\"titulo\":\"Cumpleanos Carlota\",\"fechaInicio\":\"2026-05-26\",\"horaInicio\":\"16:00:00\",\"todoDia\":false,\"lugar\":\"Costaballena\",\"personasRelacionadas\":\"Carlota\",\"descripcion\":null,\"datosExtra\":{}},\n");
+        sb.append("  {\"tipo\":\"CUMPLEANOS\",\"titulo\":\"Cumpleanos Cristian\",\"fechaInicio\":\"2026-05-23\",\"horaInicio\":null,\"todoDia\":true,\"lugar\":\"Playa de la Jara\",\"personasRelacionadas\":\"Cristian\",\"descripcion\":null,\"datosExtra\":{}}\n");
+        sb.append("]\n\n");
+        sb.append("TEXTO: \"").append(req.getTexto()).append("\"\n\n");
+        sb.append("JSON:");
+        return sb.toString();
     }
 
-    // ── Prompt para consultas sobre el calendario ─────────────
     private String buildPromptConsulta(String pregunta, String contexto) {
         return """
-            Eres FASI-IA, asistente inteligente del calendario FASI.
-            Tienes acceso a los eventos REALES del calendario que se muestran a continuación.
-            
-            REGLAS:
-            1. Responde ÚNICAMENTE con datos del contexto proporcionado.
-            2. Si un dato no está, responde: 'No tengo ese dato en el calendario.'
-            3. NUNCA inventes información.
-            4. Responde en español, de forma clara y estructurada.
-            5. Usa emojis con moderación.
-            
+            Eres FASI-IA, asistente del calendario FASI.
+            REGLAS: Responde SOLO con datos del contexto. Si no está, di 'No tengo ese dato'.
+            NUNCA inventes. Responde en español.
+
             %s
-            
+
             PREGUNTA: %s
-            
             RESPUESTA:
             """.formatted(contexto, pregunta);
     }
 
-    // ── Construir contexto del calendario para consultas ──────
     private String buildContextoCalendario() {
         StringBuilder ctx = new StringBuilder("=== EVENTOS DEL CALENDARIO ===\n\n");
-
-        LocalDate hoy    = LocalDate.now();
-        LocalDate fin    = hoy.plusMonths(3);
-
+        LocalDate hoy = LocalDate.now();
+        LocalDate fin = hoy.plusMonths(3);
         List<Evento> proximos = repo
                 .findByFechaInicioBetweenOrderByFechaInicioAscHoraInicioAsc(hoy, fin);
-
         if (proximos.isEmpty()) {
-            ctx.append("(No hay eventos próximos registrados)\n");
+            ctx.append("(No hay eventos próximos)\n");
         } else {
             ctx.append("Próximos 3 meses:\n");
             proximos.forEach(e -> ctx.append(String.format(
                     "  [%s] %s %s | %s%s%s\n",
-                    e.getFechaInicio(),
-                    e.getTipo().getEmoji(),
-                    e.getTitulo(),
+                    e.getFechaInicio(), e.getTipo().getEmoji(), e.getTitulo(),
                     e.getHoraInicio() != null ? "a las " + e.getHoraInicio() + " " : "",
                     e.getLugar() != null ? "en " + e.getLugar() + " " : "",
                     e.getPersonasRelacionadas() != null ? "· " + e.getPersonasRelacionadas() : ""
             )));
         }
-
-        // Resumen por tipo
-        ctx.append("\nRESUMEN POR TIPO (total histórico):\n");
+        ctx.append("\nRESUMEN POR TIPO:\n");
         for (Evento.TipoEvento tipo : Evento.TipoEvento.values()) {
             long count = repo.findByTipoOrderByFechaInicioAsc(tipo).size();
-            if (count > 0) {
-                ctx.append(String.format("  %s %s: %d eventos\n",
-                        tipo.getEmoji(), tipo.getLabel(), count));
-            }
+            if (count > 0) ctx.append(String.format("  %s %s: %d eventos\n",
+                    tipo.getEmoji(), tipo.getLabel(), count));
         }
-
         return ctx.toString();
     }
 
-    // ── Extraer JSON de la respuesta de la IA ────────────────
     private String extraerJson(String respuesta) {
-        // Buscar primer { y último }
-        int inicio = respuesta.indexOf('{');
-        int fin    = respuesta.lastIndexOf('}');
-        if (inicio >= 0 && fin > inicio) {
-            return respuesta.substring(inicio, fin + 1);
+        String trimmed = respuesta.trim();
+        int arrInicio = trimmed.indexOf('[');
+        int arrFin    = trimmed.lastIndexOf(']');
+        int objInicio = trimmed.indexOf('{');
+        int objFin    = trimmed.lastIndexOf('}');
+
+        // Array tiene prioridad si empieza antes que el objeto
+        if (arrInicio >= 0 && arrFin > arrInicio &&
+            (objInicio < 0 || arrInicio < objInicio)) {
+            return trimmed.substring(arrInicio, arrFin + 1);
         }
-        return respuesta.trim();
+        if (objInicio >= 0 && objFin > objInicio) {
+            return trimmed.substring(objInicio, objFin + 1);
+        }
+        return trimmed;
     }
 }
 
@@ -1077,13 +1037,21 @@ public interface EventoRepository extends JpaRepository<Evento, UUID> {
 
     // ── Eventos de un día concreto ──────────────────────────
     List<Evento> findByFechaInicioOrderByHoraInicioAsc(LocalDate fecha);
-}
 
+    // Eventos con datos pendientes (sin hora, sin lugar, etc.)
+    @Query(value = "SELECT * FROM eventos WHERE datos_extra @> '{\"pendienteHora\": true}'::jsonb ORDER BY fecha_inicio ASC", nativeQuery = true)
+    List<Evento> findEventosPendientesHora();
+
+    @Query(value = "SELECT * FROM eventos WHERE datos_extra @> '{\"pendienteHora\": true}'::jsonb OR datos_extra @> '{\"pendienteLugar\": true}'::jsonb ORDER BY fecha_inicio ASC", nativeQuery = true)
+    List<Evento> findEventosPendientesDatos();
+
+}
 --- src/main/java/com/miempresa/fasi/calendario/EventoService.java ---
 package com.miempresa.fasi.calendario;
 
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -1093,6 +1061,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -1170,7 +1139,8 @@ public class EventoService {
     /**
      * Genera todos los eventos de un patrón recurrente.
      * Soporta: WEEKLY (semanal), DAILY (diario), MONTHLY (mensual).
-     * Por defecto genera durante 3 meses desde fechaInicio.
+     * Respeta fechaFin como límite si está definida; si no, usa 3 meses desde fechaInicio.
+     * Para WEEKLY: avanza de 7 en 7 días desde la fechaInicio (que ya debe ser el día correcto).
      */
     @Transactional
     public List<Evento> saveRecurrente(EventoConfirmarRequest dto) {
@@ -1183,19 +1153,44 @@ public class EventoService {
         }
 
         LocalDate inicio = base.getFechaInicio();
-        LocalDate limite = inicio.plusMonths(3); // generar 3 meses
+
+        // Límite: usar fechaFin si existe (la IA la calcula), si no 3 meses
+        LocalDate limite;
+        if (base.getFechaFin() != null && base.getFechaFin().isAfter(inicio)) {
+            limite = base.getFechaFin();
+        } else {
+            limite = inicio.plusMonths(3);
+        }
+
+        // Para WEEKLY: avanzar inicio hasta el primer día de semana correcto
+        // La IA puede equivocarse en la fecha exacta — el backend la corrige
+        if ("WEEKLY".equals(patron) && base.getDatosExtra() != null
+                && base.getDatosExtra().containsKey("diaSemana")) {
+            String diaNombre = base.getDatosExtra().get("diaSemana").toString().toUpperCase();
+            DayOfWeek diaObjetivo = parseDiaSemana(diaNombre);
+            if (diaObjetivo != null) {
+                // Retroceder al inicio del mes para no perder el primer día
+                inicio = inicio.withDayOfMonth(1);
+                // Avanzar hasta el primer día correcto del mes
+                while (inicio.getDayOfWeek() != diaObjetivo) {
+                    inicio = inicio.plusDays(1);
+                }
+            }
+        }
 
         List<Evento> generados = new ArrayList<>();
         LocalDate cursor = inicio;
+
+        // Guardar fechaFin original para no confundirla con la del rango recurrente
+        // (en eventos recurrentes fechaFin del base es el límite de la serie, no del evento)
+        LocalDate fechaFinEvento = null; // cada evento individual no tiene fechaFin (es de 1 día)
 
         while (!cursor.isAfter(limite)) {
             Evento e = new Evento();
             e.setTipo(base.getTipo());
             e.setTitulo(base.getTitulo());
             e.setFechaInicio(cursor);
-            e.setFechaFin(base.getFechaFin() != null
-                ? cursor.plusDays(java.time.temporal.ChronoUnit.DAYS.between(inicio, base.getFechaFin()))
-                : null);
+            e.setFechaFin(fechaFinEvento);   // cada ocurrencia es 1 día
             e.setHoraInicio(base.getHoraInicio());
             e.setHoraFin(base.getHoraFin());
             e.setTodoDia(base.isTodoDia());
@@ -1210,14 +1205,34 @@ public class EventoService {
             cursor = switch (patron) {
                 case "DAILY"   -> cursor.plusDays(1);
                 case "MONTHLY" -> cursor.plusMonths(1);
-                default        -> cursor.plusWeeks(1); // WEEKLY
+                default        -> cursor.plusWeeks(1); // WEEKLY: exactamente +7 días
             };
         }
 
+        log.info("Recurrencia {}: {} eventos generados entre {} y {}",
+                patron, generados.size(), inicio, limite);
         return generados;
     }
-}
 
+    /** Convierte nombre de día en español o inglés a DayOfWeek */
+    private DayOfWeek parseDiaSemana(String nombre) {
+        return switch (nombre.toUpperCase().trim()) {
+            case "LUNES",     "MONDAY"    -> DayOfWeek.MONDAY;
+            case "MARTES",    "TUESDAY"   -> DayOfWeek.TUESDAY;
+            case "MIERCOLES", "WEDNESDAY" -> DayOfWeek.WEDNESDAY;
+            case "JUEVES",    "THURSDAY"  -> DayOfWeek.THURSDAY;
+            case "VIERNES",   "FRIDAY"    -> DayOfWeek.FRIDAY;
+            case "SABADO",    "SATURDAY"  -> DayOfWeek.SATURDAY;
+            case "DOMINGO",   "SUNDAY"    -> DayOfWeek.SUNDAY;
+            default -> null;
+        };
+    }
+
+    public List<Evento> getEventosPendientesDatos() {
+        return repo.findEventosPendientesDatos();
+    }
+
+}
 --- src/main/java/com/miempresa/fasi/common/ApiResponse.java ---
 package com.miempresa.fasi.common;
 
@@ -1383,7 +1398,12 @@ public class SecurityConfig {
                 .anyRequest().authenticated()
             )
             .csrf(csrf -> csrf
-                .ignoringRequestMatchers("/ia/api/**", "/calendario/api/**")
+                .ignoringRequestMatchers(
+                    "/ia/api/**",
+                    "/calendario/api/**",
+                    "/contexto/prompt",
+                    "/contexto/guardar"
+                )
             )
             .formLogin(form -> form
                 .loginPage("/login")
@@ -1410,6 +1430,308 @@ public class SecurityConfig {
             .roles("ADMIN")
             .build();
         return new InMemoryUserDetailsManager(admin);
+    }
+}
+
+--- src/main/java/com/miempresa/fasi/contexto/ContextoController.java ---
+package com.miempresa.fasi.contexto;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
+
+@Controller
+@RequestMapping("/contexto")
+@RequiredArgsConstructor
+public class ContextoController {
+
+    private final ContextoFamiliarRepository repo;
+    private final MareasSolarService          mareasService;
+
+    // ── Vista carga de datos ─────────────────────────────────
+    @GetMapping
+    public String vista(Model model) {
+        model.addAttribute("entradas", repo.findAllByOrderByClaveAsc());
+        return "contexto/index";
+    }
+
+    // ── Guardar entrada de contexto ──────────────────────────
+    @PostMapping("/guardar")
+    public String guardar(@RequestParam String clave,
+                          @RequestParam String valor,
+                          @RequestParam(required = false) String descripcion) {
+        ContextoFamiliar cf = repo.findByClave(clave)
+            .orElse(ContextoFamiliar.builder().clave(clave).build());
+        cf.setValor(valor);
+        if (descripcion != null && !descripcion.isBlank()) cf.setDescripcion(descripcion);
+        repo.save(cf);
+        return "redirect:/contexto";
+    }
+
+    // ── Guardar texto libre (prompt IA) ──────────────────────
+    @PostMapping("/prompt")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> procesarPrompt(@RequestBody Map<String, String> body) {
+        String texto = body.getOrDefault("texto", "").trim();
+        if (texto.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("ok", false, "msg", "Texto vacío"));
+        }
+        // Guardar como entrada de contexto libre con clave auto-generada
+        String clave = "prompt_" + System.currentTimeMillis();
+        repo.save(ContextoFamiliar.builder()
+            .clave(clave)
+            .valor(texto)
+            .descripcion("Entrada libre de contexto familiar")
+            .build());
+        return ResponseEntity.ok(Map.of("ok", true, "msg", "Contexto guardado correctamente"));
+    }
+
+    // ── API: datos contextuales para footer ──────────────────
+    @GetMapping("/api/datos")
+    @ResponseBody
+    public ResponseEntity<Map<String, String>> getDatos(
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha) {
+        if (fecha == null) fecha = LocalDate.now();
+        return ResponseEntity.ok(mareasService.getDatosContextuales(fecha));
+    }
+}
+
+--- src/main/java/com/miempresa/fasi/contexto/ContextoFamiliar.java ---
+package com.miempresa.fasi.contexto;
+
+import com.miempresa.fasi.common.BaseEntity;
+import jakarta.persistence.*;
+import lombok.*;
+
+@Entity
+@Table(name = "contexto_familiar")
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+public class ContextoFamiliar extends BaseEntity {
+
+    @Column(nullable = false, unique = true, length = 100)
+    private String clave;
+
+    @Column(nullable = false, columnDefinition = "TEXT")
+    private String valor;
+
+    @Column(length = 300)
+    private String descripcion;
+}
+
+--- src/main/java/com/miempresa/fasi/contexto/ContextoFamiliarRepository.java ---
+package com.miempresa.fasi.contexto;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+@Repository
+public interface ContextoFamiliarRepository extends JpaRepository<ContextoFamiliar, UUID> {
+    Optional<ContextoFamiliar> findByClave(String clave);
+    List<ContextoFamiliar> findAllByOrderByClaveAsc();
+}
+
+--- src/main/java/com/miempresa/fasi/contexto/MareasSolarService.java ---
+package com.miempresa.fasi.contexto;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
+import java.time.*;
+import java.time.format.DateTimeFormatter;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Optional;
+
+/**
+ * Servicio de cálculo astronómico local para FASI.
+ *
+ * MAREAS: algoritmo semidiurno basado en pleamar de referencia.
+ *   Ciclo: 12h 25min entre pleamares (ciclo lunar M2).
+ *   Precisión: ±20-30 min respecto a tablas oficiales.
+ *
+ * SOL: fórmula NOAA simplificada con latitud/longitud reales.
+ *   Precisión: ±2 min.
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class MareasSolarService {
+
+    private final ContextoFamiliarRepository repo;
+
+    // Ciclo M2 en minutos (12h 25min 14s)
+    private static final double CICLO_MAREA_MIN = 12.0 * 60.0 + 25.0 + 14.0 / 60.0;
+
+    // ── API pública ───────────────────────────────────────────
+
+    /**
+     * Devuelve todos los datos contextuales para una fecha dada.
+     * Formato listo para el footer del calendario.
+     */
+    public Map<String, String> getDatosContextuales(LocalDate fecha) {
+        Map<String, String> datos = new LinkedHashMap<>();
+
+        try {
+            double lat = getDouble("ubicacion_lat", 36.7749);
+            double lon = getDouble("ubicacion_lon", -6.3536);
+            ZoneId zona = ZoneId.of(getString("ubicacion_zona", "Europe/Madrid"));
+
+            // ── Sol ──────────────────────────────────────────
+            LocalTime[] sol = calcularSol(fecha, lat, lon, zona);
+            datos.put("amanecer",    formatHora(sol[0]));
+            datos.put("atardecer",   formatHora(sol[1]));
+
+            // ── Mareas ───────────────────────────────────────
+            LocalDateTime refTs = LocalDateTime.parse(
+                getString("marea_referencia_ts", "2026-05-05T17:00:00"));
+            double refAltura = getDouble("marea_referencia_h", 3.45);
+
+            MareasDia mareas = calcularMareasDia(fecha, refTs, refAltura, zona);
+            datos.put("pleamar1",    mareas.pleamar1 != null ? formatHora(mareas.pleamar1.toLocalTime()) : "--:--");
+            datos.put("bajamar1",    mareas.bajamar1 != null ? formatHora(mareas.bajamar1.toLocalTime()) : "--:--");
+            datos.put("pleamar2",    mareas.pleamar2 != null ? formatHora(mareas.pleamar2.toLocalTime()) : "--:--");
+            datos.put("bajamar2",    mareas.bajamar2 != null ? formatHora(mareas.bajamar2.toLocalTime()) : "--:--");
+            datos.put("altura_pm",   String.format("%.1f m", refAltura));
+
+            // ── Ciudad ───────────────────────────────────────
+            datos.put("ciudad",      getString("ubicacion_ciudad", "Sanlúcar de Barrameda"));
+
+        } catch (Exception e) {
+            log.warn("Error calculando datos contextuales: {}", e.getMessage());
+            datos.put("amanecer",  "--:--");
+            datos.put("atardecer", "--:--");
+            datos.put("pleamar1",  "--:--");
+            datos.put("bajamar1",  "--:--");
+            datos.put("pleamar2",  "--:--");
+            datos.put("bajamar2",  "--:--");
+            datos.put("ciudad",    "Sanlúcar de Barrameda");
+        }
+
+        return datos;
+    }
+
+    // ── Cálculo solar (NOAA simplificado) ────────────────────
+
+    private LocalTime[] calcularSol(LocalDate fecha, double lat, double lon, ZoneId zona) {
+        // Día del año
+        int N = fecha.getDayOfYear();
+
+        // Declinación solar
+        double decl = Math.toRadians(23.45 * Math.sin(Math.toRadians(360.0 / 365.0 * (N - 81))));
+
+        // Ecuación del tiempo (minutos)
+        double B = Math.toRadians(360.0 / 365.0 * (N - 81));
+        double ET = 9.87 * Math.sin(2 * B) - 7.53 * Math.cos(B) - 1.5 * Math.sin(B);
+
+        // Corrección de longitud (minutos)
+        double offsetUTC = zona.getRules().getOffset(fecha.atStartOfDay()).getTotalSeconds() / 3600.0;
+        double corrLon   = (lon - (offsetUTC * 15.0)) * 4.0; // 4 min por grado
+
+        // Hora solar del mediodía
+        double mediodiaSolar = 720.0 - corrLon - ET; // minutos desde medianoche
+
+        // Ángulo horario del amanecer/atardecer
+        double latRad = Math.toRadians(lat);
+        double cosH   = -Math.tan(latRad) * Math.tan(decl);
+        cosH = Math.max(-1.0, Math.min(1.0, cosH)); // clamp
+        double H = Math.toDegrees(Math.acos(cosH)) * 4.0; // minutos
+
+        LocalTime amanecer  = minutosAHora((int)(mediodiaSolar - H));
+        LocalTime atardecer = minutosAHora((int)(mediodiaSolar + H));
+
+        return new LocalTime[]{ amanecer, atardecer };
+    }
+
+    // ── Cálculo de mareas ────────────────────────────────────
+
+    private MareasDia calcularMareasDia(LocalDate fecha, LocalDateTime refPleamar,
+                                         double alturaRef, ZoneId zona) {
+        // Minutos desde la pleamar de referencia hasta medianoche del día pedido
+        LocalDateTime medianoche = fecha.atStartOfDay();
+        long minDesdeRef = Duration.between(refPleamar, medianoche).toMinutes();
+
+        // Encontrar la primera pleamar del día (avanzar en ciclos de CICLO_MAREA_MIN)
+        double ciclos = minDesdeRef / CICLO_MAREA_MIN;
+        long cicloBase = (long) Math.floor(ciclos);
+
+        MareasDia resultado = new MareasDia();
+        int encontradas = 0;
+
+        // Buscar hasta 4 eventos de marea en el día (2 pleamares + 2 bajamares)
+        for (long i = cicloBase - 1; i <= cicloBase + 4 && encontradas < 4; i++) {
+            // Pleamar
+            double minPleamar = refPleamar.atZone(zona).toEpochSecond() / 60.0
+                              + i * CICLO_MAREA_MIN;
+            LocalDateTime tsPleamar = LocalDateTime.ofEpochSecond(
+                (long)(minPleamar * 60), 0, zona.getRules().getOffset(medianoche));
+
+            if (tsPleamar.toLocalDate().equals(fecha)) {
+                if (resultado.pleamar1 == null) {
+                    resultado.pleamar1 = tsPleamar;
+                } else if (resultado.pleamar2 == null) {
+                    resultado.pleamar2 = tsPleamar;
+                }
+                encontradas++;
+            }
+
+            // Bajamar (media marea después de la pleamar)
+            double minBajamar = minPleamar + CICLO_MAREA_MIN / 2.0;
+            LocalDateTime tsBajamar = LocalDateTime.ofEpochSecond(
+                (long)(minBajamar * 60), 0, zona.getRules().getOffset(medianoche));
+
+            if (tsBajamar.toLocalDate().equals(fecha)) {
+                if (resultado.bajamar1 == null) {
+                    resultado.bajamar1 = tsBajamar;
+                } else if (resultado.bajamar2 == null) {
+                    resultado.bajamar2 = tsBajamar;
+                }
+                encontradas++;
+            }
+        }
+
+        return resultado;
+    }
+
+    // ── Helpers ──────────────────────────────────────────────
+
+    private String getString(String clave, String defecto) {
+        return repo.findByClave(clave).map(ContextoFamiliar::getValor).orElse(defecto);
+    }
+
+    private double getDouble(String clave, double defecto) {
+        try {
+            return Double.parseDouble(getString(clave, String.valueOf(defecto)));
+        } catch (NumberFormatException e) {
+            return defecto;
+        }
+    }
+
+    private LocalTime minutosAHora(int minutos) {
+        minutos = Math.max(0, Math.min(1439, minutos));
+        return LocalTime.of(minutos / 60, minutos % 60);
+    }
+
+    private String formatHora(LocalTime t) {
+        return t != null ? t.format(DateTimeFormatter.ofPattern("HH:mm")) : "--:--";
+    }
+
+    // ── DTO interno ──────────────────────────────────────────
+
+    static class MareasDia {
+        LocalDateTime pleamar1, bajamar1, pleamar2, bajamar2;
     }
 }
 
@@ -1650,6 +1972,35 @@ public class IaService {
     }
 }
 
+--- src/main/java/com/miempresa/fasi/ia/IaWarmupRunner.java ---
+package com.miempresa.fasi.ia;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.ApplicationArguments;
+import org.springframework.boot.ApplicationRunner;
+import org.springframework.stereotype.Component;
+
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class IaWarmupRunner implements ApplicationRunner {
+
+    private final OllamaClient ollamaClient;
+
+    @Override
+    public void run(ApplicationArguments args) {
+        new Thread(() -> {
+            try {
+                Thread.sleep(3000);
+                ollamaClient.warmup();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }, "ia-warmup").start();
+    }
+}
+
 --- src/main/java/com/miempresa/fasi/ia/OllamaClient.java ---
 package com.miempresa.fasi.ia;
 
@@ -1666,6 +2017,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.Map;
 
 @Slf4j
 @Component
@@ -1675,7 +2027,7 @@ public class OllamaClient {
     @Value("${fasi.ollama.url:http://localhost:11434}")
     private String ollamaUrl;
 
-    @Value("${fasi.ollama.model:gemma3:4b}")
+    @Value("${fasi.ollama.model:qwen2.5:7b}")
     private String model;
 
     private final ObjectMapper objectMapper;
@@ -1683,12 +2035,22 @@ public class OllamaClient {
             .connectTimeout(Duration.ofSeconds(10))
             .build();
 
+    /** Genera una respuesta. keep_alive=-1 mantiene el modelo en RAM indefinidamente. */
     public String generate(String prompt) {
+        return generate(prompt, 1024);
+    }
+
+    public String generate(String prompt, int numCtx) {
         try {
             OllamaRequest req = new OllamaRequest();
             req.setModel(model);
             req.setPrompt(prompt);
             req.setStream(false);
+            req.setKeep_alive(-1);
+            req.setOptions(Map.of(
+                "num_ctx",     numCtx,
+                "temperature", 0
+            ));
 
             String body = objectMapper.writeValueAsString(req);
 
@@ -1714,18 +2076,46 @@ public class OllamaClient {
         }
     }
 
+    /** Precalienta el modelo: lo carga en RAM sin generar texto. */
+    public void warmup() {
+        try {
+            log.info("🔥 Precalentando modelo IA ({})...", model);
+            OllamaRequest req = new OllamaRequest();
+            req.setModel(model);
+            req.setPrompt("");
+            req.setStream(false);
+            req.setKeep_alive(-1);
+            req.setOptions(Map.of("num_ctx", 512, "temperature", 0));
+
+            String body = objectMapper.writeValueAsString(req);
+            HttpRequest httpReq = HttpRequest.newBuilder()
+                    .uri(URI.create(ollamaUrl + "/api/generate"))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(body))
+                    .timeout(Duration.ofSeconds(120))
+                    .build();
+
+            httpClient.send(httpReq, HttpResponse.BodyHandlers.ofString());
+            log.info("✅ Modelo IA listo en RAM.");
+        } catch (Exception e) {
+            log.warn("⚠️ No se pudo precalentar el modelo: {}", e.getMessage());
+        }
+    }
+
     // ── DTOs internos ────────────────────────────────────────
     @Data
     static class OllamaRequest {
-        private String  model;
-        private String  prompt;
-        private boolean stream;
+        private String              model;
+        private String              prompt;
+        private boolean             stream;
+        private int                 keep_alive;
+        private Map<String, Object> options;
     }
 
     @Data
     @JsonIgnoreProperties(ignoreUnknown = true)
     static class OllamaResponse {
-        private String response;
+        private String  response;
         private boolean done;
     }
 }
@@ -1842,7 +2232,7 @@ public class OllamaClient {
       <div class="grid grid-cols-2 gap-4">
         <div>
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fecha inicio *</label>
-          <input type="date" th:field="*{fechaInicio}"
+          <input type="date" name="fechaInicio"
                  th:value="${evento.fechaInicio != null ? #temporals.format(evento.fechaInicio, 'yyyy-MM-dd') : ''}"
                  required
                  class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2
@@ -1850,7 +2240,7 @@ public class OllamaClient {
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fecha fin</label>
-          <input type="date" th:field="*{fechaFin}"
+          <input type="date" name="fechaFin"
                  th:value="${evento.fechaFin != null ? #temporals.format(evento.fechaFin, 'yyyy-MM-dd') : ''}"
                  class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2
                         bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"/>
@@ -1957,297 +2347,256 @@ public class OllamaClient {
       th:replace="~{layout/base :: layout(~{::title}, ~{::section})}">
 <head><title>Calendario — FASI</title></head>
 <body>
-<section>
+<section class="pb-2 flex flex-col flex-1">
 
-  <!-- CABECERA -->
-  <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-    <div class="flex items-center gap-3">
-      <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100">📅 Calendario</h2>
-      <a th:href="@{/calendario(year=${yearMonth.minusMonths(1).year},month=${yearMonth.minusMonths(1).monthValue})}"
-         class="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition text-gray-700 dark:text-gray-200">‹</a>
-      <span class="font-semibold text-gray-700 dark:text-gray-200"
-            th:text="${#temporals.format(yearMonth.atDay(1),'MMMM yyyy')}"></span>
-      <a th:href="@{/calendario(year=${yearMonth.plusMonths(1).year},month=${yearMonth.plusMonths(1).monthValue})}"
-         class="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition text-gray-700 dark:text-gray-200">›</a>
+  <!-- NAVEGACIÓN DE MES -->
+  <div class="flex items-center justify-between py-3">
+    <a th:href="@{/calendario(year=${yearMonth.minusMonths(1).year},month=${yearMonth.minusMonths(1).monthValue})}"
+       class="w-10 h-10 flex items-center justify-center rounded-full
+              hover:bg-gray-200 dark:hover:bg-gray-700 transition text-xl
+              text-gray-700 dark:text-gray-200 font-bold">
+      ‹
+    </a>
+    <div class="text-center">
+      <h2 class="text-lg font-bold text-gray-800 dark:text-gray-100 capitalize"
+          th:text="${#temporals.format(yearMonth.atDay(1),'MMMM yyyy')}"></h2>
       <a th:href="@{/calendario}"
-         class="text-xs px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-full hover:bg-gray-300 transition">Hoy</a>
+         class="text-xs text-indigo-500 hover:underline">Hoy</a>
     </div>
-    <div class="flex gap-2">
-      <button onclick="abrirModalVoz()"
-              class="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition text-sm font-semibold">
-        🎤 Voz
-      </button>
-      <a th:href="@{/calendario/nuevo}"
-         class="flex items-center gap-2 bg-gray-900 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition text-sm font-semibold">
-        + Nuevo evento
-      </a>
-      <button onclick="borrarTodosEventos()"
-              class="flex items-center gap-2 bg-red-700 hover:bg-red-800 text-white px-4 py-2 rounded-lg transition text-sm font-semibold"
-              title="Solo para pruebas — elimina TODOS los eventos">
-        🗑️ Vaciar BD
-      </button>
-    </div>
+    <a th:href="@{/calendario(year=${yearMonth.plusMonths(1).year},month=${yearMonth.plusMonths(1).monthValue})}"
+       class="w-10 h-10 flex items-center justify-center rounded-full
+              hover:bg-gray-200 dark:hover:bg-gray-700 transition text-xl
+              text-gray-700 dark:text-gray-200 font-bold">
+      ›
+    </a>
   </div>
 
-  <!-- BUSCADOR -->
-  <div class="mb-4 flex gap-2">
-    <input type="text" id="buscador-input" placeholder="🔍 Buscar eventos... (Rocio, médico, teatro...)"
-           class="flex-1 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-sm
-                  bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
-                  focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
-    <button onclick="buscarEventos()"
-            class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-indigo-700 transition">Buscar</button>
-    <button onclick="limpiarBusqueda()"
-            class="border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition">Limpiar</button>
-  </div>
-
-  <!-- RESULTADOS BÚSQUEDA -->
-  <div id="resultados-busqueda" class="hidden mb-4 bg-white dark:bg-gray-800 rounded-xl shadow p-4">
-    <h3 class="font-semibold text-gray-700 dark:text-gray-200 mb-3">Resultados:</h3>
-    <div id="lista-resultados" class="space-y-2"></div>
+  <!-- CABECERA DÍAS DE LA SEMANA -->
+  <div class="grid grid-cols-7 mb-1">
+    <div th:each="dia : ${ {'L','M','X','J','V','S','D'} }"
+         class="text-center text-xs font-semibold text-gray-400 dark:text-gray-500 py-1"
+         th:text="${dia}"></div>
   </div>
 
   <!-- GRID CALENDARIO -->
-  <div class="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
-    <div class="grid grid-cols-7 bg-gray-50 dark:bg-gray-700">
-      <div th:each="dia : ${ {'Lun','Mar','Mié','Jue','Vie','Sáb','Dom'} }"
-           class="px-2 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase"
-           th:text="${dia}"></div>
-    </div>
-    <div id="grid-calendario" class="grid grid-cols-7 border-t border-gray-100 dark:border-gray-700"></div>
-  </div>
+  <div id="grid-calendario"
+       class="grid grid-cols-7 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden flex-1" style="grid-auto-rows: 1fr;"></div>
 
-  <!-- PRÓXIMOS EVENTOS -->
-  <div class="mt-6">
-    <h3 class="font-semibold text-gray-700 dark:text-gray-200 mb-3">📌 Próximos eventos</h3>
-    <div class="space-y-2">
-      <div th:each="e : ${proximos}"
-           class="flex items-center gap-3 bg-white dark:bg-gray-800 rounded-lg shadow px-4 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition"
-           th:onclick="|window.location='@{/calendario/{id}/editar(id=${e.id})}'|">
-        <span class="text-xl" th:text="${e.tipo.emoji}"></span>
-        <div class="flex-1">
-          <p class="font-medium text-sm text-gray-800 dark:text-gray-100" th:text="${e.titulo}"></p>
-          <p class="text-xs text-gray-500"
-             th:text="${#temporals.format(e.fechaInicio,'dd/MM/yyyy')}
-                      + (${e.horaInicio != null} ? ' · ' + ${e.horaInicio} : '')
-                      + (${e.lugar != null} ? ' · ' + ${e.lugar} : '')"></p>
-        </div>
-        <span class="text-xs px-2 py-1 rounded-full text-white font-semibold"
-              th:style="'background-color:' + ${e.tipo.color}"
-              th:text="${e.tipo.label}"></span>
-      </div>
-      <p th:if="${#lists.isEmpty(proximos)}"
-         class="text-gray-400 text-sm text-center py-4">No hay eventos próximos.</p>
-    </div>
-  </div>
+  <!-- MODAL VOZ -->
+  <div id="modal-voz" class="hidden fixed inset-0 z-50 flex items-end justify-center
+                              sm:items-center bg-black/60">
+    <div class="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl
+                p-6 w-full max-w-lg mx-0 sm:mx-4 relative">
 
-  <!-- ═══════════════════════════════════════════════════════ -->
-  <!-- MODAL VOZ                                               -->
-  <!-- ═══════════════════════════════════════════════════════ -->
-  <div id="modal-voz" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8 w-full max-w-lg mx-4 relative">
-
-      <!-- Botón cerrar (X) siempre visible -->
       <button onclick="cerrarModalVoz()"
               class="absolute top-4 right-4 w-8 h-8 flex items-center justify-center
                      bg-gray-200 dark:bg-gray-600 hover:bg-red-100 dark:hover:bg-red-900
                      text-gray-600 dark:text-gray-200 rounded-full text-lg font-bold transition">
-        ✕
+        &#x2715;
       </button>
 
-      <h3 class="text-xl font-bold text-gray-800 dark:text-gray-100 mb-2">🎤 Nuevo evento por voz o texto</h3>
-      <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
-        Habla o escribe de forma natural. Ejemplos:<br/>
-        <em>"El martes cumpleaños de Alberto en Costaballena a las 4:30"</em><br/>
-        <em>"Cita médica el jueves para Rocío en consultas externas de Jerez"</em>
+      <h3 class="text-lg font-bold text-gray-800 dark:text-gray-100 mb-1">
+        &#127908; Nuevo evento
+      </h3>
+      <p class="text-xs text-gray-400 mb-4">
+        Habla o escribe: <em>"Cita médica el jueves para Rocío a las 10"</em>
       </p>
 
-      <!-- Área de texto -->
-      <textarea id="voz-texto" rows="3" placeholder="Pulsa el micrófono o escribe aquí..."
+      <textarea id="voz-texto" rows="3"
+                placeholder="Pulsa el micrófono o escribe aquí..."
                 class="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3
                        bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
-                       focus:outline-none focus:ring-2 focus:ring-red-400 text-sm resize-none mb-3"></textarea>
+                       focus:outline-none focus:ring-2 focus:ring-red-400 text-sm
+                       resize-none mb-3"></textarea>
 
-      <!-- Botones acción -->
-      <div class="flex gap-3 mb-4">
+      <div class="flex gap-2 mb-3">
         <button id="btn-micro" onclick="toggleMicrofono()"
-                class="flex-1 flex items-center justify-center gap-2 bg-red-500 hover:bg-red-600
-                       text-white py-2 rounded-xl font-semibold transition">
-          🎤 <span id="micro-label">Iniciar grabación</span>
+                class="flex-1 flex items-center justify-center gap-2 bg-red-500
+                       hover:bg-red-600 text-white py-2.5 rounded-xl font-semibold transition text-sm">
+          &#127908; <span id="micro-label">Grabar</span>
         </button>
         <button onclick="interpretarTexto()"
-                class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-xl font-semibold transition">
-          ✨ Interpretar con IA
+                class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5
+                       rounded-xl font-semibold transition text-sm">
+          &#10024; Interpretar
         </button>
       </div>
 
-      <!-- Spinner IA -->
       <div id="ia-spinner" style="display:none"
-           class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-3">
-        <div class="w-2 h-2 bg-indigo-400 rounded-full animate-bounce"></div>
-        <div class="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:150ms"></div>
-        <div class="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:300ms"></div>
+           class="flex items-center gap-2 text-xs text-gray-400 mb-3">
+        <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce"></div>
+        <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:150ms"></div>
+        <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:300ms"></div>
         <span>La IA está interpretando...</span>
       </div>
 
-      <!-- Preview evento interpretado -->
       <div id="preview-evento" style="display:none"
-           class="bg-gray-50 dark:bg-gray-700 rounded-xl p-4 mb-4">
-        <h4 class="font-semibold text-sm text-gray-700 dark:text-gray-200 mb-2">Vista previa del evento:</h4>
+           class="bg-gray-50 dark:bg-gray-700 rounded-xl p-4 mb-3">
+        <h4 class="font-semibold text-sm text-gray-700 dark:text-gray-200 mb-2">Vista previa:</h4>
         <div id="preview-contenido" class="text-sm space-y-1 text-gray-700 dark:text-gray-200"></div>
         <div class="flex gap-2 mt-3">
-          <button onclick="confirmarEvento()"
-                  class="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-semibold transition text-sm">
-            ✅ Confirmar y guardar
+          <button id="btn-confirmar" onclick="confirmarEvento()"
+                  class="flex-1 bg-green-600 hover:bg-green-700 text-white py-2
+                         rounded-lg font-semibold transition text-sm">
+            &#9989; Confirmar
           </button>
           <button onclick="editarManual()"
-                  class="flex-1 border border-gray-300 dark:border-gray-500 text-gray-700 dark:text-gray-200 py-2 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-gray-600 transition">
-            ✏️ Editar manualmente
+                  class="flex-1 border border-gray-300 dark:border-gray-500
+                         text-gray-700 dark:text-gray-200 py-2 rounded-lg text-sm
+                         hover:bg-gray-50 dark:hover:bg-gray-600 transition">
+            &#9999;&#65039; Editar
           </button>
         </div>
       </div>
-
     </div>
   </div>
 
   <!-- ═══════════════════════════════════════════════════════ -->
-  <!-- SCRIPTS                                                 -->
+  <!-- SCRIPTS CALENDARIO                                      -->
   <!-- ═══════════════════════════════════════════════════════ -->
   <script th:inline="javascript">
+    /*<![CDATA[*/
     const EVENTOS_MES = /*[[${eventos}]]*/ [];
     const YEAR_MONTH  = /*[[${yearMonth.toString()}]]*/ '';
     const HOY         = /*[[${hoy.toString()}]]*/ '';
 
     // ── Renderizar grid ──────────────────────────────────────
     function renderCalendario() {
-      const [year, month] = YEAR_MONTH.split('-').map(Number);
-      const primerDia     = new Date(year, month - 1, 1);
-      const ultimoDia     = new Date(year, month, 0).getDate();
-      let diaSemana = primerDia.getDay() - 1;
-      if (diaSemana < 0) diaSemana = 6;
+      const parts  = YEAR_MONTH.split('-');
+      const year   = parseInt(parts[0], 10);
+      const month  = parseInt(parts[1], 10);
+      const primer = new Date(year, month - 1, 1);
+      const ultimo = new Date(year, month, 0).getDate();
+
+      let col0 = primer.getDay() - 1;
+      if (col0 < 0) col0 = 6;
 
       const grid = document.getElementById('grid-calendario');
       grid.innerHTML = '';
 
-      // Celdas vacías
-      for (let i = 0; i < diaSemana; i++) {
-        grid.insertAdjacentHTML('beforeend',
-          '<div class="min-h-28 border-b border-r border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/20"></div>');
+      // Celdas vacías iniciales
+      for (let i = 0; i < col0; i++) {
+        const vacia = document.createElement('div');
+        vacia.className = 'border-b border-r border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/20';
+        grid.appendChild(vacia);
       }
 
       // Celdas de días
-      for (let dia = 1; dia <= ultimoDia; dia++) {
-        const fechaStr   = `${year}-${String(month).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
-        const esHoy      = fechaStr === HOY;
-        const eventosDia = EVENTOS_MES.filter(e => {
-          // Evento puntual o inicio del rango
+      for (let dia = 1; dia <= ultimo; dia++) {
+        const mm       = String(month).padStart(2, '0');
+        const dd       = String(dia).padStart(2, '0');
+        const fechaStr = year + '-' + mm + '-' + dd;
+        const esHoy    = (fechaStr === HOY);
+        const colIdx   = (col0 + dia - 1) % 7;
+        const esFinde  = (colIdx >= 5);
+
+        const eventosDia = EVENTOS_MES.filter(function(e) {
           if (e.fechaInicio === fechaStr) return true;
-          // Evento con rango: pintar en todos los días intermedios y fin
           if (e.fechaFin && e.fechaFin !== e.fechaInicio) {
-            const dInicio = new Date(e.fechaInicio + 'T00:00:00');
-            const dFin    = new Date(e.fechaFin    + 'T00:00:00');
-            const dCelda  = new Date(fechaStr       + 'T00:00:00');
-            return dCelda > dInicio && dCelda <= dFin;
+            var d1 = new Date(e.fechaInicio + 'T00:00:00');
+            var d2 = new Date(e.fechaFin    + 'T00:00:00');
+            var dc = new Date(fechaStr      + 'T00:00:00');
+            return dc > d1 && dc <= d2;
           }
           return false;
         });
 
-        let html = `
-          <div class="min-h-28 border-b border-r border-gray-100 dark:border-gray-700 p-1 cursor-pointer
-                      hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition"
-               onclick="window.location='/calendario/dia/${fechaStr}'">
-            <div class="flex justify-between items-start mb-1">
-              <span class="${esHoy
-                ? 'bg-indigo-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold'
-                : 'text-sm font-semibold text-gray-700 dark:text-gray-300'}">${dia}</span>
-              <a href="/calendario/nuevo?fecha=${fechaStr}"
-                 onclick="event.stopPropagation()"
-                 class="text-gray-300 hover:text-indigo-500 text-lg leading-none">+</a>
-            </div>`;
-
-        eventosDia.slice(0, 3).forEach(e => {
-          const label = (e.tipo && e.tipo.label) ? e.tipo.label : (e.tipo || '');
-          const emoji = (e.tipo && e.tipo.emoji) ? e.tipo.emoji : '📅';
-          const color = (e.tipo && e.tipo.color) ? e.tipo.color : '#6366f1';
-          html += `
-            <div class="text-xs px-1.5 py-0.5 rounded mb-0.5 text-white font-semibold shadow-sm
-                        flex items-center gap-1 group"
-                 style="background-color:${color}">
-              <span class="flex-1 truncate cursor-pointer"
-                    title="${e.titulo}"
-                    onclick="event.stopPropagation(); window.location='/calendario/${e.id}/editar'">
-                ${emoji} ${e.titulo}
-              </span>
-              <button class="opacity-0 group-hover:opacity-100 transition-opacity
-                             hover:bg-black/20 rounded px-0.5 leading-none flex-shrink-0"
-                      title="Eliminar evento"
-                      onclick="event.stopPropagation(); eliminarEvento('${e.id}', '${e.titulo.replace(/'/g, '\'')}')">
-                ✕
-              </button>
-            </div>`;
+        // Celda contenedor
+        const celda = document.createElement('div');
+        celda.className = 'border-b border-r border-gray-100 dark:border-gray-700 p-1 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition'
+          + (esFinde ? ' bg-gray-50/80 dark:bg-gray-800/50' : '');
+        celda.addEventListener('click', function() {
+          window.location = '/calendario/dia/' + fechaStr;
         });
 
-        if (eventosDia.length > 3) {
-          html += `<div class="text-xs text-gray-400 dark:text-gray-500">+${eventosDia.length - 3} más</div>`;
+        // Fila superior: número + botón +
+        const fila = document.createElement('div');
+        fila.className = 'flex justify-between items-start';
+
+        const numSpan = document.createElement('span');
+        if (esHoy) {
+          numSpan.className = 'bg-indigo-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold';
+        } else {
+          numSpan.className = 'text-xs font-semibold ' + (esFinde ? 'text-indigo-400 dark:text-indigo-400' : 'text-gray-600 dark:text-gray-300');
+        }
+        numSpan.textContent = dia;
+
+        const btnNuevo = document.createElement('a');
+        btnNuevo.href = '/calendario/nuevo?fecha=' + fechaStr;
+        btnNuevo.className = 'text-gray-300 hover:text-indigo-500 text-base leading-none w-5 h-5 flex items-center justify-center';
+        btnNuevo.textContent = '+';
+        btnNuevo.addEventListener('click', function(ev) { ev.stopPropagation(); });
+
+        fila.appendChild(numSpan);
+        fila.appendChild(btnNuevo);
+        celda.appendChild(fila);
+
+        // Eventos del día (máx 2)
+        eventosDia.slice(0, 2).forEach(function(e) {
+          var emoji = (e.tipo && e.tipo.emoji) ? e.tipo.emoji : '';
+          var color = (e.tipo && e.tipo.color) ? e.tipo.color : '#6366f1';
+          var titulo = e.titulo || '';
+
+          var pill = document.createElement('div');
+          // Badge pendiente de datos
+          var tienePendiente = e.datosExtra && e.datosExtra.pendienteHora;
+          pill.className = 'text-xs px-1 py-0.5 rounded mb-0.5 text-white font-medium flex items-center gap-0.5 group truncate';
+          pill.style.backgroundColor = color;
+
+          var span = document.createElement('span');
+          span.className = 'flex-1 truncate';
+          span.title = titulo;
+          span.textContent = emoji + ' ';
+          var tituloSpan = document.createElement('span');
+          tituloSpan.className = 'hidden sm:inline';
+          tituloSpan.textContent = titulo;
+          span.appendChild(tituloSpan);
+          span.addEventListener('click', function(ev) {
+            ev.stopPropagation();
+            window.location = '/calendario/' + e.id + '/editar';
+          });
+
+          var btnDel = document.createElement('button');
+          btnDel.className = 'opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/20 rounded flex-shrink-0 px-0.5';
+          btnDel.title = 'Eliminar';
+          btnDel.textContent = '\u2715';
+          btnDel.addEventListener('click', function(ev) {
+            ev.stopPropagation();
+            eliminarEvento(e.id, titulo);
+          });
+
+          pill.appendChild(span);
+          pill.appendChild(btnDel);
+          celda.appendChild(pill);
+        });
+
+        // +N más
+        if (eventosDia.length > 2) {
+          var mas = document.createElement('div');
+          mas.className = 'text-xs text-gray-400 dark:text-gray-500 pl-1';
+          mas.textContent = '+' + (eventosDia.length - 2);
+          celda.appendChild(mas);
         }
 
-        html += '</div>';
-        grid.insertAdjacentHTML('beforeend', html);
+        grid.appendChild(celda);
       }
-    }
 
-    // ── Buscador ─────────────────────────────────────────────
-    async function buscarEventos() {
-      const q = document.getElementById('buscador-input').value.trim();
-      if (!q) return;
-      const resp = await fetch(`/calendario/api/buscar?q=${encodeURIComponent(q)}`);
-      const data = await resp.json();
-      const contenedor = document.getElementById('lista-resultados');
-      contenedor.innerHTML = '';
-      if (data.length === 0) {
-        contenedor.innerHTML = '<p class="text-gray-400 text-sm">No se encontraron eventos.</p>';
-      } else {
-        data.forEach(e => {
-          const emoji = (e.tipo && e.tipo.emoji) ? e.tipo.emoji : '📅';
-          const color = (e.tipo && e.tipo.color) ? e.tipo.color : '#6366f1';
-          contenedor.insertAdjacentHTML('beforeend', `
-            <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
-                 onclick="window.location='/calendario/${e.id}/editar'">
-              <span class="text-lg">${emoji}</span>
-              <div class="flex-1">
-                <p class="font-medium text-sm text-gray-800 dark:text-gray-100">${e.titulo}</p>
-                <p class="text-xs text-gray-500">${e.fechaInicio}
-                   ${e.lugar ? '· ' + e.lugar : ''}
-                   ${e.personasRelacionadas ? '· ' + e.personasRelacionadas : ''}</p>
-              </div>
-              <span class="text-xs px-2 py-0.5 rounded-full text-white" style="background-color:${color}"
-                    th:text="${e.tipo?.label}"></span>
-            </div>`);
-        });
-      }
-      document.getElementById('resultados-busqueda').classList.remove('hidden');
+      // Actualizar footer
+      var primerFecha = year + '-' + String(month).padStart(2,'0') + '-01';
+      if (window.actualizarFooterFecha) window.actualizarFooterFecha(primerFecha);
     }
-
-    function limpiarBusqueda() {
-      document.getElementById('buscador-input').value = '';
-      document.getElementById('resultados-busqueda').classList.add('hidden');
-    }
-
-    document.getElementById('buscador-input').addEventListener('keydown', e => {
-      if (e.key === 'Enter') buscarEventos();
-    });
 
     // ── Modal voz ────────────────────────────────────────────
-    let recognition  = null;
-    let grabando     = false;
-    let eventoActual = null;
+    var recognition  = null;
+    var grabando     = false;
+    var eventoActual = null;
 
-    function abrirModalVoz() {
+    window.abrirModalVoz = function() {
       document.getElementById('modal-voz').classList.remove('hidden');
       document.getElementById('preview-evento').style.display = 'none';
       document.getElementById('ia-spinner').style.display     = 'none';
       document.getElementById('voz-texto').value              = '';
-    }
+    };
 
     function cerrarModalVoz() {
       document.getElementById('modal-voz').classList.add('hidden');
@@ -2255,47 +2604,77 @@ public class OllamaClient {
       eventoActual = null;
     }
 
-    function toggleMicrofono() {
-      grabando ? pararMicrofono() : iniciarMicrofono();
-    }
+    function toggleMicrofono() { grabando ? pararMicrofono() : iniciarMicrofono(); }
 
     function iniciarMicrofono() {
+      console.log('iniciarMicrofono llamado');
       if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-        alert('Tu navegador no soporta reconocimiento de voz. Usa Chrome.');
-        return;
+        alert('Tu navegador no soporta reconocimiento de voz. Usa Chrome o Edge.'); return;
       }
-      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+        alert('El micrófono requiere HTTPS. Accede via localhost o activa HTTPS.'); return;
+      }
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(function(stream) {
+          stream.getTracks().forEach(function(t){ t.stop(); });
+          _iniciarReconocimiento();
+        })
+        .catch(function(err) {
+          alert('Permiso de micrófono denegado: ' + err.message);
+        });
+    }
+    function _iniciarReconocimiento() {
+      var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
       recognition = new SR();
-      recognition.lang            = 'es-ES';
-      recognition.continuous      = true;
-      recognition.interimResults  = true;
-
-      recognition.onresult = (event) => {
-        const transcript = Array.from(event.results).map(r => r[0].transcript).join('');
-        document.getElementById('voz-texto').value = transcript;
+      recognition.lang           = 'es-ES';
+      recognition.continuous     = true;
+      recognition.interimResults = true;
+            var textoAcumulado = '';
+      recognition.onresult = function(event) {
+        var interino = '';
+        for (var i = event.resultIndex; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            textoAcumulado += event.results[i][0].transcript + ' ';
+          } else {
+            interino += event.results[i][0].transcript;
+          }
+        }
+        // Mostrar texto final acumulado + interino en gris
+        var textarea = document.getElementById('voz-texto');
+        textarea.value = textoAcumulado + interino;
       };
-
-      recognition.onend = () => {
-        // Solo reiniciar si el usuario no paró manualmente Y hay silencio breve
+      recognition.onend = function() {
+        // Si estaba grabando, reiniciar para mantener continuo
         if (grabando) {
-          setTimeout(() => {
-            if (grabando) {
-              try { recognition.start(); } catch(e) { /* ya iniciado */ }
-            }
-          }, 300);
+          try { recognition.start(); } catch(e) {}
         }
       };
-
-      recognition.onerror = (e) => {
-        console.warn('Speech error:', e.error);
-        // 'no-speech' es normal (silencio), no parar
-        if (e.error === 'no-speech') return;
-        // Para cualquier otro error real, detener limpiamente
-        grabando = false;
-        actualizarBotonMicro(false);
+      recognition.onend = function() {
+        if (grabando) setTimeout(function() { try { recognition.start(); } catch(e){} }, 300);
       };
-
+      recognition.onerror = function(e) {
+        console.error('Speech error:', e.error);
+        if (e.error === 'no-speech') return;
+        if (e.error === 'not-allowed') { alert('Permiso de micrófono denegado. Revisa la configuración del navegador.'); }
+        if (e.error === 'network')     { alert('Error de red en reconocimiento de voz.'); }
+        grabando = false; actualizarBotonMicro(false);
+      };
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'es-ES';
+      recognition.maxAlternatives = 1;
       recognition.start();
+      console.log('SpeechRecognition iniciado');
+      // Reintentar automaticamente si no-speech
+      recognition.onerror = function(e) {
+        console.error('Speech error:', e.error);
+        if (e.error === 'no-speech') {
+          grabando = false; actualizarBotonMicro(false);
+          return; // No alert, simplemente para
+        }
+        if (e.error === 'not-allowed') { alert('Permiso de micrófono denegado.'); }
+        grabando = false; actualizarBotonMicro(false);
+      };
       grabando = true;
       actualizarBotonMicro(true);
     }
@@ -2307,119 +2686,157 @@ public class OllamaClient {
     }
 
     function actualizarBotonMicro(activo) {
-      const btn   = document.getElementById('btn-micro');
-      const label = document.getElementById('micro-label');
-      if (activo) {
-        label.textContent = '⏹ Parar grabación';
-        btn.classList.add('bg-red-700');
-        btn.classList.remove('bg-red-500');
-      } else {
-        label.textContent = '🎤 Iniciar grabación';
-        btn.classList.remove('bg-red-700');
-        btn.classList.add('bg-red-500');
-      }
+      var label = document.getElementById('micro-label');
+      var btn   = document.getElementById('btn-micro');
+      label.textContent = activo ? 'Parar' : 'Grabar';
+      if (activo) { btn.classList.add('bg-red-700'); }
+      else        { btn.classList.remove('bg-red-700'); }
     }
 
     async function interpretarTexto() {
-      const texto = document.getElementById('voz-texto').value.trim();
+      var texto = document.getElementById('voz-texto').value.trim();
       if (!texto) { alert('Escribe o dicta algo primero.'); return; }
-
-      const spinner = document.getElementById('ia-spinner');
-      const preview = document.getElementById('preview-evento');
-      spinner.style.display = 'flex';
-      preview.style.display = 'none';
-
+      document.getElementById('ia-spinner').style.display     = 'flex';
+      document.getElementById('preview-evento').style.display = 'none';
       try {
-        const resp = await fetch('/calendario/api/interpretar', {
-          method:  'POST',
+        var resp = await fetch('/calendario/api/interpretar', {
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ texto, fechaContexto: HOY })
+          body: JSON.stringify({ texto: texto, fechaContexto: HOY })
         });
-        const data = await resp.json();
-
-        if (data.exito && data.eventoPreview) {
-          eventoActual = data.eventoPreview;
-          mostrarPreview(data.eventoPreview);
+        var data = await resp.json();
+        if (data.exito) {
+          if (data.multiple && data.eventosPreview && data.eventosPreview.length > 0) {
+            eventoActual = data.eventosPreview;
+            mostrarPreviewMultiple(data.eventosPreview);
+          } else if (data.eventoPreview) {
+            eventoActual = data.eventoPreview;
+            mostrarPreview(data.eventoPreview);
+          } else {
+            alert('La IA no devolvió ningún evento.');
+          }
         } else {
-          alert('❌ ' + (data.mensajeError || 'Error al interpretar'));
+          alert('Error: ' + (data.mensajeError || 'No se pudo interpretar'));
         }
       } catch (err) {
-        alert('Error de conexión: ' + err.message);
+        alert('Error: ' + err.message);
       } finally {
-        spinner.style.display = 'none';
+        document.getElementById('ia-spinner').style.display = 'none';
       }
     }
 
     function mostrarPreview(evento) {
-      const c = document.getElementById('preview-contenido');
-      const tipoLabel = (evento.tipo && evento.tipo.label) ? evento.tipo.label : (evento.tipo || '');
-      const tipoEmoji = (evento.tipo && evento.tipo.emoji) ? evento.tipo.emoji : '📅';
+      // Aviso si no tiene hora
+      var avisoHora = (!evento.horaInicio && !evento.todoDia)
+        ? '<div class="mt-2 p-2 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 rounded text-xs text-yellow-700 dark:text-yellow-300">⚠️ No se especificó hora — se guardará como <strong>pendiente de hora</strong></div>'
+        : '';
+      var c         = document.getElementById('preview-contenido');
+      var tipoLabel = (evento.tipo && evento.tipo.label) ? evento.tipo.label : (evento.tipo || '');
+      var tipoEmoji = (evento.tipo && evento.tipo.emoji) ? evento.tipo.emoji : '';
+      var esRec     = evento.datosExtra && evento.datosExtra.recurrente === true;
+      var patron    = esRec ? evento.datosExtra.patron : null;
+      var diaSem    = (esRec && evento.datosExtra.diaSemana) ? evento.datosExtra.diaSemana : null;
 
-      // Fecha: mostrar rango si hay fechaFin distinta
-      let fechaStr = evento.fechaInicio || '-';
-      if (evento.fechaFin && evento.fechaFin !== evento.fechaInicio) {
-        fechaStr += ' → ' + evento.fechaFin;
-        const d1   = new Date(evento.fechaInicio + 'T00:00:00');
-        const d2   = new Date(evento.fechaFin    + 'T00:00:00');
-        const dias = Math.round((d2 - d1) / 86400000) + 1;
-        fechaStr  += ` (${dias} días)`;
+      var fechaStr = evento.fechaInicio || '-';
+      if (esRec && evento.fechaFin) {
+        var fi = evento.fechaInicio.split('-').reverse().slice(0,2).join('/');
+        var ff = evento.fechaFin.split('-').reverse().slice(0,2).join('/');
+        fechaStr = 'del ' + fi + ' al ' + ff;
+      } else if (evento.fechaFin && evento.fechaFin !== evento.fechaInicio) {
+        var d1   = new Date(evento.fechaInicio + 'T00:00:00');
+        var d2   = new Date(evento.fechaFin    + 'T00:00:00');
+        var dias = Math.round((d2 - d1) / 86400000) + 1;
+        fechaStr += ' a ' + evento.fechaFin + ' (' + dias + ' dias)';
       }
       if (evento.horaInicio) fechaStr += ' a las ' + evento.horaInicio.substring(0,5);
 
-      // Detectar si es recurrente
-      const esRecurrente = evento.datosExtra && evento.datosExtra.recurrente === true;
-      const patron       = esRecurrente ? evento.datosExtra.patron : null;
+      var html = '<p><strong>Tipo:</strong> ' + tipoEmoji + ' ' + tipoLabel + '</p>'
+               + '<p><strong>Titulo:</strong> ' + (evento.titulo || '-') + '</p>'
+               + '<p><strong>Fecha:</strong> ' + fechaStr + '</p>';
+      if (evento.lugar)                html += '<p><strong>Lugar:</strong> ' + evento.lugar + '</p>';
+      if (evento.personasRelacionadas) html += '<p><strong>Personas:</strong> ' + evento.personasRelacionadas + '</p>';
+      if (evento.descripcion)          html += '<p><strong>Notas:</strong> ' + evento.descripcion + '</p>';
+      if (esRec) html += '<p class="mt-2 text-indigo-600 font-semibold text-xs">Recurrente (' + (patron || 'periodico') + ')' + (diaSem ? ' cada ' + diaSem : '') + '</p>';
+      c.innerHTML = html;
 
-      c.innerHTML = `
-        <p><strong>Tipo:</strong> ${tipoEmoji} ${tipoLabel}</p>
-        <p><strong>Título:</strong> ${evento.titulo || '-'}</p>
-        <p><strong>Fecha:</strong> ${fechaStr}</p>
-        ${evento.lugar ? `<p><strong>Lugar:</strong> 📍 ${evento.lugar}</p>` : ''}
-        ${evento.personasRelacionadas ? `<p><strong>Personas:</strong> ${evento.personasRelacionadas}</p>` : ''}
-        ${evento.descripcion ? `<p><strong>Notas:</strong> ${evento.descripcion}</p>` : ''}
-        ${esRecurrente ? `<p class="mt-2 text-indigo-600 font-semibold">🔁 Evento recurrente detectado (${patron || 'periódico'})<br>
-          <span class="font-normal text-xs text-gray-500">Se generarán todos los eventos del patrón</span></p>` : ''}
-      `;
-
-      // Mostrar botón especial si es recurrente
-      const btnConfirmar = document.querySelector('#preview-evento button[onclick="confirmarEvento()"]');
-      if (btnConfirmar) {
-        if (esRecurrente) {
-          btnConfirmar.textContent = '🔁 Confirmar todos los eventos';
-          btnConfirmar.classList.replace('bg-green-600', 'bg-indigo-600');
-          btnConfirmar.classList.replace('hover:bg-green-700', 'hover:bg-indigo-700');
-        } else {
-          btnConfirmar.textContent = '✅ Confirmar y guardar';
-          btnConfirmar.classList.replace('bg-indigo-600', 'bg-green-600');
-          btnConfirmar.classList.replace('hover:bg-indigo-700', 'hover:bg-green-700');
-        }
+      var btnConf = document.getElementById('btn-confirmar');
+      if (btnConf) {
+        btnConf.textContent = esRec ? 'Confirmar todos' : 'Confirmar';
+        btnConf.className = btnConf.className
+          .replace('bg-green-600','').replace('hover:bg-green-700','')
+          .replace('bg-indigo-600','').replace('hover:bg-indigo-700','');
+        btnConf.className += esRec ? ' bg-indigo-600 hover:bg-indigo-700' : ' bg-green-600 hover:bg-green-700';
       }
+      document.getElementById('preview-evento').style.display = 'block';
+    }
 
+
+    function mostrarPreviewMultiple(eventos) {
+      var c    = document.getElementById('preview-contenido');
+      var html = '<p class="font-semibold text-sm mb-2 text-indigo-600">' + eventos.length + ' eventos detectados:</p>';
+      eventos.forEach(function(e) {
+        var emoji = (e.tipo && e.tipo.emoji) ? e.tipo.emoji : '';
+        var color = (e.tipo && e.tipo.color) ? e.tipo.color : '#6366f1';
+        var hora  = e.horaInicio ? ' · ' + e.horaInicio.substring(0,5) : '';
+        var lugar = e.lugar ? ' · ' + e.lugar : '';
+        var pers  = e.personasRelacionadas ? ' · ' + e.personasRelacionadas : '';
+        html += '<div class="border-l-2 pl-2 mb-2 py-0.5" style="border-color:' + color + '">'
+              + '<p class="text-xs font-semibold text-gray-800 dark:text-gray-100">' + emoji + ' ' + e.titulo + '</p>'
+              + '<p class="text-xs text-gray-400">' + (e.fechaInicio || '') + hora + lugar + pers + '</p>'
+              + '</div>';
+      });
+      c.innerHTML = html;
+      var btn = document.getElementById('btn-confirmar');
+      if (btn) btn.textContent = '\u2705 Confirmar ' + eventos.length + ' eventos';
       document.getElementById('preview-evento').style.display = 'block';
     }
 
     async function confirmarEvento() {
       if (!eventoActual) return;
-      const esRecurrente = eventoActual.datosExtra && eventoActual.datosExtra.recurrente === true;
-      const endpoint     = esRecurrente ? '/calendario/api/confirmar-recurrente' : '/calendario/api/confirmar';
+
+      // ── Lista de eventos ──────────────────────────────────
+      if (Array.isArray(eventoActual)) {
+        var guardados = 0; var errores = 0;
+        for (var i = 0; i < eventoActual.length; i++) {
+          var ev    = eventoActual[i];
+          var esR   = ev.datosExtra && ev.datosExtra.recurrente === true;
+          var ep    = esR ? '/calendario/api/confirmar-recurrente' : '/calendario/api/confirmar';
+          try {
+            var r = await fetch(ep, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(ev)
+            });
+            if (r.ok) guardados++; else errores++;
+          } catch(e) { errores++; }
+        }
+        var msg = guardados + ' evento' + (guardados !== 1 ? 's' : '') + ' creado' + (guardados !== 1 ? 's' : '');
+        if (errores > 0) msg += ' (' + errores + ' con error)';
+        alert(msg);
+        cerrarModalVoz();
+        window.location.reload();
+        return;
+      }
+
+      // ── Evento único ──────────────────────────────────────
+      var esRec    = eventoActual.datosExtra && eventoActual.datosExtra.recurrente === true;
+      var endpoint = esRec ? '/calendario/api/confirmar-recurrente' : '/calendario/api/confirmar';
       try {
-        const resp = await fetch(endpoint, {
-          method:  'POST',
+        var resp = await fetch(endpoint, {
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify(eventoActual)
+          body: JSON.stringify(eventoActual)
         });
         if (resp.ok) {
-          const data = await resp.json();
-          if (esRecurrente && Array.isArray(data)) {
-            alert(`✅ Se crearon ${data.length} eventos recurrentes.`);
-          }
+          var data = await resp.json();
+          if (esRec && Array.isArray(data)) alert(data.length + ' eventos creados.');
           cerrarModalVoz();
           window.location.reload();
         } else {
-          alert('Error al guardar el evento.');
+          alert('Error al guardar.');
         }
       } catch (err) {
-        alert('Error de conexión: ' + err.message);
+        alert('Error: ' + err.message);
       }
     }
 
@@ -2428,41 +2845,151 @@ public class OllamaClient {
       window.location = '/calendario/nuevo?fecha=' + (eventoActual.fechaInicio || HOY);
     }
 
-    // ── Eliminar evento individual ───────────────────────────
     async function eliminarEvento(id, titulo) {
-      if (!confirm(`¿Eliminar "${titulo}"?\nSi tiene rango de fechas se borrará de todos los días.`)) return;
-      try {
-        const resp = await fetch(`/calendario/api/eliminar/${id}`, { method: 'DELETE' });
-        if (resp.ok) {
-          window.location.reload();
-        } else {
-          alert('Error al eliminar el evento.');
-        }
-      } catch (err) {
-        alert('Error de conexión: ' + err.message);
-      }
+      if (!confirm('Eliminar "' + titulo + '"?')) return;
+      var resp = await fetch('/calendario/api/eliminar/' + id, { method: 'DELETE' });
+      if (resp.ok) window.location.reload();
+      else alert('Error al eliminar.');
     }
 
-    // ── Borrar TODOS los eventos (solo para pruebas) ──────────
-    async function borrarTodosEventos() {
-      if (!confirm('⚠️ ¿Borrar TODOS los eventos de la base de datos?\nEsta acción no se puede deshacer.')) return;
-      if (!confirm('¿Estás seguro? Se eliminarán TODOS los eventos permanentemente.')) return;
+    // ── Recordatorios ────────────────────────────────────────
+    var DISPARADOS = new Set();
+
+    async function iniciarRecordatorios() {
+      if (!('Notification' in window)) return;
+      if (Notification.permission === 'default') await Notification.requestPermission();
+      if (Notification.permission !== 'granted') return;
+      comprobarRecordatorios();
+      setInterval(comprobarRecordatorios, 60000);
+    }
+
+    async function comprobarRecordatorios() {
+      if (Notification.permission !== 'granted') return;
       try {
-        const resp = await fetch('/calendario/api/vaciar', { method: 'DELETE' });
-        if (resp.ok) {
-          window.location.reload();
-        } else {
-          alert('Error al vaciar los eventos.');
-        }
-      } catch (err) {
-        alert('Error de conexión: ' + err.message);
+        var ahora  = new Date();
+        var parts2 = YEAR_MONTH.split('-');
+        var y = parseInt(parts2[0],10);
+        var m = parseInt(parts2[1],10);
+        var r1 = await fetch('/calendario/api/mes?year=' + y + '&month=' + m);
+        var eventos = await r1.json();
+        eventos.forEach(function(e) {
+          if (!e.recordatorioMinutos || !e.fechaInicio) return;
+          var horaStr  = e.horaInicio ? e.horaInicio.substring(0,5) : '00:00';
+          var eventoTs = new Date(e.fechaInicio + 'T' + horaStr + ':00');
+          if (isNaN(eventoTs.getTime())) return;
+          var dispararEn = new Date(eventoTs.getTime() - e.recordatorioMinutos * 60000);
+          if (Math.abs(ahora - dispararEn) > 90000) return;
+          var clave = e.id + '-' + e.recordatorioMinutos;
+          if (DISPARADOS.has(clave)) return;
+          DISPARADOS.add(clave);
+          var minRest = Math.round((eventoTs - ahora) / 60000);
+          var tiempo  = minRest <= 0 ? 'ahora' : 'en ' + minRest + ' min';
+          var emoji   = (e.tipo && e.tipo.emoji) ? e.tipo.emoji : '';
+          var label   = (e.tipo && e.tipo.label) ? e.tipo.label : '';
+          var notif   = new Notification(
+            emoji + ' ' + e.titulo + ' - ' + tiempo,
+            { body: label + ' ' + e.fechaInicio + ' ' + horaStr + (e.lugar ? ' ' + e.lugar : ''),
+              tag: clave, requireInteraction: minRest <= 5 }
+          );
+          notif.onclick = function() {
+            window.focus();
+            window.location = '/calendario/' + e.id + '/editar';
+            notif.close();
+          };
+        });
+      } catch(err) {
+        console.warn('Recordatorios:', err);
       }
     }
 
     // ── Init ─────────────────────────────────────────────────
     renderCalendario();
+    iniciarRecordatorios();
+    /*]]>*/
   </script>
 
+</section>
+</body>
+</html>
+
+--- src/main/resources/templates/contexto/index.html ---
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: layout(~{::title}, ~{::section})}">
+<head><title>Contexto Familiar — FASI</title></head>
+<body>
+<section>
+  <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-2">🧠 Carga de Datos</h2>
+  <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">
+    Aquí puedes meter información sobre tu familia, gustos, zona y rutinas.<br/>
+    La IA usará todo esto para darte sugerencias personalizadas.
+  </p>
+
+  <!-- Entrada libre por prompt -->
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-6 mb-6">
+    <h3 class="font-semibold text-gray-700 dark:text-gray-200 mb-3">✍️ Añadir información libre</h3>
+    <p class="text-xs text-gray-400 mb-3">
+      Escribe lo que quieras que sepa la IA sobre tu familia.<br/>
+      Ejemplos: <em>"Rocío tiene 8 años y va al colegio San José"</em>,
+      <em>"Los martes Alberto tiene fútbol a las 18h"</em>,
+      <em>"Preferimos la playa de Bajo de Guía"</em>
+    </p>
+    <textarea id="prompt-texto" rows="4"
+              placeholder="Escribe aquí información sobre tu familia, rutinas, preferencias..."
+              class="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3
+                     bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
+                     focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm resize-none mb-3"></textarea>
+    <button onclick="guardarPrompt()"
+            class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg font-semibold transition text-sm">
+      💾 Guardar contexto
+    </button>
+    <span id="prompt-ok" class="hidden ml-3 text-green-600 text-sm font-semibold">✅ Guardado</span>
+  </div>
+
+  <!-- Tabla de entradas actuales -->
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
+    <h3 class="font-semibold text-gray-700 dark:text-gray-200 mb-4">📋 Datos actuales</h3>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-gray-200 dark:border-gray-700">
+            <th class="text-left py-2 px-3 text-gray-500 font-semibold">Clave</th>
+            <th class="text-left py-2 px-3 text-gray-500 font-semibold">Valor</th>
+            <th class="text-left py-2 px-3 text-gray-500 font-semibold">Descripción</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr th:each="e : ${entradas}"
+              class="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
+            <td class="py-2 px-3 font-mono text-xs text-indigo-600 dark:text-indigo-400"
+                th:text="${e.clave}"></td>
+            <td class="py-2 px-3 text-gray-800 dark:text-gray-200 max-w-xs truncate"
+                th:text="${e.valor}"></td>
+            <td class="py-2 px-3 text-gray-400 text-xs"
+                th:text="${e.descripcion ?: '-'}"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    async function guardarPrompt() {
+      const texto = document.getElementById('prompt-texto').value.trim();
+      if (!texto) return;
+      const resp = await fetch('/contexto/prompt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texto })
+      });
+      if (resp.ok) {
+        const ok = document.getElementById('prompt-ok');
+        ok.classList.remove('hidden');
+        document.getElementById('prompt-texto').value = '';
+        setTimeout(() => ok.classList.add('hidden'), 3000);
+      }
+    }
+  </script>
 </section>
 </body>
 </html>
@@ -2732,138 +3259,421 @@ public class OllamaClient {
       th:fragment="layout(title, content)">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
   <title th:replace="${title}">FASI</title>
+  
+  <!-- PWA Meta Tags -->
+  <link rel="manifest" href="/manifest.json"/>
+  <meta name="theme-color" content="#4f46e5"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="FASI"/>
+  <link rel="apple-touch-icon" href="/images/icon-192.png"/>
+  
   <script th:src="@{/js/tailwind.min.js}"></script>
   <script th:src="@{/js/htmx.min.js}"></script>
   <script>tailwind.config = { darkMode: 'class' };</script>
+  
   <style>
     *, *::before, *::after {
       transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
     }
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+    
+    #hamburger-menu {
+      transition: transform 0.3s ease, opacity 0.3s ease;
+    }
+    #hamburger-menu.hidden-menu {
+      transform: translateX(100%);
+      opacity: 0;
+      pointer-events: none;
+    }
+    
+    .main-content { 
+      display: flex; 
+      flex-direction: column; 
+      flex: 1; 
+      min-height: 0; 
+      overflow-y: auto;
+      padding-top: 56px;
+      padding-bottom: 16px;
+    }
+    
+    /* Safe area para notch de iPhone */
+    @supports (padding: env(safe-area-inset-top)) {
+      header { padding-top: env(safe-area-inset-top); }
+      .main-content { padding-top: calc(56px + env(safe-area-inset-top)); }
+    }
   </style>
 </head>
-<body class="bg-gray-100 dark:bg-gray-950 min-h-screen">
+<body class="bg-gray-100 dark:bg-gray-950 h-screen flex flex-col overflow-hidden">
 
-  <!-- TOPBAR MÓVIL -->
-  <header class="lg:hidden bg-gray-900 dark:bg-gray-800 text-white sticky top-0 z-50">
-    <div class="flex items-center justify-between px-4 py-3">
-      <span class="text-xl font-bold">⚡ FASI</span>
-      <div class="flex items-center gap-3">
-        <button onclick="toggleDark()" class="text-xl focus:outline-none">
-          <span id="dark-icon">🌙</span>
-        </button>
-        <button id="menu-btn" class="text-2xl focus:outline-none">☰</button>
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- HEADER FIJO — Mobile-first con tabs integradas         -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <header class="fixed top-0 left-0 right-0 z-50 bg-gray-900 dark:bg-gray-800
+                 text-white h-14 flex items-center shadow-lg">
+
+    <!-- Logo (fijo izquierda) -->
+    <a th:href="@{/}" 
+       class="flex-shrink-0 w-12 h-full flex items-center justify-center text-2xl
+              hover:bg-gray-700 transition cursor-pointer" 
+       title="Inicio">
+      ⚡
+    </a>
+
+    <!-- Tabs deslizables (centro) -->
+    <div class="flex-1 overflow-x-auto scrollbar-hide">
+      <div class="flex gap-0 h-14" id="header-tabs">
+        
+        <div class="flex-shrink-0 flex flex-col items-center justify-center px-3 min-w-[80px]
+                    border-r border-gray-700">
+          <span class="text-base">🌅</span>
+          <span class="text-xs text-amber-300 font-semibold" id="header-amanecer">--:--</span>
+        </div>
+
+        <div class="flex-shrink-0 flex flex-col items-center justify-center px-3 min-w-[80px]
+                    border-r border-gray-700">
+          <span class="text-base">🌇</span>
+          <span class="text-xs text-orange-300 font-semibold" id="header-atardecer">--:--</span>
+        </div>
+
+        <div class="flex-shrink-0 flex flex-col items-center justify-center px-3 min-w-[80px]
+                    border-r border-gray-700">
+          <span class="text-base">🌊</span>
+          <span class="text-xs text-blue-300 font-semibold" id="header-pleamar1">--:--</span>
+        </div>
+
+        <div class="flex-shrink-0 flex flex-col items-center justify-center px-3 min-w-[80px]
+                    border-r border-gray-700">
+          <span class="text-base">🏖️</span>
+          <span class="text-xs text-cyan-300 font-semibold" id="header-bajamar1">--:--</span>
+        </div>
+
+        <div class="flex-shrink-0 flex flex-col items-center justify-center px-3 min-w-[80px]
+                    border-r border-gray-700">
+          <span class="text-base">🌊</span>
+          <span class="text-xs text-blue-300 font-semibold" id="header-pleamar2">--:--</span>
+        </div>
+
+        <div class="flex-shrink-0 flex flex-col items-center justify-center px-3 min-w-[80px]
+                    border-r border-gray-700">
+          <span class="text-base">🏖️</span>
+          <span class="text-xs text-cyan-300 font-semibold" id="header-bajamar2">--:--</span>
+        </div>
+
+        <div class="flex-shrink-0 flex flex-col items-center justify-center px-3 min-w-[80px]">
+          <span class="text-base">📍</span>
+          <span class="text-xs text-gray-300 font-semibold" id="header-ciudad">Sanlúcar</span>
+        </div>
+
       </div>
     </div>
-    <nav id="mobile-menu"
-         class="hidden absolute left-0 right-0 bg-gray-800 dark:bg-gray-900
-                px-4 pb-4 space-y-1 shadow-xl z-50">
-      <a th:href="@{/calendario}"
-         class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">
-        📅 <span>Calendario</span>
-      </a>
-      <a th:href="@{/ia}"
-         class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">
-        🤖 <span>Asistente IA</span>
-      </a>
-      <div class="border-t border-gray-700 pt-2 mt-2 text-sm text-gray-400">
-        <span sec:authentication="name">usuario</span>
-        <form th:action="@{/logout}" method="post" class="inline ml-2">
-          <button type="submit" class="text-red-400 hover:text-red-300">salir</button>
-        </form>
-      </div>
-    </nav>
+
+    <!-- Botones fijos derecha -->
+    <div class="flex-shrink-0 flex items-center gap-1 pr-2">
+      
+      <button onclick="if(typeof window.abrirModalVoz==='function') window.abrirModalVoz(); else window.location='/calendario/nuevo'"
+              class="w-10 h-10 flex items-center justify-center rounded-full
+                     bg-indigo-600 hover:bg-indigo-500 transition text-xl font-bold"
+              title="Nuevo evento">
+        +
+      </button>
+
+      <button onclick="toggleMenu()"
+              class="w-10 h-10 flex items-center justify-center rounded-full
+                     hover:bg-gray-700 transition text-2xl"
+              title="Menú">
+        ☰
+      </button>
+
+    </div>
+
   </header>
 
-  <div id="menu-overlay" class="hidden fixed inset-0 z-40 lg:hidden"
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- MENÚ HAMBURGUESA                                        -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div id="menu-overlay" class="hidden fixed inset-0 z-40 bg-black/50"
        onclick="cerrarMenu()"></div>
 
-  <div class="flex">
-    <!-- SIDEBAR DESKTOP -->
-    <aside class="hidden lg:flex lg:flex-col w-64 bg-gray-900 dark:bg-gray-800
-                  text-white min-h-screen fixed top-0 left-0 z-40">
-      <div class="p-6 border-b border-gray-700 flex items-center justify-between">
-        <div>
-          <span class="text-2xl font-bold tracking-wide">⚡ FASI</span>
-          <p class="text-xs text-gray-400 mt-1">Calendario Inteligente</p>
+  <nav id="hamburger-menu"
+       class="hidden-menu fixed top-0 right-0 bottom-0 z-50 w-72
+              bg-gray-900 dark:bg-gray-800 text-white shadow-2xl
+              flex flex-col">
+
+    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-700">
+      <span class="font-bold text-lg">⚡ FASI</span>
+      <button onclick="cerrarMenu()"
+              class="w-8 h-8 flex items-center justify-center rounded-full
+                     hover:bg-gray-700 transition text-gray-400 hover:text-white">
+        ✕
+      </button>
+    </div>
+
+    <div class="px-5 py-3 border-b border-gray-700 bg-gray-800/50">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center
+                    text-sm font-bold">
+          <span sec:authentication="name" class="uppercase">U</span>
         </div>
-        <button onclick="toggleDark()"
-                class="text-2xl focus:outline-none hover:scale-110 transition-transform ml-2">
-          <span id="dark-icon-desktop">🌙</span>
+        <div>
+          <p class="text-sm font-semibold" sec:authentication="name">usuario</p>
+          <p class="text-xs text-gray-400">Administrador</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex-1 py-3 space-y-1 px-3">
+
+      <a th:href="@{/calendario}"
+         onclick="cerrarMenu()"
+         class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-700 transition">
+        📅 <span>Calendario</span>
+      </a>
+
+      <button onclick="cerrarMenu(); if(typeof window.abrirModalVoz==='function') window.abrirModalVoz();"
+              class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-700 transition text-left">
+        ➕ <span>Nuevo evento</span>
+      </button>
+
+      <button onclick="cerrarMenu(); abrirBuscadorIA();"
+              class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-700 transition text-left">
+        🔍 <span>Buscar</span>
+      </button>
+
+      <button onclick="cerrarMenu(); toggleDark();"
+              class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-700 transition text-left">
+        <span id="menu-dark-icon">🌙</span> <span>Modo noche/día</span>
+      </button>
+
+      <a th:href="@{/contexto}"
+         onclick="cerrarMenu()"
+         class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-700 transition">
+        🧠 <span>Carga de Datos</span>
+      </a>
+
+      <a th:href="@{/ia}"
+         onclick="cerrarMenu()"
+         class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-700 transition">
+        🤖 <span>Asistente IA</span>
+      </a>
+
+      <div class="border-t border-gray-700 my-2"></div>
+
+      <button onclick="cerrarMenu(); confirmarVaciarBD();"
+              class="w-full flex items-center gap-3 px-4 py-3 rounded-xl
+                     hover:bg-red-900/50 text-red-400 transition text-left text-sm">
+        🗑️ <span>Vaciar BD <span class="text-xs text-gray-500">(pruebas)</span></span>
+      </button>
+    </div>
+
+    <div class="px-5 py-4 border-t border-gray-700">
+      <form th:action="@{/logout}" method="post">
+        <button type="submit"
+                class="w-full flex items-center justify-center gap-2 py-2 rounded-xl
+                       bg-red-600/20 hover:bg-red-600/40 text-red-400 transition text-sm">
+          🚪 Cerrar sesión
+        </button>
+      </form>
+    </div>
+  </nav>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- MODAL BUSCADOR IA                                       -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div id="modal-buscador"
+       class="hidden fixed inset-0 z-50 flex items-start justify-center pt-16 px-4 bg-black/60">
+    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg">
+
+      <div class="flex items-center gap-3 p-4 border-b border-gray-200 dark:border-gray-700">
+        <span class="text-xl">🔍</span>
+        <input type="text" id="ia-search-input"
+               placeholder="Pregunta algo... ¿Qué tengo el próximo fin de semana?"
+               class="flex-1 bg-transparent text-gray-900 dark:text-gray-100
+                      focus:outline-none text-sm placeholder-gray-400"/>
+        <button onclick="cerrarBuscadorIA()"
+                class="w-8 h-8 flex items-center justify-center rounded-full
+                       bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 text-gray-500 text-sm">
+          ✕
         </button>
       </div>
-      <nav class="flex-1 p-4 space-y-1">
-        <a th:href="@{/calendario}"
-           class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">
-          📅 <span>Calendario</span>
-        </a>
-        <a th:href="@{/ia}"
-           class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700 transition">
-          🤖 <span>Asistente IA</span>
-        </a>
 
-        <!-- Leyenda de tipos de evento -->
-        <div class="pt-4 mt-4 border-t border-gray-700">
-          <p class="text-xs text-gray-500 uppercase font-semibold mb-2 px-3">Tipos de evento</p>
-          <div class="space-y-1">
-            <a th:each="tipo : ${T(com.miempresa.fasi.calendario.Evento.TipoEvento).values()}"
-               th:href="@{/calendario(tipo=${tipo.name()})}"
-               class="flex items-center gap-2 px-3 py-1 rounded-lg hover:bg-gray-700
-                      transition text-sm text-gray-300">
-              <span class="w-2 h-2 rounded-full flex-shrink-0"
-                    th:style="'background-color:' + ${tipo.color}"></span>
-              <span th:text="${tipo.emoji + ' ' + tipo.label}"></span>
-            </a>
-          </div>
-        </div>
-      </nav>
-      <div class="p-4 border-t border-gray-700 text-sm text-gray-400">
-        <span sec:authentication="name">usuario</span>
-        <form th:action="@{/logout}" method="post" class="inline ml-2">
-          <button type="submit" class="text-red-400 hover:text-red-300">salir</button>
-        </form>
+      <div class="p-3 flex flex-wrap gap-2 border-b border-gray-100 dark:border-gray-700">
+        <button onclick="buscarIA('¿Qué tengo esta semana?')"
+                class="text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600
+                       dark:text-indigo-300 px-3 py-1 rounded-full hover:bg-indigo-100 transition">
+          Esta semana
+        </button>
+        <button onclick="buscarIA('¿Qué eventos hay este mes?')"
+                class="text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600
+                       dark:text-indigo-300 px-3 py-1 rounded-full hover:bg-indigo-100 transition">
+          Este mes
+        </button>
+        <button onclick="buscarIA('¿Cuándo es el próximo cumpleaños?')"
+                class="text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600
+                       dark:text-indigo-300 px-3 py-1 rounded-full hover:bg-indigo-100 transition">
+          Próximo cumpleaños
+        </button>
       </div>
-    </aside>
 
-    <!-- CONTENIDO PRINCIPAL -->
-    <main class="flex-1 lg:ml-64 p-4 lg:p-8 w-full">
-      <th:block th:replace="${content}"/>
-    </main>
+      <div id="ia-search-result" class="p-4 min-h-24 max-h-80 overflow-y-auto">
+        <p class="text-sm text-gray-400 text-center pt-4">
+          Escribe una pregunta o elige una sugerencia 👆
+        </p>
+      </div>
+
+      <div id="ia-search-spinner" style="display:none"
+           class="flex items-center gap-2 px-4 pb-4 text-sm text-gray-400">
+        <div class="w-2 h-2 bg-indigo-400 rounded-full animate-bounce"></div>
+        <div class="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:150ms"></div>
+        <div class="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:300ms"></div>
+        <span>Consultando a la IA...</span>
+      </div>
+    </div>
   </div>
 
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- CONTENIDO PRINCIPAL                                     -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <main class="main-content w-full mx-auto px-3 lg:px-6">
+    <th:block th:replace="${content}"/>
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- SCRIPTS GLOBALES                                        -->
+  <!-- ═══════════════════════════════════════════════════════ -->
   <script>
-    const menuBtn    = document.getElementById('menu-btn');
-    const mobileMenu = document.getElementById('mobile-menu');
-    const overlay    = document.getElementById('menu-overlay');
-
-    function abrirMenu()  { mobileMenu.classList.remove('hidden'); overlay.classList.remove('hidden'); }
-    function cerrarMenu() { mobileMenu.classList.add('hidden');    overlay.classList.add('hidden'); }
-    if (menuBtn) menuBtn.addEventListener('click', e => {
-      e.stopPropagation();
-      mobileMenu.classList.contains('hidden') ? abrirMenu() : cerrarMenu();
-    });
-
-    const htmlEl      = document.documentElement;
-    const iconMobile  = document.getElementById('dark-icon');
-    const iconDesktop = document.getElementById('dark-icon-desktop');
+    // ── Dark mode ────────────────────────────────────────────
+    const htmlEl  = document.documentElement;
 
     function applyDark(isDark) {
       isDark ? htmlEl.classList.add('dark') : htmlEl.classList.remove('dark');
-      const icon = isDark ? '☀️' : '🌙';
-      if (iconMobile)  iconMobile.textContent  = icon;
-      if (iconDesktop) iconDesktop.textContent = icon;
+      const menuIcon = document.getElementById('menu-dark-icon');
+      if (menuIcon) menuIcon.textContent = isDark ? '☀️' : '🌙';
     }
+    
     function toggleDark() {
       const isDark = !htmlEl.classList.contains('dark');
       localStorage.setItem('fasi-dark', isDark ? '1' : '0');
       applyDark(isDark);
     }
+    
     (function() {
       const saved = localStorage.getItem('fasi-dark');
       applyDark(saved !== null ? saved === '1'
                                : window.matchMedia('(prefers-color-scheme: dark)').matches);
     })();
+
+    // ── Menú hamburguesa ─────────────────────────────────────
+    const menuOverlay   = document.getElementById('menu-overlay');
+    const hamburgerMenu = document.getElementById('hamburger-menu');
+
+    function toggleMenu() {
+      const isHidden = hamburgerMenu.classList.contains('hidden-menu');
+      if (isHidden) {
+        hamburgerMenu.classList.remove('hidden-menu');
+        menuOverlay.classList.remove('hidden');
+      } else {
+        cerrarMenu();
+      }
+    }
+    
+    function cerrarMenu() {
+      hamburgerMenu.classList.add('hidden-menu');
+      menuOverlay.classList.add('hidden');
+    }
+
+    // ── Buscador IA ──────────────────────────────────────────
+    function abrirBuscadorIA() {
+      document.getElementById('modal-buscador').classList.remove('hidden');
+      setTimeout(() => document.getElementById('ia-search-input').focus(), 100);
+    }
+    
+    function cerrarBuscadorIA() {
+      document.getElementById('modal-buscador').classList.add('hidden');
+    }
+
+    document.getElementById('ia-search-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') buscarIA(e.target.value.trim());
+      if (e.key === 'Escape') cerrarBuscadorIA();
+    });
+
+    async function buscarIA(pregunta) {
+      if (!pregunta) pregunta = document.getElementById('ia-search-input').value.trim();
+      if (!pregunta) return;
+      document.getElementById('ia-search-input').value = pregunta;
+
+      const result  = document.getElementById('ia-search-result');
+      const spinner = document.getElementById('ia-search-spinner');
+      result.innerHTML  = '';
+      spinner.style.display = 'flex';
+
+      try {
+        const resp = await fetch('/calendario/api/consulta', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify(pregunta)
+        });
+        const texto = await resp.text();
+        result.innerHTML = `
+          <div class="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">
+            ${escapeHtml(texto)}
+          </div>`;
+      } catch (err) {
+        result.innerHTML = `<p class="text-sm text-red-500">Error: ${escapeHtml(err.message)}</p>`;
+      } finally {
+        spinner.style.display = 'none';
+      }
+    }
+
+    // ── Vaciar BD ────────────────────────────────────────────
+    async function confirmarVaciarBD() {
+      if (!confirm('⚠️ ¿Borrar TODOS los eventos?')) return;
+      if (!confirm('¿Seguro? Esta acción no se puede deshacer.')) return;
+      const resp = await fetch('/calendario/api/vaciar', { method: 'DELETE' });
+      if (resp.ok) window.location.reload();
+    }
+
+    // ── Footer: cargar datos contextuales ────────────────────
+    async function cargarDatosFooter(fecha) {
+      try {
+        const fechaStr = fecha || new Date().toISOString().split('T')[0];
+        const resp = await fetch(`/contexto/api/datos?fecha=${fechaStr}`);
+        const d    = await resp.json();
+        document.getElementById('header-amanecer').textContent  = d.amanecer  || '--:--';
+        document.getElementById('header-atardecer').textContent = d.atardecer || '--:--';
+        document.getElementById('header-pleamar1').textContent  = d.pleamar1  || '--:--';
+        document.getElementById('header-bajamar1').textContent  = d.bajamar1  || '--:--';
+        document.getElementById('header-pleamar2').textContent  = d.pleamar2  || '--:--';
+        document.getElementById('header-bajamar2').textContent  = d.bajamar2  || '--:--';
+        document.getElementById('header-ciudad').textContent    = (d.ciudad || 'Sanlúcar').split(' ')[0];
+      } catch (e) {
+        console.warn('Header datos contextuales no disponibles:', e.message);
+      }
+    }
+
+    function escapeHtml(text) {
+      const d = document.createElement('div');
+      d.appendChild(document.createTextNode(String(text)));
+      return d.innerHTML;
+    }
+
+    // ── Init ─────────────────────────────────────────────────
+    (function initFooterFecha() {
+      const m = window.location.pathname.match(/\/calendario\/dia\/(\d{4}-\d{2}-\d{2})/);
+      cargarDatosFooter(m ? m[1] : null);
+    })();
+
+    window.actualizarFooterFecha = cargarDatosFooter;
+
+    // ── PWA Service Worker ───────────────────────────────────
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js')
+        .then(() => console.log('✅ PWA lista para instalar'))
+        .catch(e => console.warn('⚠️ PWA no disponible:', e));
+    }
   </script>
 
 </body>
@@ -3068,5 +3878,50 @@ COMMENT ON COLUMN eventos.tipo IS 'CUMPLEANOS|CITA_MEDICA|TUTORIA|CLAUSTRO|CURSO
 COMMENT ON COLUMN eventos.datos_extra IS 'Campos específicos por tipo en formato JSONB';
 COMMENT ON COLUMN eventos.texto_original_voz IS 'Texto dictado por voz tal como lo reconoció el navegador';
 COMMENT ON COLUMN eventos.texto_busqueda IS 'Vector full-text generado automáticamente para búsqueda rápida';
+
+--- src/main/resources/db/migration/V9__contexto_familiar.sql ---
+-- ============================================================
+--  FASI V9 — Contexto familiar para IA y sugerencias
+-- ============================================================
+
+CREATE TABLE contexto_familiar (
+    id          UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+    clave       VARCHAR(100) NOT NULL UNIQUE,
+    valor       TEXT         NOT NULL,
+    descripcion VARCHAR(300),
+    created_at  TIMESTAMP    NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMP    NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE contexto_familiar IS 'Datos de contexto familiar para enriquecer la IA';
+
+-- Datos iniciales de Sanlúcar de Barrameda
+INSERT INTO contexto_familiar (clave, valor, descripcion) VALUES
+('ubicacion_ciudad',    'Sanlúcar de Barrameda',  'Ciudad de residencia'),
+('ubicacion_provincia', 'Cádiz',                   'Provincia'),
+('ubicacion_pais',      'España',                  'País'),
+('ubicacion_lat',       '36.7749',                 'Latitud decimal'),
+('ubicacion_lon',       '-6.3536',                 'Longitud decimal'),
+('ubicacion_zona',      'Europe/Madrid',            'Zona horaria'),
+('marea_referencia_ts', '2026-05-05T17:00:00',     'Pleamar de referencia para cálculo de mareas'),
+('marea_referencia_h',  '3.45',                    'Altura en metros de la pleamar de referencia');
+
+-- Tabla de usuarios (base para multiusuario)
+CREATE TABLE usuarios (
+    id           UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+    username     VARCHAR(50)  NOT NULL UNIQUE,
+    password     VARCHAR(200) NOT NULL,
+    nombre       VARCHAR(100),
+    rol          VARCHAR(20)  NOT NULL DEFAULT 'USER',
+    activo       BOOLEAN      NOT NULL DEFAULT true,
+    created_at   TIMESTAMP    NOT NULL DEFAULT now(),
+    updated_at   TIMESTAMP    NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE usuarios IS 'Usuarios del sistema FASI (multiusuario)';
+
+-- Usuario admin por defecto (password: admin — se cambiará desde la app)
+INSERT INTO usuarios (username, password, nombre, rol) VALUES
+('admin', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LPVDWXfoH.6', 'Administrador', 'ADMIN');
 
 ══ FIN DEL CONTEXTO ══
