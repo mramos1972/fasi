@@ -16,9 +16,7 @@
     <div class="text-center">
       <h2 class="text-lg font-bold text-gray-800 dark:text-gray-100 capitalize"
           th:text="${#temporals.format(yearMonth.atDay(1),'MMMM yyyy')}"></h2>
-      <a th:href="@{/calendario}"
-         class="text-xs text-indigo-500 hover:underline">Hoy</a>
-    </div>
+      </div>
     <a th:href="@{/calendario(year=${yearMonth.plusMonths(1).year},month=${yearMonth.plusMonths(1).monthValue})}"
        class="w-10 h-10 flex items-center justify-center rounded-full
               hover:bg-gray-200 dark:hover:bg-gray-700 transition text-xl
@@ -561,5 +559,43 @@
   </script>
 
 </section>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SWIPE HORIZONTAL — cambiar de mes en móvil             -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<script>
+(function() {
+  const grid = document.querySelector('#calendario-grid, .calendario-grid, #calendar-grid, main');
+  if (!grid) return;
+
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let touchEndX   = 0;
+  let touchEndY   = 0;
+  const MIN_SWIPE = 60;   // píxeles mínimos para considerar swipe
+  const MAX_VERT  = 80;   // tolerancia vertical (evita confundir con scroll)
+
+  grid.addEventListener('touchstart', e => {
+    touchStartX = e.changedTouches[0].screenX;
+    touchStartY = e.changedTouches[0].screenY;
+  }, { passive: true });
+
+  grid.addEventListener('touchend', e => {
+    touchEndX = e.changedTouches[0].screenX;
+    touchEndY = e.changedTouches[0].screenY;
+    handleSwipe();
+  }, { passive: true });
+
+  function handleSwipe() {
+    const dx = touchEndX - touchStartX;
+    const dy = Math.abs(touchEndY - touchStartY);
+    if (Math.abs(dx) < MIN_SWIPE) return;
+    if (dy > MAX_VERT) return;  // fue más vertical que horizontal → scroll
+    if (typeof cambiarMes !== 'function') return;
+    if (dx > 0) cambiarMes(-1);  // swipe derecha → mes anterior
+    else        cambiarMes(1);   // swipe izquierda → mes siguiente
+  }
+})();
+</script>
 </body>
 </html>
