@@ -1,6 +1,7 @@
 package com.miempresa.fasi.ia;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +24,7 @@ public class OllamaClient {
     @Value("${fasi.ollama.url:http://localhost:11434}")
     private String ollamaUrl;
 
-    @Value("${fasi.ollama.model:qwen2.5:7b}")
+    @Value("${fasi.ollama.model:qwen2.5:3b}")
     private String model;
 
     private final ObjectMapper objectMapper;
@@ -31,7 +32,9 @@ public class OllamaClient {
             .connectTimeout(Duration.ofSeconds(10))
             .build();
 
-    /** Genera una respuesta. keep_alive=-1 mantiene el modelo en RAM indefinidamente. */
+    // ════════════════════════════════════════════════════════
+    //  Generación estándar (chat / consulta libre)
+    // ════════════════════════════════════════════════════════
     public String generate(String prompt) {
         return generate(prompt, 1024);
     }
@@ -45,34 +48,53 @@ public class OllamaClient {
             req.setKeep_alive(-1);
             req.setOptions(Map.of(
                 "num_ctx",     numCtx,
-                "temperature", 0
+                "temperature", 0,
+                "top_k",       20,
+                "top_p",       0.7
             ));
 
-            String body = objectMapper.writeValueAsString(req);
-
-            HttpRequest httpReq = HttpRequest.newBuilder()
-                    .uri(URI.create(ollamaUrl + "/api/generate"))
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(body))
-                    .timeout(Duration.ofSeconds(120))
-                    .build();
-
-            HttpResponse<String> resp = httpClient.send(
-                    httpReq, HttpResponse.BodyHandlers.ofString());
-
-            OllamaResponse ollamaResp =
-                    objectMapper.readValue(resp.body(), OllamaResponse.class);
-            return ollamaResp.getResponse();
+            return callOllama(req);
 
         } catch (Exception e) {
             log.error("Error llamando a Ollama", e);
             return "⚠️ Error al conectar con el asistente IA. " +
-                   "Asegúrate de que Ollama está corriendo en WSL " +
-                   "(ollama serve).";
+                   "Asegúrate de que Ollama está corriendo en WSL (ollama serve).";
         }
     }
 
-    /** Precalienta el modelo: lo carga en RAM sin generar texto. */
+    // ════════════════════════════════════════════════════════
+    //  Generación JSON-mode (extracción de eventos)
+    //  - format:"json" garantiza salida JSON válida
+    //  - num_predict limita la salida -> más rápido
+    //  - top_k=10 -> menos creatividad, más velocidad
+    // ════════════════════════════════════════════════════════
+    public String generateJson(String prompt, int numCtx, int maxOutputTokens) {
+        try {
+            OllamaRequest req = new OllamaRequest();
+            req.setModel(model);
+            req.setPrompt(prompt);
+            req.setStream(false);
+            req.setKeep_alive(-1);
+            req.setFormat("json");
+            req.setOptions(Map.of(
+                "num_ctx",     numCtx,
+                "num_predict", maxOutputTokens,
+                "temperature", 0,
+                "top_k",       10,
+                "top_p",       0.5
+            ));
+
+            return callOllama(req);
+
+        } catch (Exception e) {
+            log.error("Error llamando a Ollama (JSON mode)", e);
+            return "{}";
+        }
+    }
+
+    // ════════════════════════════════════════════════════════
+    //  Warmup
+    // ════════════════════════════════════════════════════════
     public void warmup() {
         try {
             log.info("🔥 Precalentando modelo IA ({})...", model);
@@ -83,28 +105,45 @@ public class OllamaClient {
             req.setKeep_alive(-1);
             req.setOptions(Map.of("num_ctx", 512, "temperature", 0));
 
-            String body = objectMapper.writeValueAsString(req);
-            HttpRequest httpReq = HttpRequest.newBuilder()
-                    .uri(URI.create(ollamaUrl + "/api/generate"))
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(body))
-                    .timeout(Duration.ofSeconds(120))
-                    .build();
-
-            httpClient.send(httpReq, HttpResponse.BodyHandlers.ofString());
+            callOllama(req);
             log.info("✅ Modelo IA listo en RAM.");
         } catch (Exception e) {
             log.warn("⚠️ No se pudo precalentar el modelo: {}", e.getMessage());
         }
     }
 
-    // ── DTOs internos ────────────────────────────────────────
+    // ════════════════════════════════════════════════════════
+    //  HTTP helper
+    // ════════════════════════════════════════════════════════
+    private String callOllama(OllamaRequest req) throws Exception {
+        String body = objectMapper.writeValueAsString(req);
+
+        HttpRequest httpReq = HttpRequest.newBuilder()
+                .uri(URI.create(ollamaUrl + "/api/generate"))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .timeout(Duration.ofSeconds(120))
+                .build();
+
+        HttpResponse<String> resp = httpClient.send(
+                httpReq, HttpResponse.BodyHandlers.ofString());
+
+        OllamaResponse ollamaResp =
+                objectMapper.readValue(resp.body(), OllamaResponse.class);
+        return ollamaResp.getResponse();
+    }
+
+    // ════════════════════════════════════════════════════════
+    //  DTOs internos
+    // ════════════════════════════════════════════════════════
     @Data
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     static class OllamaRequest {
         private String              model;
         private String              prompt;
         private boolean             stream;
         private int                 keep_alive;
+        private String              format;     // 👈 nuevo: "json" para JSON mode
         private Map<String, Object> options;
     }
 

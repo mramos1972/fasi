@@ -1,0 +1,161 @@
+package com.miempresa.fasi.calendario;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.miempresa.fasi.ia.IaContextBuilder;
+import com.miempresa.fasi.ia.OllamaClient;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class EventoIaService {
+
+    private final OllamaClient     ollamaClient;
+    private final EventoRepository repo;
+    private final ObjectMapper     objectMapper;
+    private final IaContextBuilder contextBuilder;
+
+    // Parámetros optimizados
+    private static final int CTX_INTERPRETAR    = 1024;
+    private static final int MAX_OUTPUT_TOKENS  = 400;
+
+    public EventoIaResponse interpretar(EventoIaRequest request) {
+        long inicio = System.currentTimeMillis();
+        try {
+            String prompt = buildPromptInterpretarMinimo(request);
+            String json   = ollamaClient.generateJson(prompt, CTX_INTERPRETAR, MAX_OUTPUT_TOKENS);
+            String jsonLimpio = extraerJson(json);
+
+            log.debug("JSON recibido de IA: {}", jsonLimpio);
+
+            String trimmed = jsonLimpio.trim();
+
+            // ── MÚLTIPLES EVENTOS ─────────────────────────────
+            if (trimmed.startsWith("[")) {
+                List<EventoConfirmarRequest> dtos = objectMapper.readValue(
+                    trimmed,
+                    objectMapper.getTypeFactory()
+                        .constructCollectionType(List.class, EventoConfirmarRequest.class)
+                );
+                List<Evento> previews = new ArrayList<>();
+                for (EventoConfirmarRequest dto : dtos) {
+                    Evento e = dto.toEvento();
+                    e.setTextoOriginalVoz(request.getTexto());
+                    previews.add(e);
+                }
+                log.info("IA detectó {} eventos múltiples en {}ms",
+                        previews.size(), System.currentTimeMillis() - inicio);
+                return new EventoIaResponse(true, null, null, previews,
+                        System.currentTimeMillis() - inicio);
+            }
+
+            // ── EVENTO ÚNICO ──────────────────────────────────
+            ObjectNode node = (ObjectNode) objectMapper.readTree(trimmed);
+
+            normalizarHora(node, "horaInicio");
+            normalizarHora(node, "horaFin");
+
+            boolean esRecurrente = node.has("recurrente") && node.get("recurrente").asBoolean(false);
+            String  patron       = node.has("patron")     ? node.get("patron").asText(null) : null;
+
+            node.remove("recurrente");
+            node.remove("patron");
+
+            Evento evento = objectMapper.treeToValue(node, Evento.class);
+            evento.setTextoOriginalVoz(request.getTexto());
+
+            if (esRecurrente && patron != null) {
+                java.util.Map<String, Object> extra = evento.getDatosExtra() != null
+                    ? new HashMap<>(evento.getDatosExtra())
+                    : new HashMap<>();
+                extra.put("recurrente", true);
+                extra.put("patron", patron);
+                extra.put("textoRecurrencia", request.getTexto());
+                if (node.has("diaSemana") && !node.get("diaSemana").isNull()) {
+                    extra.put("diaSemana", node.get("diaSemana").asText());
+                }
+                evento.setDatosExtra(extra);
+            }
+
+            log.info("IA detectó 1 evento en {}ms", System.currentTimeMillis() - inicio);
+            return new EventoIaResponse(true, null, evento, null,
+                    System.currentTimeMillis() - inicio);
+
+        } catch (Exception e) {
+            log.error("Error interpretando texto: {}", e.getMessage());
+            return new EventoIaResponse(false,
+                    "No pude interpretar el texto. Inténtalo de nuevo.",
+                    null, System.currentTimeMillis() - inicio);
+        }
+    }
+
+    private void normalizarHora(ObjectNode node, String campo) {
+        if (!node.has(campo) || node.get(campo).isNull()) return;
+        String val = node.get(campo).asText("").trim()
+                         .replaceAll("(?i)\\s*[Hh].*$", "").trim();
+        if (val.isEmpty() || val.equals("null")) { node.putNull(campo); return; }
+        if (val.matches("\\d{1,2}:\\d{2}$")) val = val + ":00";
+        if (val.matches("\\d{1,2}$"))        val = val + ":00:00";
+        node.put(campo, val);
+    }
+
+    @Transactional(readOnly = true)
+    public String consultar(String pregunta) {
+        String prompt = contextBuilder.buildPrompt(pregunta, "calendario");
+        return ollamaClient.generate(prompt, 1536);
+    }
+
+    // ════════════════════════════════════════════════════════
+    //  Prompt MINIMALISTA — ~200 tokens vs ~800 antes
+    // ════════════════════════════════════════════════════════
+    private String buildPromptInterpretarMinimo(EventoIaRequest req) {
+        String fechaHoy = req.getFechaContexto() != null
+                ? req.getFechaContexto()
+                : LocalDate.now().format(DateTimeFormatter.ISO_DATE);
+
+        return """
+            Extrae eventos de calendario en JSON. Fecha hoy: %s
+            Tipos: CUMPLEANOS, CITA_MEDICA, TUTORIA, CLAUSTRO, CURSO, EXTRAESCOLAR, VIAJE, VACACIONES, COMIDA, COMPRAS, OTRO
+
+            Si hay varios eventos -> array. Si hay uno -> objeto.
+            Campos: tipo, titulo, fechaInicio (YYYY-MM-DD), horaInicio (HH:mm:ss o null),
+            todoDia (bool), lugar, personasRelacionadas, descripcion, datosExtra (objeto vacio {}).
+            Para recurrentes: recurrente=true, patron="WEEKLY", diaSemana="LUNES".
+
+            Reglas:
+            - Sin hora explicita -> horaInicio:null
+            - Cumpleanos sin hora -> todoDia:true
+            - Tipo dudoso -> OTRO
+            - titulo max 60 chars
+
+            TEXTO: "%s"
+            """.formatted(fechaHoy, req.getTexto());
+    }
+
+    private String extraerJson(String respuesta) {
+        String trimmed = respuesta.trim();
+        int arrInicio = trimmed.indexOf('[');
+        int arrFin    = trimmed.lastIndexOf(']');
+        int objInicio = trimmed.indexOf('{');
+        int objFin    = trimmed.lastIndexOf('}');
+
+        if (arrInicio >= 0 && arrFin > arrInicio &&
+            (objInicio < 0 || arrInicio < objInicio)) {
+            return trimmed.substring(arrInicio, arrFin + 1);
+        }
+        if (objInicio >= 0 && objFin > objInicio) {
+            return trimmed.substring(objInicio, objFin + 1);
+        }
+        return trimmed;
+    }
+}
