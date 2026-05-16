@@ -1,0 +1,195 @@
+══════════════════════════════════════════════════════════════
+  FASI — CONTEXTO IA · RESUMEN GENERAL
+  Generado: 2026-05-16 18:26
+  Stack: Spring Boot 3.2.5, Java 17, PostgreSQL, Thymeleaf, Tailwind, HTMX, Ollama
+══════════════════════════════════════════════════════════════
+
+══ ESTRUCTURA (3 niveles) ══
+src
+├── main
+│   ├── java
+│   │   └── com
+│   └── resources
+│       ├── db
+│       ├── static
+│       ├── templates
+│       ├── application-dev.properties
+│       ├── application-prod.properties
+│       └── application.properties
+└── test
+    └── java
+        └── com
+
+10 directories, 3 files
+
+══ MIGRACIONES FLYWAY ══
+src/main/resources/db/migration/V1__init_schema.sql
+src/main/resources/db/migration/V2__agenda.sql
+src/main/resources/db/migration/V3__tareas.sql
+src/main/resources/db/migration/V4__contabilidad.sql
+src/main/resources/db/migration/V5__documentos.sql
+src/main/resources/db/migration/V6__desarrollo.sql
+src/main/resources/db/migration/V7__ia.sql
+src/main/resources/db/migration/V8__calendario.sql
+src/main/resources/db/migration/V9__contexto_familiar.sql
+
+══ ENUMS Y CONSTANTES CLAVE ══
+src/main/java/com/miempresa/fasi/calendario/Evento.java:72:    public enum TipoEvento {
+
+────────────────────────────────────────────────
+📄 pom.xml (100 líneas)
+────────────────────────────────────────────────
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>3.2.5</version>
+    <relativePath/>
+  </parent>
+  <groupId>com.miempresa</groupId>
+  <artifactId>fasi</artifactId>
+  <version>0.0.1-SNAPSHOT</version>
+  <name>fasi</name>
+  <description>Full Assistant — agenda, tareas, contabilidad, documentos</description>
+  <properties>
+    <java.version>17</java.version>
+    <springdoc.version>2.5.0</springdoc.version>
+    <finalName>app</finalName>
+  </properties>
+  <dependencies>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-thymeleaf</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-security</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.thymeleaf.extras</groupId>
+      <artifactId>thymeleaf-extras-springsecurity6</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-validation</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springdoc</groupId>
+      <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+      <version>${springdoc.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
+      <optional>true</optional>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.security</groupId>
+      <artifactId>spring-security-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.hypersistence</groupId>
+      <artifactId>hypersistence-utils-hibernate-63</artifactId>
+      <version>3.7.3</version>
+    </dependency>
+  </dependencies>
+  <build>
+    <finalName>${finalName}</finalName>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+        <configuration>
+          <excludes>
+            <exclude>
+              <groupId>org.projectlombok</groupId>
+              <artifactId>lombok</artifactId>
+            </exclude>
+          </excludes>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>
+
+────────────────────────────────────────────────
+📄 Dockerfile (8 líneas)
+────────────────────────────────────────────────
+FROM eclipse-temurin:17-jre-alpine
+WORKDIR /app
+RUN addgroup -S fasi && adduser -S fasi -G fasi
+COPY target/app.jar app.jar
+RUN mkdir -p /uploads && chown fasi:fasi /uploads
+USER fasi
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "app.jar"]
+
+────────────────────────────────────────────────
+📄 src/main/resources/application-dev.properties (10 líneas)
+────────────────────────────────────────────────
+spring.datasource.url=jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:fasi_dev}
+spring.datasource.username=${DB_USER:fasi}
+spring.datasource.password=${DB_PASS:fasi}
+spring.datasource.driver-class-name=org.postgresql.Driver
+spring.jpa.show-sql=true
+spring.jpa.properties.hibernate.format_sql=true
+logging.level.com.miempresa.fasi=DEBUG
+server.address=0.0.0.0
+fasi.ollama.url=${OLLAMA_URL:http://host.docker.internal:11434}
+
+
+────────────────────────────────────────────────
+📄 src/main/resources/application-prod.properties (6 líneas)
+────────────────────────────────────────────────
+spring.datasource.url=jdbc:postgresql://${DB_HOST}:${DB_PORT:5432}/${DB_NAME}
+spring.datasource.username=${DB_USER}
+spring.datasource.password=${DB_PASS}
+spring.datasource.driver-class-name=org.postgresql.Driver
+spring.thymeleaf.cache=true
+logging.level.com.miempresa.fasi=INFO
+
+────────────────────────────────────────────────
+📄 src/main/resources/application.properties (14 líneas)
+────────────────────────────────────────────────
+spring.application.name=fasi
+spring.profiles.active=${SPRING_PROFILE:dev}
+spring.jpa.open-in-view=false
+spring.jpa.hibernate.ddl-auto=validate
+spring.flyway.enabled=true
+spring.flyway.locations=classpath:db/migration
+spring.thymeleaf.cache=false
+springdoc.swagger-ui.path=/swagger-ui.html
+springdoc.api-docs.path=/api-docs
+fasi.upload.dir=${UPLOAD_DIR:./uploads}
+
+# ── Ollama / IA local ────────────────────────────────────────
+fasi.ollama.url=${OLLAMA_URL:http://localhost:11434}
+fasi.ollama.model=${OLLAMA_MODEL:qwen2.5:3b}

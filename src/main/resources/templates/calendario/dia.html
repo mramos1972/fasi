@@ -108,6 +108,13 @@
         </div>
         <h3 class="font-semibold text-gray-800 dark:text-gray-100 text-lg"
             th:text="${e.titulo}"></h3>
+        <!-- Chips de etiquetas -->
+        <div th:if="${e.etiquetas != null and !e.etiquetas.isEmpty()}"
+             class="flex flex-wrap gap-1 mt-1">
+          <span th:each="tag : ${e.etiquetas}"
+                class="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 font-medium"
+                th:text="'#' + ${tag}"></span>
+        </div>
         <p th:if="${e.lugar != null}"
            class="text-sm text-gray-500 mt-1">📍 <span th:text="${e.lugar}"></span></p>
         <p th:if="${e.personasRelacionadas != null}"

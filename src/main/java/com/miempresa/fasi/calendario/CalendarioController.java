@@ -1,5 +1,7 @@
 package com.miempresa.fasi.calendario;
 
+
+import org.springframework.web.bind.annotation.RequestParam;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -79,7 +81,9 @@ public class CalendarioController {
 
     // ── Guardar nuevo evento ─────────────────────────────────
     @PostMapping
-    public String guardar(@Valid @ModelAttribute Evento evento) {
+    public String guardar(@Valid @ModelAttribute Evento evento,
+            @RequestParam(value = "etiquetasRaw", required = false) String etiquetasRaw) {
+        evento.setEtiquetas(parseEtiquetas(etiquetasRaw));
         eventoService.save(evento);
         return "redirect:/calendario?year=" + evento.getFechaInicio().getYear()
                 + "&month=" + evento.getFechaInicio().getMonthValue();
@@ -88,7 +92,9 @@ public class CalendarioController {
     // ── Actualizar evento ────────────────────────────────────
     @PostMapping("/{id}")
     public String actualizar(@PathVariable UUID id,
-                             @Valid @ModelAttribute Evento evento) {
+                             @Valid @ModelAttribute Evento evento,
+            @RequestParam(value = "etiquetasRaw", required = false) String etiquetasRaw) {
+        evento.setEtiquetas(parseEtiquetas(etiquetasRaw));
         eventoService.update(id, evento);
         return "redirect:/calendario?year=" + evento.getFechaInicio().getYear()
                 + "&month=" + evento.getFechaInicio().getMonthValue();
@@ -167,6 +173,22 @@ public class CalendarioController {
     @ResponseBody
     public List<Evento> getPendientesDatos() {
         return eventoService.getEventosPendientesDatos();
+    }
+
+    /** Convierte "tutoria, colegio" en Set sin tildes ni mayusculas */
+    private java.util.Set<String> parseEtiquetas(String raw) {
+        if (raw == null || raw.isBlank()) return new java.util.HashSet<>();
+        return java.util.Arrays.stream(raw.split(","))
+                .map(String::trim)
+                .map(String::toLowerCase)
+                .filter(s -> !s.isEmpty())
+                .map(s -> s.replaceAll("[áàä]", "a")
+                           .replaceAll("[éèë]", "e")
+                           .replaceAll("[íìï]", "i")
+                           .replaceAll("[óòö]", "o")
+                           .replaceAll("[úùü]", "u")
+                           .replaceAll("[ñ]", "n"))
+                .collect(java.util.stream.Collectors.toCollection(java.util.HashSet::new));
     }
 
 }

@@ -147,44 +147,42 @@ public class EventoIaService {
     // ════════════════════════════════════════════════════════
     //  Prompt con ENVOLTORIO obligatorio: {"eventos":[...]}
     // ════════════════════════════════════════════════════════
-    private String buildPromptInterpretarMinimo(EventoIaRequest req) {
-        String fechaHoy = req.getFechaContexto() != null
-                ? req.getFechaContexto()
-                : LocalDate.now().format(DateTimeFormatter.ISO_DATE);
+    private String buildPromptInterpretarMinimo(EventoIaRequest request) {
+        String hoy = (request.getFechaContexto() != null && !request.getFechaContexto().isBlank())
+                ? request.getFechaContexto()
+                : java.time.LocalDate.now().toString();
 
         return """
-            Eres un extractor de eventos de calendario. Devuelve SIEMPRE este formato:
-            {"eventos":[ {evento1}, {evento2}, ... ]}
+            Eres extractor de eventos de calendario. Devuelve SOLO JSON válido,
+            sin texto explicativo, en este formato exacto:
+            {"eventos":[{"tipo":"...","titulo":"...","fechaInicio":"YYYY-MM-DD",
+                        "horaInicio":"HH:mm:ss","lugar":"...","personasRelacionadas":"...",
+                        "descripcion":"...","etiquetas":["tag1","tag2"]}]}
 
-            La clave "eventos" SIEMPRE es un array, aunque haya un solo evento.
+            REGLAS:
+            - tipo: UNO de [PERSONAL, SOCIAL, SALUD, TRABAJO, FAMILIA, VIAJE,
+                            APRENDIZAJE, OCIO, GESTION, OTRO]
+            - etiquetas: array de 1-3 strings cortos en minúsculas y sin tildes
+              (ej: ["cumpleanos", "amigos"], ["dentista"], ["futbol", "hijo"])
+            - personasRelacionadas: SIEMPRE string separado por comas, NUNCA array
+            - fechaInicio: SIEMPRE YYYY-MM-DD, sin hora
+            - horaInicio: HH:mm:ss o null si no se especifica
+            - Hoy es %s
 
-            Cada evento tiene estos campos exactos:
-            - tipo: uno de [CUMPLEANOS, CITA_MEDICA, TUTORIA, CLAUSTRO, CURSO, EXTRAESCOLAR, VIAJE, VACACIONES, COMIDA, COMPRAS, OTRO]
-            - titulo: string corto (max 60 chars)
-            - fechaInicio: string "YYYY-MM-DD"
-            - horaInicio: string "HH:mm:ss" o null si no hay hora
-            - todoDia: boolean (true para cumpleaños sin hora)
-            - lugar: string o null
-            - personasRelacionadas: STRING separado por comas (ej "Miguel, Rocio") o null. NUNCA array.
-            - descripcion: string o null
-            - datosExtra: {} (objeto vacio)
+            EJEMPLOS de mapeo tipo + etiquetas:
+            - "cumple Noa el viernes" -> tipo=SOCIAL, etiquetas=["cumpleanos"]
+            - "médico jueves 10h" -> tipo=SALUD, etiquetas=["medico"]
+            - "claustro lunes" -> tipo=TRABAJO, etiquetas=["claustro"]
+            - "tutoría Rocío martes 18h" -> tipo=FAMILIA, etiquetas=["tutoria","colegio"]
+            - "extraescolar Rocío martes 18h" -> tipo=FAMILIA, etiquetas=["extraescolar"]
+            - "comprar pan" -> tipo=GESTION, etiquetas=["compras"]
+            - "viaje Madrid 5-7 junio" -> tipo=VIAJE, etiquetas=["viaje"]
+            - "curso Spring Boot" -> tipo=APRENDIZAJE, etiquetas=["curso","formacion"]
+            - "cine sábado" -> tipo=OCIO, etiquetas=["cine"]
+            - "comida con Alberto" -> tipo=SOCIAL, etiquetas=["comida","amigos"]
 
-            Reglas:
-            - Fecha actual: %s
-            - Sin hora explicita -> horaInicio: null
-            - Cumpleanos sin hora -> todoDia: true, horaInicio: null
-            - Tipo dudoso -> "OTRO"
-            - personasRelacionadas: SIEMPRE STRING, jamás array
-
-            Ejemplo entrada: "cita medica de Miguel el 30 junio a las 12:20 en Jerez, cumple de Carlota el 26 mayo en Costaballena"
-            Ejemplo salida:
-            {"eventos":[
-              {"tipo":"CITA_MEDICA","titulo":"Cita medica Miguel","fechaInicio":"2026-06-30","horaInicio":"12:20:00","todoDia":false,"lugar":"Jerez","personasRelacionadas":"Miguel","descripcion":null,"datosExtra":{}},
-              {"tipo":"CUMPLEANOS","titulo":"Cumpleaños Carlota","fechaInicio":"2026-05-26","horaInicio":null,"todoDia":true,"lugar":"Costaballena","personasRelacionadas":"Carlota","descripcion":null,"datosExtra":{}}
-            ]}
-
-            TEXTO USUARIO: "%s"
-            """.formatted(fechaHoy, req.getTexto());
+            Texto del usuario: %s
+            """.formatted(hoy, request.getTexto());
     }
 
     private String extraerJson(String respuesta) {

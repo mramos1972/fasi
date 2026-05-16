@@ -1,0 +1,625 @@
+══════════════════════════════════════════════════════════════
+  FASI — CONTEXTO IA · CONTROLLERS Y DTOs
+  Generado: 2026-05-16 18:26
+  Stack: Spring Boot 3.2.5, Java 17, PostgreSQL, Thymeleaf, Tailwind, HTMX, Ollama
+══════════════════════════════════════════════════════════════
+
+
+────────────────────────────────────────────────
+📄 src/main/java/com/miempresa/fasi/HomeController.java (18 líneas)
+────────────────────────────────────────────────
+package com.miempresa.fasi;
+
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.GetMapping;
+
+@Controller
+public class HomeController {
+
+    @GetMapping("/")
+    public String home() {
+        return "redirect:/calendario";
+    }
+
+    @GetMapping("/login")
+    public String login() {
+        return "login";
+    }
+}
+
+────────────────────────────────────────────────
+📄 src/main/java/com/miempresa/fasi/calendario/CalendarioController.java (171 líneas)
+────────────────────────────────────────────────
+package com.miempresa.fasi.calendario;
+
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
+import java.time.YearMonth;
+import java.util.List;
+import java.util.UUID;
+
+@Controller
+@RequestMapping("/calendario")
+@RequiredArgsConstructor
+public class CalendarioController {
+
+    private final EventoService    eventoService;
+    private final EventoIaService  eventoIaService;
+
+    // ── Vista principal (mes actual por defecto) ─────────────
+    @GetMapping
+    public String vistaCalendario(
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Integer month,
+            @RequestParam(required = false) String vista,
+            Model model) {
+
+        LocalDate hoy     = LocalDate.now();
+        int       anio    = year  != null ? year  : hoy.getYear();
+        int       mes     = month != null ? month : hoy.getMonthValue();
+        String    vistaSel = vista != null ? vista : "mes";
+
+        YearMonth ym      = YearMonth.of(anio, mes);
+
+        model.addAttribute("eventos",     eventoService.findByMes(anio, mes));
+        model.addAttribute("proximos",    eventoService.findProximos(5));
+        model.addAttribute("tipos",       Evento.TipoEvento.values());
+        model.addAttribute("yearMonth",   ym);
+        model.addAttribute("hoy",         hoy);
+        model.addAttribute("vista",       vistaSel);
+        model.addAttribute("nuevoEvento", new Evento());
+
+        return "calendario/index";
+    }
+
+    // ── Vista de un día concreto ─────────────────────────────
+    @GetMapping("/dia/{fecha}")
+    public String viaDia(@PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+                         LocalDate fecha, Model model) {
+        model.addAttribute("fecha",   fecha);
+        model.addAttribute("eventos", eventoService.findByDia(fecha));
+        model.addAttribute("tipos",   Evento.TipoEvento.values());
+        return "calendario/dia";
+    }
+
+    // ── Formulario nuevo evento (manual) ─────────────────────
+    @GetMapping("/nuevo")
+    public String nuevoForm(@RequestParam(required = false)
+                            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
+                            Model model) {
+        Evento e = new Evento();
+        e.setFechaInicio(fecha != null ? fecha : LocalDate.now());
+        model.addAttribute("evento", e);
+        model.addAttribute("tipos",  Evento.TipoEvento.values());
+        return "calendario/form";
+    }
+
+    // ── Formulario editar evento ─────────────────────────────
+    @GetMapping("/{id}/editar")
+    public String editarForm(@PathVariable UUID id, Model model) {
+        model.addAttribute("evento", eventoService.findById(id));
+        model.addAttribute("tipos",  Evento.TipoEvento.values());
+        return "calendario/form";
+    }
+
+    // ── Guardar nuevo evento ─────────────────────────────────
+    @PostMapping
+    public String guardar(@Valid @ModelAttribute Evento evento) {
+        eventoService.save(evento);
+        return "redirect:/calendario?year=" + evento.getFechaInicio().getYear()
+                + "&month=" + evento.getFechaInicio().getMonthValue();
+    }
+
+    // ── Actualizar evento ────────────────────────────────────
+    @PostMapping("/{id}")
+    public String actualizar(@PathVariable UUID id,
+                             @Valid @ModelAttribute Evento evento) {
+        eventoService.update(id, evento);
+        return "redirect:/calendario?year=" + evento.getFechaInicio().getYear()
+                + "&month=" + evento.getFechaInicio().getMonthValue();
+    }
+
+    // ── Eliminar evento ──────────────────────────────────────
+    @PostMapping("/{id}/eliminar")
+    public String eliminar(@PathVariable UUID id) {
+        eventoService.delete(id);
+        return "redirect:/calendario";
+    }
+
+    // ── API: Buscar eventos (buscador full-text) ─────────────
+    @GetMapping("/api/buscar")
+    @ResponseBody
+    public ResponseEntity<List<Evento>> buscar(@RequestParam String q) {
+        return ResponseEntity.ok(eventoService.buscar(q));
+    }
+
+    // ── API: Interpretar texto con IA → preview evento ───────
+    @PostMapping("/api/interpretar")
+    @ResponseBody
+    public ResponseEntity<EventoIaResponse> interpretarVoz(
+            @Valid @RequestBody EventoIaRequest request) {
+        return ResponseEntity.ok(eventoIaService.interpretar(request));
+    }
+
+    // ── API: Confirmar y guardar evento interpretado por IA ──
+    @PostMapping("/api/confirmar")
+    @ResponseBody
+    public ResponseEntity<Evento> confirmarEvento(@RequestBody EventoConfirmarRequest dto) {
+        Evento evento = dto.toEvento();
+        return ResponseEntity.ok(eventoService.save(evento));
+    }
+
+    // ── API: Consulta IA sobre el calendario ─────────────────
+    @PostMapping("/api/consulta")
+    @ResponseBody
+    public ResponseEntity<String> consultaIa(@RequestBody String pregunta) {
+        return ResponseEntity.ok(eventoIaService.consultar(pregunta));
+    }
+
+    // ── API: Eventos del mes (para renderizado dinámico) ─────
+    @GetMapping("/api/mes")
+    @ResponseBody
+    public ResponseEntity<List<Evento>> eventosMes(
+            @RequestParam int year, @RequestParam int month) {
+        return ResponseEntity.ok(eventoService.findByMes(year, month));
+    }
+
+    // ── API: Eliminar evento individual (desde el grid) ───────
+    @DeleteMapping("/api/eliminar/{id}")
+    @ResponseBody
+    public ResponseEntity<Void> eliminarApi(@PathVariable UUID id) {
+        eventoService.delete(id);
+        return ResponseEntity.ok().build();
+    }
+
+    // ── API: Vaciar todos los eventos (solo para pruebas) ─────
+    @DeleteMapping("/api/vaciar")
+    @ResponseBody
+    public ResponseEntity<Void> vaciarEventos() {
+        eventoService.deleteAll();
+        return ResponseEntity.ok().build();
+    }
+
+    // ── API: Confirmar evento recurrente → genera todos los eventos ──
+    @PostMapping("/api/confirmar-recurrente")
+    @ResponseBody
+    public ResponseEntity<List<Evento>> confirmarRecurrente(
+            @RequestBody EventoConfirmarRequest dto) {
+        return ResponseEntity.ok(eventoService.saveRecurrente(dto));
+    }
+
+    @GetMapping("/api/pendientes-datos")
+    @ResponseBody
+    public List<Evento> getPendientesDatos() {
+        return eventoService.getEventosPendientesDatos();
+    }
+
+}
+────────────────────────────────────────────────
+📄 src/main/java/com/miempresa/fasi/calendario/EventoConfirmarRequest.java (52 líneas)
+────────────────────────────────────────────────
+package com.miempresa.fasi.calendario;
+
+import lombok.Data;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.HashMap;
+import java.util.Map;
+
+@Data
+public class EventoConfirmarRequest {
+    private Evento.TipoEvento tipo;
+    private String            titulo;
+    private LocalDate         fechaInicio;
+    private LocalDate         fechaFin;
+    private LocalTime         horaInicio;
+    private LocalTime         horaFin;
+    private boolean           todoDia;
+    private String            lugar;
+    private String            personasRelacionadas;
+    private String            descripcion;
+    private Integer           recordatorioMinutos;
+    private Map<String, Object> datosExtra;
+    private String            textoOriginalVoz;
+
+    public Evento toEvento() {
+        Evento e = new Evento();
+        e.setTipo(tipo != null ? tipo : Evento.TipoEvento.OTRO);
+        e.setTitulo(titulo);
+        e.setFechaInicio(fechaInicio);
+        e.setFechaFin(fechaFin);
+        e.setHoraInicio(horaInicio);
+        e.setHoraFin(horaFin);
+        e.setTodoDia(todoDia);
+        e.setLugar(lugar);
+        e.setPersonasRelacionadas(personasRelacionadas);
+        e.setDescripcion(descripcion);
+        e.setRecordatorioMinutos(recordatorioMinutos);
+        e.setTextoOriginalVoz(textoOriginalVoz);
+
+        Map<String, Object> extra = datosExtra != null
+            ? new HashMap<>(datosExtra)
+            : new HashMap<>();
+
+        // Si no tiene hora y no es todo el día → marcar pendiente
+        if (horaInicio == null && !todoDia) {
+            extra.put("pendienteHora", true);
+        }
+
+        e.setDatosExtra(extra.isEmpty() ? null : extra);
+        return e;
+    }
+}
+
+────────────────────────────────────────────────
+📄 src/main/java/com/miempresa/fasi/calendario/EventoIaRequest.java (11 líneas)
+────────────────────────────────────────────────
+package com.miempresa.fasi.calendario;
+
+import jakarta.validation.constraints.NotBlank;
+import lombok.Data;
+
+@Data
+public class EventoIaRequest {
+    @NotBlank
+    private String texto;          // texto dictado por voz o escrito
+    private String fechaContexto;  // fecha actual (para resolver "el jueves")
+}
+
+────────────────────────────────────────────────
+📄 src/main/java/com/miempresa/fasi/calendario/EventoIaResponse.java (39 líneas)
+────────────────────────────────────────────────
+package com.miempresa.fasi.calendario;
+
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import java.util.List;
+
+@Data
+@NoArgsConstructor
+public class EventoIaResponse {
+    private boolean      exito;
+    private String       mensajeError;
+    private Evento       eventoPreview;
+    private List<Evento> eventosPreview;
+    private long         tiempoMs;
+
+    // Constructor evento único — compatibilidad hacia atrás
+    public EventoIaResponse(boolean exito, String mensajeError,
+                             Evento eventoPreview, long tiempoMs) {
+        this.exito         = exito;
+        this.mensajeError  = mensajeError;
+        this.eventoPreview = eventoPreview;
+        this.tiempoMs      = tiempoMs;
+    }
+
+    // Constructor múltiples eventos
+    public EventoIaResponse(boolean exito, String mensajeError,
+                             Evento eventoPreview, List<Evento> eventosPreview,
+                             long tiempoMs) {
+        this.exito          = exito;
+        this.mensajeError   = mensajeError;
+        this.eventoPreview  = eventoPreview;
+        this.eventosPreview = eventosPreview;
+        this.tiempoMs       = tiempoMs;
+    }
+
+    public boolean isMultiple() {
+        return eventosPreview != null && !eventosPreview.isEmpty();
+    }
+}
+
+────────────────────────────────────────────────
+📄 src/main/java/com/miempresa/fasi/common/ApiResponse.java (34 líneas)
+────────────────────────────────────────────────
+package com.miempresa.fasi.common;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import lombok.Getter;
+
+import java.time.LocalDateTime;
+
+@Getter
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class ApiResponse<T> {
+
+    private final boolean success;
+    private final String  message;
+    private final T       data;
+    private final LocalDateTime timestamp = LocalDateTime.now();
+
+    private ApiResponse(boolean success, String message, T data) {
+        this.success = success;
+        this.message = message;
+        this.data    = data;
+    }
+
+    public static <T> ApiResponse<T> ok(T data) {
+        return new ApiResponse<>(true, null, data);
+    }
+
+    public static <T> ApiResponse<T> ok(String message, T data) {
+        return new ApiResponse<>(true, message, data);
+    }
+
+    public static <T> ApiResponse<T> error(String message) {
+        return new ApiResponse<>(false, message, null);
+    }
+}
+
+────────────────────────────────────────────────
+📄 src/main/java/com/miempresa/fasi/common/GlobalExceptionHandler.java (46 líneas)
+────────────────────────────────────────────────
+package com.miempresa.fasi.common;
+
+import jakarta.persistence.EntityNotFoundException;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.stream.Collectors;
+
+@Slf4j
+@ControllerAdvice
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    @ResponseBody
+    public void noResource() { }
+
+    @ExceptionHandler(EntityNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public String notFound(EntityNotFoundException ex, Model model) {
+        model.addAttribute("error", ex.getMessage());
+        return "error/404";
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ResponseBody
+    public ApiResponse<Void> validationError(MethodArgumentNotValidException ex) {
+        String msg = ex.getBindingResult().getFieldErrors().stream()
+            .map(e -> e.getField() + ": " + e.getDefaultMessage())
+            .collect(Collectors.joining(", "));
+        return ApiResponse.error(msg);
+    }
+
+    @ExceptionHandler(Exception.class)
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    public String genericError(Exception ex, Model model) {
+        log.error("Error no controlado", ex);
+        model.addAttribute("error", "Error interno del servidor");
+        return "error/500";
+    }
+}
+
+────────────────────────────────────────────────
+📄 src/main/java/com/miempresa/fasi/config/SecurityConfig.java (60 líneas)
+────────────────────────────────────────────────
+package com.miempresa.fasi.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.security.web.SecurityFilterChain;
+
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/css/**", "/js/**", "/images/**", "/webjars/**").permitAll()
+                .requestMatchers("/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                .anyRequest().authenticated()
+            )
+            .csrf(csrf -> csrf
+                .ignoringRequestMatchers(
+                    "/ia/api/**",
+                    "/calendario/api/**",
+                    "/contexto/prompt",
+                    "/contexto/guardar"
+                )
+            )
+            .formLogin(form -> form
+                .loginPage("/login")
+                .defaultSuccessUrl("/calendario", true)
+                .permitAll()
+            )
+            .logout(logout -> logout
+                .logoutSuccessUrl("/login?logout")
+                .permitAll()
+            );
+        return http.build();
+    }
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public UserDetailsService userDetailsService(PasswordEncoder encoder) {
+        var admin = User.builder()
+            .username("admin")
+            .password(encoder.encode("admin"))
+            .roles("ADMIN")
+            .build();
+        return new InMemoryUserDetailsManager(admin);
+    }
+}
+
+────────────────────────────────────────────────
+📄 src/main/java/com/miempresa/fasi/contexto/ContextoController.java (69 líneas)
+────────────────────────────────────────────────
+package com.miempresa.fasi.contexto;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
+
+@Controller
+@RequestMapping("/contexto")
+@RequiredArgsConstructor
+public class ContextoController {
+
+    private final ContextoFamiliarRepository repo;
+    private final MareasSolarService          mareasService;
+
+    // ── Vista carga de datos ─────────────────────────────────
+    @GetMapping
+    public String vista(Model model) {
+        model.addAttribute("entradas", repo.findAllByOrderByClaveAsc());
+        return "contexto/index";
+    }
+
+    // ── Guardar entrada de contexto ──────────────────────────
+    @PostMapping("/guardar")
+    public String guardar(@RequestParam String clave,
+                          @RequestParam String valor,
+                          @RequestParam(required = false) String descripcion) {
+        ContextoFamiliar cf = repo.findByClave(clave)
+            .orElse(ContextoFamiliar.builder().clave(clave).build());
+        cf.setValor(valor);
+        if (descripcion != null && !descripcion.isBlank()) cf.setDescripcion(descripcion);
+        repo.save(cf);
+        return "redirect:/contexto";
+    }
+
+    // ── Guardar texto libre (prompt IA) ──────────────────────
+    @PostMapping("/prompt")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> procesarPrompt(@RequestBody Map<String, String> body) {
+        String texto = body.getOrDefault("texto", "").trim();
+        if (texto.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("ok", false, "msg", "Texto vacío"));
+        }
+        // Guardar como entrada de contexto libre con clave auto-generada
+        String clave = "prompt_" + System.currentTimeMillis();
+        repo.save(ContextoFamiliar.builder()
+            .clave(clave)
+            .valor(texto)
+            .descripcion("Entrada libre de contexto familiar")
+            .build());
+        return ResponseEntity.ok(Map.of("ok", true, "msg", "Contexto guardado correctamente"));
+    }
+
+    // ── API: datos contextuales para footer ──────────────────
+    @GetMapping("/api/datos")
+    @ResponseBody
+    public ResponseEntity<Map<String, String>> getDatos(
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha) {
+        if (fecha == null) fecha = LocalDate.now();
+        return ResponseEntity.ok(mareasService.getDatosContextuales(fecha));
+    }
+}
+
+────────────────────────────────────────────────
+📄 src/main/java/com/miempresa/fasi/ia/IaChatRequest.java (11 líneas)
+────────────────────────────────────────────────
+package com.miempresa.fasi.ia;
+
+import jakarta.validation.constraints.NotBlank;
+import lombok.Data;
+
+@Data
+public class IaChatRequest {
+    @NotBlank
+    private String mensaje;
+    private String modulo; // opcional: "contabilidad", "tareas", "agenda", "general"
+}
+
+────────────────────────────────────────────────
+📄 src/main/java/com/miempresa/fasi/ia/IaChatResponse.java (14 líneas)
+────────────────────────────────────────────────
+package com.miempresa.fasi.ia;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class IaChatResponse {
+    private String respuesta;
+    private String modulo;
+    private long   tiempoMs;
+}
+
+────────────────────────────────────────────────
+📄 src/main/java/com/miempresa/fasi/ia/IaController.java (46 líneas)
+────────────────────────────────────────────────
+package com.miempresa.fasi.ia;
+
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.*;
+
+@Controller
+@RequestMapping("/ia")
+@RequiredArgsConstructor
+public class IaController {
+
+    private final IaService service;
+
+    /** Pantalla principal del chat */
+    @GetMapping
+    public String chat(Model model) {
+        model.addAttribute("request",  new IaChatRequest());
+        model.addAttribute("historial", service.historial());
+        return "ia/chat";
+    }
+
+    /**
+     * Endpoint HTMX — devuelve solo el fragmento HTML de la respuesta.
+     * El formulario hace POST aquí y HTMX inserta el resultado en el chat.
+     */
+    @PostMapping("/chat")
+    public String chatHtmx(@Valid @ModelAttribute IaChatRequest request,
+                            Model model) {
+        IaChatResponse resp = service.chat(request);
+        model.addAttribute("pregunta",  request.getMensaje());
+        model.addAttribute("respuesta", resp.getRespuesta());
+        model.addAttribute("tiempoMs",  resp.getTiempoMs());
+        model.addAttribute("modulo",    resp.getModulo());
+        return "ia/chat :: #respuesta-fragment";
+    }
+
+    /** API REST para uso externo / testing */
+    @PostMapping("/api/chat")
+    @ResponseBody
+    public ResponseEntity<IaChatResponse> apiChat(@Valid @RequestBody IaChatRequest request) {
+        return ResponseEntity.ok(service.chat(request));
+    }
+}

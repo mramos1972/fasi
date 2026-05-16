@@ -15,8 +15,8 @@ public class IaContextBuilder {
 
     private final EventoRepository eventoRepo;
 
-    private static final int MAX_EVENTOS_CTX  = 15;
-    private static final int RANGO_DIAS_BASE  = 30;
+    private static final int MAX_EVENTOS_CTX   = 15;
+    private static final int RANGO_DIAS_BASE   = 30;
     private static final int RANGO_DIAS_AMPLIO = 90;
 
     // ════════════════════════════════════════════════════════
@@ -75,35 +75,68 @@ public class IaContextBuilder {
             ctx.append("Sin eventos en el rango consultado.\n");
         } else {
             ctx.append("Eventos:\n");
-            eventos.forEach(e -> ctx
-                .append("- ").append(e.getFechaInicio())
-                .append(e.getHoraInicio() != null ? " " + e.getHoraInicio() : "")
-                .append(" | ").append(e.getTipo().getLabel())
-                .append(" | ").append(e.getTitulo())
-                .append(e.getLugar() != null ? " (" + e.getLugar() + ")" : "")
-                .append(e.getPersonasRelacionadas() != null
-                        ? " · " + e.getPersonasRelacionadas() : "")
-                .append("\n"));
+            eventos.forEach(e -> {
+                ctx.append("- ").append(e.getFechaInicio())
+                   .append(e.getHoraInicio() != null ? " " + e.getHoraInicio() : "")
+                   .append(" | ").append(e.getTipo().getLabel())
+                   .append(" | ").append(e.getTitulo())
+                   .append(e.getLugar() != null ? " (" + e.getLugar() + ")" : "")
+                   .append(e.getPersonasRelacionadas() != null
+                           ? " · " + e.getPersonasRelacionadas() : "");
+                if (e.getEtiquetas() != null && !e.getEtiquetas().isEmpty()) {
+                    ctx.append(" #").append(String.join(" #", e.getEtiquetas()));
+                }
+                ctx.append("\n");
+            });
         }
         return ctx.toString();
     }
 
     // ════════════════════════════════════════════════════════
     //  Heurísticas — sin IA, en Java puro
+    //  Mapeo a las 10 macrocategorías
     // ════════════════════════════════════════════════════════
     private Evento.TipoEvento detectarTipo(String p) {
+        // SALUD
         if (p.contains("médic") || p.contains("medic") || p.contains("doctor")
-         || p.contains("hospital") || p.contains("consulta"))   return Evento.TipoEvento.CITA_MEDICA;
-        if (p.contains("cumple"))                               return Evento.TipoEvento.CUMPLEANOS;
-        if (p.contains("tutor"))                                return Evento.TipoEvento.TUTORIA;
-        if (p.contains("claustro"))                             return Evento.TipoEvento.CLAUSTRO;
-        if (p.contains("curso") || p.contains("formaci"))       return Evento.TipoEvento.CURSO;
-        if (p.contains("extraescolar"))                         return Evento.TipoEvento.EXTRAESCOLAR;
-        if (p.contains("viaj"))                                 return Evento.TipoEvento.VIAJE;
-        if (p.contains("vacacion"))                             return Evento.TipoEvento.VACACIONES;
-        if (p.contains("comida") || p.contains("comer")
-         || p.contains("cena") || p.contains("almuerz"))        return Evento.TipoEvento.COMIDA;
-        if (p.contains("compra"))                               return Evento.TipoEvento.COMPRAS;
+         || p.contains("hospital") || p.contains("consulta") || p.contains("dentist")
+         || p.contains("fisio") || p.contains("gym") || p.contains("gimnasio")
+         || p.contains("terap"))                                  return Evento.TipoEvento.SALUD;
+
+        // SOCIAL
+        if (p.contains("cumple") || p.contains("comida") || p.contains("comer")
+         || p.contains("cena") || p.contains("almuerz") || p.contains("fiesta")
+         || p.contains("quedad") || p.contains("amig"))           return Evento.TipoEvento.SOCIAL;
+
+        // TRABAJO
+        if (p.contains("claustro") || p.contains("reuni")
+         || p.contains("trabajo") || p.contains("oficina"))       return Evento.TipoEvento.TRABAJO;
+
+        // APRENDIZAJE
+        if (p.contains("curso") || p.contains("formaci") || p.contains("clase")
+         || p.contains("estudi") || p.contains("taller")
+         || p.contains("charla"))                                 return Evento.TipoEvento.APRENDIZAJE;
+
+        // FAMILIA
+        if (p.contains("tutor") || p.contains("extraescolar")
+         || p.contains("hijo") || p.contains("hija")
+         || p.contains("niñ") || p.contains("famil")
+         || p.contains("colegio"))                                return Evento.TipoEvento.FAMILIA;
+
+        // VIAJE
+        if (p.contains("viaj") || p.contains("vacacion") || p.contains("vuelo")
+         || p.contains("hotel"))                                  return Evento.TipoEvento.VIAJE;
+
+        // GESTION
+        if (p.contains("compra") || p.contains("trámit") || p.contains("tramit")
+         || p.contains("banco") || p.contains("recad")
+         || p.contains("itv"))                                    return Evento.TipoEvento.GESTION;
+
+        // OCIO
+        if (p.contains("hobby") || p.contains("deporte") || p.contains("museo")
+         || p.contains("cine") || p.contains("teatro")
+         || p.contains("concierto"))                              return Evento.TipoEvento.OCIO;
+
         return null;
     }
 
