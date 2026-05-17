@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: layout(~{::title}, ~{::section})}">
+<head><title>Evento — FASI</title></head>
+<body>
+<section>
+  <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6"
+      th:text="${evento.id == null} ? '📅 Nuevo evento' : '✏️ Editar evento'"></h2>
+
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-8 max-w-2xl">
+    <form th:action="${evento.id == null} ? @{/calendario} : @{/calendario/{id}(id=${evento.id})}"
+          th:object="${evento}" method="post" class="space-y-5">
+
+      <!-- Tipo de evento -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tipo de evento *</label>
+        <select th:field="*{tipo}" required
+                class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2
+                       bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+          <option value="">— Selecciona un tipo —</option>
+          <option th:each="t : ${tipos}" th:value="${t}"
+                  th:text="${t.emoji + ' ' + t.label}"></option>
+        </select>
+      </div>
+
+      <!-- Título -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Título *</label>
+        <input type="text" th:field="*{titulo}" required
+               class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2
+                      bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
+                      focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
+      </div>
+
+      <!-- Fechas y horas -->
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fecha inicio *</label>
+          <input type="date" name="fechaInicio"
+                 th:value="${evento.fechaInicio != null ? #temporals.format(evento.fechaInicio, 'yyyy-MM-dd') : ''}"
+                 required
+                 class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2
+                        bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"/>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fecha fin</label>
+          <input type="date" name="fechaFin"
+                 th:value="${evento.fechaFin != null ? #temporals.format(evento.fechaFin, 'yyyy-MM-dd') : ''}"
+                 class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2
+                        bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"/>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Hora inicio</label>
+          <input type="time" th:field="*{horaInicio}"
+                 class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2
+                        bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"/>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Hora fin</label>
+          <input type="time" th:field="*{horaFin}"
+                 class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2
+                        bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"/>
+        </div>
+      </div>
+
+      <!-- Todo el día -->
+      <div class="flex items-center gap-2">
+        <input type="checkbox" th:field="*{todoDia}" id="todoDia"
+               class="w-4 h-4 rounded border-gray-300 text-indigo-600"/>
+        <label for="todoDia" class="text-sm text-gray-700 dark:text-gray-300">Todo el día</label>
+      </div>
+
+      <!-- Lugar y personas -->
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Lugar</label>
+          <input type="text" th:field="*{lugar}"
+                 placeholder="Ej: Jerez, consultas externas"
+                 class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2
+                        bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
+                        focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Personas</label>
+          <input type="text" th:field="*{personasRelacionadas}"
+                 placeholder="Ej: Rocío, Alberto"
+                 class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2
+                        bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
+                        focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
+        </div>
+      </div>
+      <!-- Etiquetas libres -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          Etiquetas
+          <span class="text-xs text-gray-400 font-normal">(separadas por comas)</span>
+        </label>
+        <input type="text" name="etiquetasRaw"
+               th:value="${evento.etiquetas != null ? #strings.setJoin(evento.etiquetas, ', ') : ''}"
+               placeholder="Ej: cumpleanos, amigos, jara"
+               class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
+        <p class="text-xs text-gray-400 mt-1">
+          Las etiquetas ayudan a filtrar y buscar.
+        </p>
+      </div>
+
+
+
+      <!-- Descripción -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Notas / Descripción</label>
+        <textarea th:field="*{descripcion}" rows="3"
+                  class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2
+                         bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
+                         focus:outline-none focus:ring-2 focus:ring-indigo-400"></textarea>
+      </div>
+
+      <!-- Recordatorio -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Recordatorio</label>
+        <select th:field="*{recordatorioMinutos}"
+                class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2
+                       bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+          <option value="">Sin recordatorio</option>
+          <option value="15">15 minutos antes</option>
+          <option value="30">30 minutos antes</option>
+          <option value="60">1 hora antes</option>
+          <option value="1440">1 día antes</option>
+          <option value="10080">1 semana antes</option>
+        </select>
+      </div>
+
+      <!-- Botones -->
+      <div class="flex gap-3 pt-2">
+        <button type="submit"
+                class="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition font-semibold">
+          Guardar evento
+        </button>
+        <a th:href="@{/calendario}"
+           class="px-6 py-2 rounded-lg border border-gray-300 hover:bg-gray-50
+                  dark:hover:bg-gray-700 transition">
+          Cancelar
+        </a>
+        <!-- Botón eliminar (solo en edición) -->
+        <form th:if="${evento.id != null}"
+              th:action="@{/calendario/{id}/eliminar(id=${evento.id})}" method="post"
+              class="ml-auto" onsubmit="return confirm('¿Eliminar este evento?')">
+          <button type="submit"
+                  class="px-6 py-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition">
+            Eliminar
+          </button>
+        </form>
+      </div>
+
+    </form>
+  </div>
+</section>
+</body>
+</html>

@@ -191,4 +191,11 @@ public class CalendarioController {
                 .collect(java.util.stream.Collectors.toCollection(java.util.HashSet::new));
     }
 
+
+    // ── API: Obtener todas las etiquetas existentes ──────────
+    @GetMapping("/api/etiquetas")
+    @ResponseBody
+    public ResponseEntity<List<String>> getEtiquetas() {
+        return ResponseEntity.ok(eventoService.getAllEtiquetas());
+    }
 }

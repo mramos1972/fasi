@@ -74,6 +74,7 @@ public class EventoService {
         e.setDescripcion(datos.getDescripcion());
         e.setRecordatorioMinutos(datos.getRecordatorioMinutos());
         e.setDatosExtra(datos.getDatosExtra());
+        e.setEtiquetas(datos.getEtiquetas());
         return repo.save(e);
     }
 
@@ -183,4 +184,13 @@ public class EventoService {
         return repo.findEventosPendientesDatos();
     }
 
+
+    // ── Obtener todas las etiquetas únicas usadas ────────────
+    public List<String> getAllEtiquetas() {
+        return repo.findAll().stream()
+                .flatMap(e -> e.getEtiquetas().stream())
+                .distinct()
+                .sorted()
+                .toList();
+    }
 }
