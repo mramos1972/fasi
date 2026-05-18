@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# FASI — Generador de contexto para IA
+# FASI — Generador de contexto para IA (VERSIÓN MEJORADA)
 # Uso: ./get-context.sh
 # Genera: CONTEXT_IA_YYYYMMDD_HHMM.txt + git commit automático
 # ============================================================
@@ -8,10 +8,7 @@
 TIMESTAMP=$(date '+%Y%m%d_%H%M')
 OUTPUT="CONTEXT_IA_${TIMESTAMP}.txt"
 
-echo "======================================================"
-echo "  FASI — CONTEXTO COMPLETO PARA IA"
-echo "  Generado: $(date '+%Y-%m-%d %H:%M')"
-echo "======================================================"
+echo "📄 Generando $OUTPUT ..."
 
 generate_context() {
   echo "======================================================"
@@ -35,9 +32,21 @@ generate_context() {
     pom.xml \
     Dockerfile \
     Jenkinsfile \
+    dev-redeploy.sh \
     src/main/resources/application.properties \
     src/main/resources/application-dev.properties \
     src/main/resources/application-prod.properties
+  do
+    echo ""
+    echo "--- $f ---"
+    cat "$f" 2>/dev/null || echo "[NO EXISTE]"
+  done
+
+  echo ""
+  echo "══ ARCHIVOS ESTÁTICOS (PWA) ══"
+  for f in \
+    src/main/resources/static/manifest.json \
+    src/main/resources/static/sw.js
   do
     echo ""
     echo "--- $f ---"
@@ -73,7 +82,6 @@ generate_context() {
 }
 
 # ── Generar fichero ───────────────────────────────────────────
-echo "📄 Generando $OUTPUT ..."
 generate_context > "$OUTPUT"
 
 if [ $? -ne 0 ]; then
@@ -81,13 +89,13 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-echo "✅ Fichero generado: $OUTPUT"
+echo "✅ Fichero generado: $OUTPUT ($(du -h "$OUTPUT" | cut -f1))"
 
 # ── Git commit automático ─────────────────────────────────────
 if git rev-parse --git-dir > /dev/null 2>&1; then
   echo "📦 Haciendo git add y commit..."
   git add .
-  git commit -m "context: snapshot $TIMESTAMP"
+  git commit -m "context: snapshot $TIMESTAMP" 2>/dev/null
   if [ $? -eq 0 ]; then
     echo "✅ Commit realizado: context: snapshot $TIMESTAMP"
   else
