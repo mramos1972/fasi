@@ -334,24 +334,21 @@
       document.getElementById('ia-spinner').style.display     = 'flex';
       document.getElementById('preview-evento').style.display = 'none';
       try {
-        var resp = await fetch('/calendario/api/interpretar', {
+        var resp = await fetch('/calendario/api/interpretar-preview', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ texto: texto, fechaContexto: HOY })
+          body: JSON.stringify({ texto: texto })
         });
         var data = await resp.json();
-        if (data.exito) {
-          if (data.multiple && data.eventosPreview && data.eventosPreview.length > 0) {
-            eventoActual = data.eventosPreview;
-            mostrarPreviewMultiple(data.eventosPreview);
-          } else if (data.eventoPreview) {
-            eventoActual = data.eventoPreview;
-            mostrarPreview(data.eventoPreview);
-          } else {
-            alert('La IA no devolvió ningún evento.');
-          }
+        
+        // Nueva API devuelve: { evento, esRecurrente, totalEventos, primerasFechas, descripcionPreview }
+        if (data.evento) {
+          eventoActual = data.evento;
+          eventoActual.esRecurrente = data.esRecurrente;
+          eventoActual.descripcionPreview = data.descripcionPreview;
+          mostrarPreview(eventoActual, data);
         } else {
-          alert('Error: ' + (data.mensajeError || 'No se pudo interpretar'));
+          alert('La IA no pudo interpretar el texto.');
         }
       } catch (err) {
         alert('Error: ' + err.message);
@@ -360,7 +357,8 @@
       }
     }
 
-    function mostrarPreview(evento) {
+    // NUEVA FUNCIÓN: mostrarPreview actualizada
+    function mostrarPreview(evento, dataExtra) { {
       var avisoHora = (!evento.horaInicio && !evento.todoDia)
         ? '<div class="mt-2 p-2 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 rounded text-xs text-yellow-700 dark:text-yellow-300">⚠️ No se especificó hora — se guardará como <strong>pendiente de hora</strong></div>'
         : '';

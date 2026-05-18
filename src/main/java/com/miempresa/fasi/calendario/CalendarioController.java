@@ -14,14 +14,20 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.UUID;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.Optional;
 
 @Controller
 @RequestMapping("/calendario")
 @RequiredArgsConstructor
 public class CalendarioController {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(CalendarioController.class);
+
     private final EventoService    eventoService;
     private final EventoIaService  eventoIaService;
+    private final EventoParserRegex regexParser;
 
     // ── Vista principal (mes actual por defecto) ─────────────
     @GetMapping
@@ -197,5 +203,91 @@ public class CalendarioController {
     @ResponseBody
     public ResponseEntity<List<String>> getEtiquetas() {
         return ResponseEntity.ok(eventoService.getAllEtiquetas());
+    }
+// Añadir al final de CalendarioController.java, antes del último }
+
+    @PostMapping("/api/interpretar-preview")
+    @ResponseBody
+    public Map<String, Object> interpretarConPreview(@RequestBody Map<String, String> body) {
+        String texto = body.get("texto");
+        LocalDate hoy = LocalDate.now();
+
+        log.info("📥 Interpretando con preview: {}", texto);
+
+        // Intentar REGEX primero
+        Optional<EventoParserRegex.EventoParseResult> resultadoRegex = regexParser.parse(texto, hoy);
+        
+        Evento evento;
+        boolean esRecurrente;
+        
+        if (resultadoRegex.isPresent()) {
+            log.info("⚡ REGEX exitoso");
+            evento = resultadoRegex.get().evento();
+            esRecurrente = resultadoRegex.get().esRecurrente();
+        } else {
+            log.info("⏩ REGEX no coincide → usando IA");
+            EventoIaRequest request = new EventoIaRequest();
+            request.setTexto(texto);
+            request.setFechaContexto(hoy.toString());
+            
+            EventoIaResponse iaResponse = eventoIaService.interpretar(request);
+            
+            if (!iaResponse.isExito() || iaResponse.getEventoPreview() == null) {
+                Map<String, Object> errorResponse = new HashMap<>();
+                errorResponse.put("error", iaResponse.getMensajeError());
+                return errorResponse;
+            }
+            
+            evento = iaResponse.getEventoPreview();
+            esRecurrente = evento.getDatosExtra() != null && 
+                          Boolean.TRUE.equals(evento.getDatosExtra().get("recurrente"));
+        }
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("evento", evento);
+        response.put("esRecurrente", esRecurrente);
+
+        // Si es recurrente, generar vista previa de fechas
+        if (esRecurrente) {
+            List<LocalDate> fechas = eventoService.generarVistaPrevia(evento);
+            response.put("totalEventos", fechas.size());
+            response.put("primerasFechas", fechas.stream().limit(10).toList());
+
+            // Generar descripción legible
+            String descripcion = generarDescripcionPreview(fechas);
+            response.put("descripcionPreview", descripcion);
+        }
+
+        return response;
+    }
+    
+    private String generarDescripcionPreview(List<LocalDate> fechas) {
+        if (fechas.isEmpty()) return "No se generarán eventos";
+        
+        StringBuilder sb = new StringBuilder();
+        sb.append("Se crearán ").append(fechas.size()).append(" eventos:\n");
+        
+        int limite = Math.min(10, fechas.size());
+        for (int i = 0; i < limite; i++) {
+            LocalDate fecha = fechas.get(i);
+            String diaSemana = switch (fecha.getDayOfWeek()) {
+                case MONDAY -> "Lunes";
+                case TUESDAY -> "Martes";
+                case WEDNESDAY -> "Miércoles";
+                case THURSDAY -> "Jueves";
+                case FRIDAY -> "Viernes";
+                case SATURDAY -> "Sábado";
+                case SUNDAY -> "Domingo";
+            };
+            sb.append("• ").append(diaSemana).append(" ")
+              .append(String.format("%02d/%02d/%d", fecha.getDayOfMonth(), fecha.getMonthValue(), fecha.getYear()))
+              .append("\n");
+        }
+        
+        if (fechas.size() > 10) {
+            sb.append("... y ").append(fechas.size() - 10).append(" más");
+        }
+        
+        return sb.toString();
     }
 }

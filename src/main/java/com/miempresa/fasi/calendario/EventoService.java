@@ -8,8 +8,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.DayOfWeek;
+import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Slf4j
@@ -20,7 +22,9 @@ public class EventoService {
 
     private final EventoRepository repo;
 
-    // ── Lectura ──────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════
+    //  LECTURA
+    // ══════════════════════════════════════════════════════════
 
     public List<Evento> findByMes(int year, int month) {
         LocalDate inicio = LocalDate.of(year, month, 1);
@@ -52,7 +56,21 @@ public class EventoService {
             .orElseThrow(() -> new EntityNotFoundException("Evento no encontrado: " + id));
     }
 
-    // ── Escritura ────────────────────────────────────────────
+    public List<String> getAllEtiquetas() {
+        return repo.findAllOptimizado().stream()
+                .flatMap(e -> e.getEtiquetas().stream())
+                .distinct()
+                .sorted()
+                .toList();
+    }
+
+    public List<Evento> getEventosPendientesDatos() {
+        return repo.findEventosPendientesDatos();
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  ESCRITURA
+    // ══════════════════════════════════════════════════════════
 
     @Transactional
     public Evento save(Evento e) {
@@ -88,61 +106,98 @@ public class EventoService {
         repo.deleteAll();
     }
 
+    // ══════════════════════════════════════════════════════════
+    //  RECURRENCIA (CORREGIDO Y MEJORADO)
+    // ══════════════════════════════════════════════════════════
+
     /**
-     * Genera todos los eventos de un patrón recurrente.
-     * Soporta: WEEKLY (semanal), DAILY (diario), MONTHLY (mensual).
-     * Respeta fechaFin como límite si está definida; si no, usa 3 meses desde fechaInicio.
-     * Para WEEKLY: avanza de 7 en 7 días desde la fechaInicio (que ya debe ser el día correcto).
+     * Genera vista previa de eventos recurrentes SIN guardarlos.
+     * Devuelve las primeras 10 fechas para mostrar al usuario.
+     */
+    public List<LocalDate> generarVistaPrevia(Evento plantilla) {
+        Map<String, Object> datosExtra = plantilla.getDatosExtra();
+        if (datosExtra == null || !datosExtra.containsKey("patron")) {
+            return List.of(plantilla.getFechaInicio());
+        }
+
+        String patron = datosExtra.get("patron").toString().toUpperCase();
+        LocalDate inicio = plantilla.getFechaInicio();
+        LocalDate fin = plantilla.getFechaFin() != null ? plantilla.getFechaFin() : inicio.plusMonths(3);
+
+        List<LocalDate> fechas = new ArrayList<>();
+        
+        switch (patron) {
+            case "WEEKLY" -> {
+                List<DayOfWeek> dias = extraerDiasSemana(datosExtra);
+                LocalDate cursor = inicio.withDayOfMonth(1); // Empezar desde el día 1 del mes
+                while (!cursor.isAfter(fin) && fechas.size() < 100) {
+                    if (dias.contains(cursor.getDayOfWeek())) {
+                        fechas.add(cursor);
+                    }
+                    cursor = cursor.plusDays(1);
+                }
+            }
+            case "DAILY" -> {
+                LocalDate cursor = inicio;
+                while (!cursor.isAfter(fin) && fechas.size() < 100) {
+                    fechas.add(cursor);
+                    cursor = cursor.plusDays(1);
+                }
+            }
+            case "MONTHLY" -> {
+                int diaDelMes = (int) datosExtra.getOrDefault("diaDelMes", inicio.getDayOfMonth());
+                LocalDate cursor = inicio;
+                while (!cursor.isAfter(fin) && fechas.size() < 100) {
+                    int diaAjustado = Math.min(diaDelMes, cursor.lengthOfMonth());
+                    fechas.add(cursor.withDayOfMonth(diaAjustado));
+                    cursor = cursor.plusMonths(1);
+                }
+            }
+            case "MONTHLY_RELATIVE" -> {
+                String diaSemana = datosExtra.get("diaSemana").toString();
+                int posicion = (int) datosExtra.get("posicion");
+                DayOfWeek dow = parseDiaSemana(diaSemana);
+                LocalDate cursor = inicio;
+                while (!cursor.isAfter(fin) && fechas.size() < 100) {
+                    LocalDate fecha = calcularDiaRelativo(cursor, dow, posicion);
+                    if (fecha != null && !fecha.isAfter(fin)) {
+                        fechas.add(fecha);
+                    }
+                    cursor = cursor.plusMonths(1);
+                }
+            }
+            case "YEARLY" -> {
+                int diaDelMes = (int) datosExtra.get("diaDelMes");
+                int mes = (int) datosExtra.get("mes");
+                LocalDate cursor = LocalDate.of(inicio.getYear(), mes, diaDelMes);
+                if (cursor.isBefore(inicio)) cursor = cursor.plusYears(1);
+                while (!cursor.isAfter(fin) && fechas.size() < 10) {
+                    fechas.add(cursor);
+                    cursor = cursor.plusYears(1);
+                }
+            }
+            default -> fechas.add(inicio);
+        }
+
+        log.info("📅 Vista previa: {} eventos generados para patrón {}", fechas.size(), patron);
+        return fechas;
+    }
+
+    /**
+     * Guarda eventos recurrentes en la BD.
      */
     @Transactional
     public List<Evento> saveRecurrente(EventoConfirmarRequest dto) {
         Evento base = dto.toEvento();
-
-        // Leer patrón de datosExtra
-        String patron = "WEEKLY";
-        if (base.getDatosExtra() != null && base.getDatosExtra().containsKey("patron")) {
-            patron = base.getDatosExtra().get("patron").toString().toUpperCase();
-        }
-
-        LocalDate inicio = base.getFechaInicio();
-
-        // Límite: usar fechaFin si existe (la IA la calcula), si no 3 meses
-        LocalDate limite;
-        if (base.getFechaFin() != null && base.getFechaFin().isAfter(inicio)) {
-            limite = base.getFechaFin();
-        } else {
-            limite = inicio.plusMonths(3);
-        }
-
-        // Para WEEKLY: avanzar inicio hasta el primer día de semana correcto
-        // La IA puede equivocarse en la fecha exacta — el backend la corrige
-        if ("WEEKLY".equals(patron) && base.getDatosExtra() != null
-                && base.getDatosExtra().containsKey("diaSemana")) {
-            String diaNombre = base.getDatosExtra().get("diaSemana").toString().toUpperCase();
-            DayOfWeek diaObjetivo = parseDiaSemana(diaNombre);
-            if (diaObjetivo != null) {
-                // Retroceder al inicio del mes para no perder el primer día
-                inicio = inicio.withDayOfMonth(1);
-                // Avanzar hasta el primer día correcto del mes
-                while (inicio.getDayOfWeek() != diaObjetivo) {
-                    inicio = inicio.plusDays(1);
-                }
-            }
-        }
-
+        List<LocalDate> fechas = generarVistaPrevia(base);
+        
         List<Evento> generados = new ArrayList<>();
-        LocalDate cursor = inicio;
-
-        // Guardar fechaFin original para no confundirla con la del rango recurrente
-        // (en eventos recurrentes fechaFin del base es el límite de la serie, no del evento)
-        LocalDate fechaFinEvento = null; // cada evento individual no tiene fechaFin (es de 1 día)
-
-        while (!cursor.isAfter(limite)) {
+        for (LocalDate fecha : fechas) {
             Evento e = new Evento();
             e.setTipo(base.getTipo());
             e.setTitulo(base.getTitulo());
-            e.setFechaInicio(cursor);
-            e.setFechaFin(fechaFinEvento);   // cada ocurrencia es 1 día
+            e.setFechaInicio(fecha);
+            e.setFechaFin(null); // Cada evento individual es de 1 día
             e.setHoraInicio(base.getHoraInicio());
             e.setHoraFin(base.getHoraFin());
             e.setTodoDia(base.isTodoDia());
@@ -151,48 +206,68 @@ public class EventoService {
             e.setDescripcion(base.getDescripcion());
             e.setRecordatorioMinutos(base.getRecordatorioMinutos());
             e.setDatosExtra(base.getDatosExtra());
+            e.setEtiquetas(base.getEtiquetas());
             e.setTextoOriginalVoz(base.getTextoOriginalVoz());
             generados.add(repo.save(e));
-
-            cursor = switch (patron) {
-                case "DAILY"   -> cursor.plusDays(1);
-                case "MONTHLY" -> cursor.plusMonths(1);
-                default        -> cursor.plusWeeks(1); // WEEKLY: exactamente +7 días
-            };
         }
 
-        log.info("Recurrencia {}: {} eventos generados entre {} y {}",
-                patron, generados.size(), inicio, limite);
+        log.info("✅ Guardados {} eventos recurrentes", generados.size());
         return generados;
     }
 
-    /** Convierte nombre de día en español o inglés a DayOfWeek */
+    // ══════════════════════════════════════════════════════════
+    //  UTILIDADES PRIVADAS
+    // ══════════════════════════════════════════════════════════
+
+    private List<DayOfWeek> extraerDiasSemana(Map<String, Object> datosExtra) {
+        List<DayOfWeek> dias = new ArrayList<>();
+        
+        // Intentar leer "diasSemana" (plural, lista)
+        if (datosExtra.containsKey("diasSemana")) {
+            Object obj = datosExtra.get("diasSemana");
+            if (obj instanceof List<?> lista) {
+                for (Object item : lista) {
+                    DayOfWeek dow = parseDiaSemana(item.toString());
+                    if (dow != null) dias.add(dow);
+                }
+            }
+        }
+        
+        // Fallback: leer "diaSemana" (singular, string)
+        if (dias.isEmpty() && datosExtra.containsKey("diaSemana")) {
+            DayOfWeek dow = parseDiaSemana(datosExtra.get("diaSemana").toString());
+            if (dow != null) dias.add(dow);
+        }
+        
+        return dias;
+    }
+
     private DayOfWeek parseDiaSemana(String nombre) {
         return switch (nombre.toUpperCase().trim()) {
             case "LUNES",     "MONDAY"    -> DayOfWeek.MONDAY;
             case "MARTES",    "TUESDAY"   -> DayOfWeek.TUESDAY;
-            case "MIERCOLES", "WEDNESDAY" -> DayOfWeek.WEDNESDAY;
+            case "MIERCOLES", "MIÉRCOLES", "WEDNESDAY" -> DayOfWeek.WEDNESDAY;
             case "JUEVES",    "THURSDAY"  -> DayOfWeek.THURSDAY;
             case "VIERNES",   "FRIDAY"    -> DayOfWeek.FRIDAY;
-            case "SABADO",    "SATURDAY"  -> DayOfWeek.SATURDAY;
+            case "SABADO",    "SÁBADO",   "SATURDAY"  -> DayOfWeek.SATURDAY;
             case "DOMINGO",   "SUNDAY"    -> DayOfWeek.SUNDAY;
             default -> null;
         };
     }
 
-    public List<Evento> getEventosPendientesDatos() {
-        return repo.findEventosPendientesDatos();
+    private LocalDate calcularDiaRelativo(LocalDate mes, DayOfWeek dow, int posicion) {
+        if (posicion == -1) {
+            // Último día de la semana del mes
+            return mes.with(TemporalAdjusters.lastInMonth(dow));
+        } else {
+            // Primer, segundo, tercer, cuarto día de la semana
+            return mes.with(TemporalAdjusters.dayOfWeekInMonth(posicion, dow));
+        }
     }
 
-
-    // ── Obtener todas las etiquetas únicas usadas ────────────
-    public List<String> getAllEtiquetas() {
-        return repo.findAllOptimizado().stream()
-                .flatMap(e -> e.getEtiquetas().stream())
-                .distinct()
-                .sorted()
-                .toList();
-    }
+    // ══════════════════════════════════════════════════════════
+    //  MÉTODO LEGACY (mantener por compatibilidad)
+    // ══════════════════════════════════════════════════════════
 
     @Transactional
     public void saveRecurrente(Evento plantilla, String patron) {

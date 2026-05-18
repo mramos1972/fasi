@@ -11,21 +11,82 @@ import java.time.temporal.TemporalAdjusters;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Component
 public class EventoParserRegex {
 
     // ══════════════════════════════════════════════════════════
-    //  PATRONES REGEX — EVENTOS RECURRENTES (CORREGIDOS)
+    //  PATRONES REGEX — RECURRENCIA SEMANAL
     // ══════════════════════════════════════════════════════════
 
-    // Patrón maestro: captura TODOS los elementos de recurrencia
-    private static final Pattern RECURRENCIA_MASTER = Pattern.compile(
-        "(?i)(todos|cada)\\s+los?\\s+(lunes|martes|miércoles|miercoles|jueves|viernes|sábados?|sabados?|domingos?|días?|dias?)(?:\\s+y\\s+(lunes|martes|miércoles|miercoles|jueves|viernes|sábados?|sabados?|domingos?))?(?:\\s+de\\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre))?"
+    // "todos los lunes y martes de junio"
+    private static final Pattern REC_SEMANAL_MULTIPLE_MES = Pattern.compile(
+        "(?i)(todos|cada)\\s+los?\\s+(lunes|martes|miércoles|miercoles|jueves|viernes|sábados?|sabados?|domingos?)\\s+y\\s+(lunes|martes|miércoles|miercoles|jueves|viernes|sábados?|sabados?|domingos?)\\s+de\\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)"
     );
 
-    // Patrones simples para eventos únicos
+    // "todos los lunes de junio"
+    private static final Pattern REC_SEMANAL_MES = Pattern.compile(
+        "(?i)(todos|cada)\\s+los?\\s+(lunes|martes|miércoles|miercoles|jueves|viernes|sábados?|sabados?|domingos?)\\s+de\\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)"
+    );
+
+    // "todos los lunes y viernes"
+    private static final Pattern REC_SEMANAL_MULTIPLE = Pattern.compile(
+        "(?i)(todos|cada)\\s+los?\\s+(lunes|martes|miércoles|miercoles|jueves|viernes|sábados?|sabados?|domingos?)\\s+y\\s+(lunes|martes|miércoles|miercoles|jueves|viernes|sábados?|sabados?|domingos?)"
+    );
+
+    // "todos los lunes"
+    private static final Pattern REC_SEMANAL_SIMPLE = Pattern.compile(
+        "(?i)(todos|cada)\\s+los?\\s+(lunes|martes|miércoles|miercoles|jueves|viernes|sábados?|sabados?|domingos?)"
+    );
+
+    // "todos los días de julio"
+    private static final Pattern REC_DIARIA_MES = Pattern.compile(
+        "(?i)(todos|cada)\\s+los?\\s+días?\\s+de\\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)"
+    );
+
+    // ══════════════════════════════════════════════════════════
+    //  PATRONES REGEX — RECURRENCIA MENSUAL
+    // ══════════════════════════════════════════════════════════
+
+    // "el día 15 de cada mes"
+    private static final Pattern REC_MENSUAL_SIMPLE = Pattern.compile(
+        "(?i)(?:el\\s+día\\s+|todos\\s+los\\s+días?\\s+)(\\d{1,2})\\s+de\\s+cada\\s+mes"
+    );
+
+    // "el día 10 de enero, marzo y mayo" o "el día 5 de junio, julio y agosto"
+    private static final Pattern REC_MENSUAL_LISTA = Pattern.compile(
+        "(?i)(?:el\\s+día\\s+|todos\\s+los\\s+días?\\s+)(\\d{1,2})\\s+de\\s+([\\wáéíóúñ,\\s]+)"
+    );
+
+    // "cada primer lunes de cada mes" o "cada último viernes de marzo"
+    private static final Pattern REC_MENSUAL_RELATIVO = Pattern.compile(
+        "(?i)cada\\s+(primer|primero|segundo|tercer|tercero|cuarto|último|ultima|ultimo)\\s+(lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo)\\s+de\\s+(?:cada\\s+mes|(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre))"
+    );
+
+    // ══════════════════════════════════════════════════════════
+    //  PATRONES REGEX — RECURRENCIA ANUAL
+    // ══════════════════════════════════════════════════════════
+
+    // "todos los 25 de diciembre de cada año" o "el 15 de marzo de cada año"
+    private static final Pattern REC_ANUAL = Pattern.compile(
+        "(?i)(?:todos\\s+los\\s+|el\\s+)(\\d{1,2})\\s+de\\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\\s+de\\s+cada\\s+año"
+    );
+
+    // ══════════════════════════════════════════════════════════
+    //  PATRONES REGEX — RECURRENCIA CON RANGO
+    // ══════════════════════════════════════════════════════════
+
+    // "los lunes desde junio hasta agosto" o "todos los días desde el 1 de junio hasta el 30 de agosto"
+    private static final Pattern REC_RANGO_MESES = Pattern.compile(
+        "(?i)(?:los\\s+)?(lunes|martes|miércoles|miercoles|jueves|viernes|sábados?|sabados?|domingos?|días?)\\s+desde\\s+(?:el\\s+\\d{1,2}\\s+de\\s+)?(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\\s+hasta\\s+(?:el\\s+\\d{1,2}\\s+de\\s+)?(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)"
+    );
+
+    // ══════════════════════════════════════════════════════════
+    //  PATRONES REGEX — EVENTOS ÚNICOS
+    // ══════════════════════════════════════════════════════════
+
     private static final Pattern CUMPLE = Pattern.compile(
         "(?i)cumple(?:años)?\\s+(?:de\\s+)?([\\wáéíóúñ]+)\\s+el\\s+(\\d{1,2})\\s+de\\s+(\\w+)"
     );
@@ -41,6 +102,10 @@ public class EventoParserRegex {
     private static final Pattern CLAUSTRO = Pattern.compile(
         "(?i)claustro\\s+el\\s+(lunes|martes|miércoles|miercoles|jueves|viernes)(?:\\s+a\\s+las\\s+(\\d{1,2}):(\\d{2}))?"
     );
+
+    // ══════════════════════════════════════════════════════════
+    //  MAPAS DE CONVERSIÓN
+    // ══════════════════════════════════════════════════════════
 
     private static final Map<String, Integer> MESES = Map.ofEntries(
         Map.entry("enero", 1), Map.entry("febrero", 2), Map.entry("marzo", 3),
@@ -61,16 +126,44 @@ public class EventoParserRegex {
         "domingo", DayOfWeek.SUNDAY
     );
 
+    private static final Map<String, Integer> POSICIONES = Map.of(
+        "primer", 1, "primero", 1,
+        "segundo", 2,
+        "tercer", 3, "tercero", 3,
+        "cuarto", 4,
+        "último", -1, "ultima", -1, "ultimo", -1
+    );
+
+    // ══════════════════════════════════════════════════════════
+    //  MÉTODO PRINCIPAL
+    // ══════════════════════════════════════════════════════════
+
     public Optional<EventoParseResult> parse(String texto, LocalDate fechaContexto) {
         if (texto == null || texto.isBlank()) return Optional.empty();
         String textoNorm = texto.trim().toLowerCase();
         log.debug("🔍 Parseando: {}", textoNorm);
 
-        // ── PRIORIDAD 1: Eventos recurrentes ──────────────────
-        Optional<EventoParseResult> resultado = parseRecurrencia(textoNorm, fechaContexto);
-        if (resultado.isPresent()) return resultado;
+        Optional<EventoParseResult> resultado;
 
-        // ── PRIORIDAD 2: Eventos únicos ───────────────────────
+        // ── PRIORIDAD 1: Recurrencia Semanal ──────────────────
+        if ((resultado = parseRecSemanalMultipleMes(textoNorm, fechaContexto)).isPresent()) return resultado;
+        if ((resultado = parseRecSemanalMes(textoNorm, fechaContexto)).isPresent()) return resultado;
+        if ((resultado = parseRecSemanalMultiple(textoNorm, fechaContexto)).isPresent()) return resultado;
+        if ((resultado = parseRecSemanalSimple(textoNorm, fechaContexto)).isPresent()) return resultado;
+        if ((resultado = parseRecDiariaMes(textoNorm, fechaContexto)).isPresent()) return resultado;
+
+        // ── PRIORIDAD 2: Recurrencia Mensual ──────────────────
+        if ((resultado = parseRecMensualRelativo(textoNorm, fechaContexto)).isPresent()) return resultado;
+        if ((resultado = parseRecMensualLista(textoNorm, fechaContexto)).isPresent()) return resultado;
+        if ((resultado = parseRecMensualSimple(textoNorm, fechaContexto)).isPresent()) return resultado;
+
+        // ── PRIORIDAD 3: Recurrencia Anual ────────────────────
+        if ((resultado = parseRecAnual(textoNorm, fechaContexto)).isPresent()) return resultado;
+
+        // ── PRIORIDAD 4: Recurrencia con Rango ────────────────
+        if ((resultado = parseRecRangoMeses(textoNorm, fechaContexto)).isPresent()) return resultado;
+
+        // ── PRIORIDAD 5: Eventos Únicos ───────────────────────
         if ((resultado = parseCumpleanos(textoNorm, fechaContexto)).isPresent()) return resultado;
         if ((resultado = parseCitaMedica(textoNorm, fechaContexto)).isPresent()) return resultado;
         if ((resultado = parseTutoria(textoNorm, fechaContexto)).isPresent()) return resultado;
@@ -81,52 +174,182 @@ public class EventoParserRegex {
     }
 
     // ══════════════════════════════════════════════════════════
-    //  PARSER UNIFICADO DE RECURRENCIA
+    //  PARSERS DE RECURRENCIA SEMANAL
     // ══════════════════════════════════════════════════════════
 
-    private Optional<EventoParseResult> parseRecurrencia(String texto, LocalDate hoy) {
-        Matcher m = RECURRENCIA_MASTER.matcher(texto);
+    private Optional<EventoParseResult> parseRecSemanalMultipleMes(String texto, LocalDate hoy) {
+        Matcher m = REC_SEMANAL_MULTIPLE_MES.matcher(texto);
         if (!m.find()) return Optional.empty();
 
-        String cuantificador = m.group(1); // todos|cada
-        String dia1Nombre = m.group(2).toLowerCase().replaceAll("s$", "");
-        String dia2Nombre = m.group(3) != null ? m.group(3).toLowerCase().replaceAll("s$", "") : null;
-        String mesNombre = m.group(4) != null ? m.group(4).toLowerCase() : null;
+        String dia1 = normalizarDia(m.group(2));
+        String dia2 = normalizarDia(m.group(3));
+        String mes = m.group(4).toLowerCase();
 
-        log.debug("✅ REGEX MATCH: cuantificador={}, dia1={}, dia2={}, mes={}", 
-                  cuantificador, dia1Nombre, dia2Nombre, mesNombre);
+        DayOfWeek dow1 = DIAS_SEMANA.get(dia1);
+        DayOfWeek dow2 = DIAS_SEMANA.get(dia2);
+        Integer mesNum = MESES.get(mes);
 
-        // ── Caso: "todos los días" ────────────────────────────
-        if (dia1Nombre.equals("día") || dia1Nombre.equals("dia")) {
-            Integer mes = mesNombre != null ? MESES.get(mesNombre) : null;
-            log.info("✅ REGEX: Recurrente diario" + (mes != null ? " de " + mesNombre : ""));
-            return crearRecurrenteDiario(texto, hoy, mes);
-        }
+        if (dow1 == null || dow2 == null || mesNum == null) return Optional.empty();
 
-        // ── Caso: días de la semana ───────────────────────────
-        DayOfWeek dia1 = DIAS_SEMANA.get(dia1Nombre);
-        if (dia1 == null) {
-            log.warn("⚠️ Día no reconocido: {}", dia1Nombre);
-            return Optional.empty();
-        }
+        log.info("✅ REGEX: Recurrente semanal múltiple ({} y {}) de {}", dia1, dia2, mes);
+        return crearRecurrenteSemanal(texto, hoy, List.of(dow1, dow2), mesNum);
+    }
 
-        List<DayOfWeek> dias = new ArrayList<>();
-        dias.add(dia1);
+    private Optional<EventoParseResult> parseRecSemanalMes(String texto, LocalDate hoy) {
+        Matcher m = REC_SEMANAL_MES.matcher(texto);
+        if (!m.find()) return Optional.empty();
 
-        if (dia2Nombre != null) {
-            DayOfWeek dia2 = DIAS_SEMANA.get(dia2Nombre);
-            if (dia2 != null) {
-                dias.add(dia2);
-                log.info("✅ REGEX: Recurrente semanal múltiple ({} y {})" + 
-                         (mesNombre != null ? " de " + mesNombre : ""), dia1Nombre, dia2Nombre);
-            }
-        } else {
-            log.info("✅ REGEX: Recurrente semanal simple ({})" + 
-                     (mesNombre != null ? " de " + mesNombre : ""), dia1Nombre);
-        }
+        String dia = normalizarDia(m.group(2));
+        String mes = m.group(3).toLowerCase();
 
-        Integer mes = mesNombre != null ? MESES.get(mesNombre) : null;
-        return crearRecurrenteSemanal(texto, hoy, dias, mes);
+        DayOfWeek dow = DIAS_SEMANA.get(dia);
+        Integer mesNum = MESES.get(mes);
+
+        if (dow == null || mesNum == null) return Optional.empty();
+
+        log.info("✅ REGEX: Recurrente semanal ({}) de {}", dia, mes);
+        return crearRecurrenteSemanal(texto, hoy, List.of(dow), mesNum);
+    }
+
+    private Optional<EventoParseResult> parseRecSemanalMultiple(String texto, LocalDate hoy) {
+        Matcher m = REC_SEMANAL_MULTIPLE.matcher(texto);
+        if (!m.find()) return Optional.empty();
+
+        String dia1 = normalizarDia(m.group(2));
+        String dia2 = normalizarDia(m.group(3));
+
+        DayOfWeek dow1 = DIAS_SEMANA.get(dia1);
+        DayOfWeek dow2 = DIAS_SEMANA.get(dia2);
+
+        if (dow1 == null || dow2 == null) return Optional.empty();
+
+        log.info("✅ REGEX: Recurrente semanal múltiple ({} y {})", dia1, dia2);
+        return crearRecurrenteSemanal(texto, hoy, List.of(dow1, dow2), null);
+    }
+
+    private Optional<EventoParseResult> parseRecSemanalSimple(String texto, LocalDate hoy) {
+        Matcher m = REC_SEMANAL_SIMPLE.matcher(texto);
+        if (!m.find()) return Optional.empty();
+
+        String dia = normalizarDia(m.group(2));
+        DayOfWeek dow = DIAS_SEMANA.get(dia);
+
+        if (dow == null) return Optional.empty();
+
+        log.info("✅ REGEX: Recurrente semanal ({})", dia);
+        return crearRecurrenteSemanal(texto, hoy, List.of(dow), null);
+    }
+
+    private Optional<EventoParseResult> parseRecDiariaMes(String texto, LocalDate hoy) {
+        Matcher m = REC_DIARIA_MES.matcher(texto);
+        if (!m.find()) return Optional.empty();
+
+        String mes = m.group(2).toLowerCase();
+        Integer mesNum = MESES.get(mes);
+
+        if (mesNum == null) return Optional.empty();
+
+        log.info("✅ REGEX: Recurrente diaria de {}", mes);
+        return crearRecurrenteDiaria(texto, hoy, mesNum);
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  PARSERS DE RECURRENCIA MENSUAL
+    // ══════════════════════════════════════════════════════════
+
+    private Optional<EventoParseResult> parseRecMensualSimple(String texto, LocalDate hoy) {
+        Matcher m = REC_MENSUAL_SIMPLE.matcher(texto);
+        if (!m.find()) return Optional.empty();
+
+        int dia = Integer.parseInt(m.group(1));
+
+        log.info("✅ REGEX: Recurrente mensual (día {})", dia);
+        return crearRecurrenteMensual(texto, hoy, dia, null);
+    }
+
+    private Optional<EventoParseResult> parseRecMensualLista(String texto, LocalDate hoy) {
+        Matcher m = REC_MENSUAL_LISTA.matcher(texto);
+        if (!m.find()) return Optional.empty();
+
+        int dia = Integer.parseInt(m.group(1));
+        String mesesStr = m.group(2).toLowerCase();
+
+        // Extraer meses: "enero, marzo y mayo" → [1, 3, 5]
+        List<Integer> meses = Arrays.stream(mesesStr.split("[,\\sy]+"))
+            .map(String::trim)
+            .filter(s -> !s.isEmpty() && !s.equals("y"))
+            .map(MESES::get)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toList());
+
+        if (meses.isEmpty()) return Optional.empty();
+
+        log.info("✅ REGEX: Recurrente mensual (día {} de meses {})", dia, meses);
+        return crearRecurrenteMensual(texto, hoy, dia, meses);
+    }
+
+    private Optional<EventoParseResult> parseRecMensualRelativo(String texto, LocalDate hoy) {
+        Matcher m = REC_MENSUAL_RELATIVO.matcher(texto);
+        if (!m.find()) return Optional.empty();
+
+        String posStr = m.group(1).toLowerCase();
+        String diaStr = m.group(2).toLowerCase();
+        String mesStr = m.group(3) != null ? m.group(3).toLowerCase() : null;
+
+        Integer posicion = POSICIONES.get(posStr);
+        DayOfWeek dow = DIAS_SEMANA.get(diaStr);
+        Integer mes = mesStr != null ? MESES.get(mesStr) : null;
+
+        if (posicion == null || dow == null) return Optional.empty();
+
+        log.info("✅ REGEX: Recurrente mensual relativo ({} {} de {})", 
+                 posStr, diaStr, mes != null ? mesStr : "cada mes");
+        return crearRecurrenteMensualRelativo(texto, hoy, posicion, dow, mes);
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  PARSERS DE RECURRENCIA ANUAL
+    // ══════════════════════════════════════════════════════════
+
+    private Optional<EventoParseResult> parseRecAnual(String texto, LocalDate hoy) {
+        Matcher m = REC_ANUAL.matcher(texto);
+        if (!m.find()) return Optional.empty();
+
+        int dia = Integer.parseInt(m.group(1));
+        String mes = m.group(2).toLowerCase();
+        Integer mesNum = MESES.get(mes);
+
+        if (mesNum == null) return Optional.empty();
+
+        log.info("✅ REGEX: Recurrente anual ({} de {})", dia, mes);
+        return crearRecurrenteAnual(texto, hoy, dia, mesNum);
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  PARSERS DE RECURRENCIA CON RANGO
+    // ══════════════════════════════════════════════════════════
+
+    private Optional<EventoParseResult> parseRecRangoMeses(String texto, LocalDate hoy) {
+        Matcher m = REC_RANGO_MESES.matcher(texto);
+        if (!m.find()) return Optional.empty();
+
+        String diaStr = normalizarDia(m.group(1));
+        String mesInicio = m.group(2).toLowerCase();
+        String mesFin = m.group(3).toLowerCase();
+
+        Integer mesInicioNum = MESES.get(mesInicio);
+        Integer mesFinNum = MESES.get(mesFin);
+
+        if (mesInicioNum == null || mesFinNum == null) return Optional.empty();
+
+        boolean esDiario = diaStr.equals("día") || diaStr.equals("dia");
+        DayOfWeek dow = esDiario ? null : DIAS_SEMANA.get(diaStr);
+
+        if (!esDiario && dow == null) return Optional.empty();
+
+        log.info("✅ REGEX: Recurrente {} desde {} hasta {}", 
+                 esDiario ? "diaria" : diaStr, mesInicio, mesFin);
+        return crearRecurrenteRango(texto, hoy, dow, mesInicioNum, mesFinNum);
     }
 
     // ══════════════════════════════════════════════════════════
@@ -169,12 +392,10 @@ public class EventoParserRegex {
         datosExtra.put("diasSemana", dias.stream().map(DayOfWeek::name).toList());
         plantilla.setDatosExtra(datosExtra);
 
-        log.info("✅ REGEX: Evento recurrente semanal → {} (días: {}, lugar: {})", 
-                 titulo, dias, lugar);
         return Optional.of(new EventoParseResult(plantilla, true));
     }
 
-    private Optional<EventoParseResult> crearRecurrenteDiario(String texto, LocalDate hoy, Integer mes) {
+    private Optional<EventoParseResult> crearRecurrenteDiaria(String texto, LocalDate hoy, Integer mes) {
         LocalTime hora = extraerHora(texto);
         String lugar = extraerLugar(texto);
 
@@ -206,12 +427,167 @@ public class EventoParserRegex {
         datosExtra.put("patron", "DAILY");
         plantilla.setDatosExtra(datosExtra);
 
-        log.info("✅ REGEX: Evento recurrente diario → {}", titulo);
+        return Optional.of(new EventoParseResult(plantilla, true));
+    }
+
+    private Optional<EventoParseResult> crearRecurrenteMensual(String texto, LocalDate hoy, 
+                                                                 int dia, List<Integer> meses) {
+        LocalTime hora = extraerHora(texto);
+        String lugar = extraerLugar(texto);
+
+        LocalDate inicio, fin;
+        if (meses != null && !meses.isEmpty()) {
+            // Primer mes de la lista
+            int primerMes = meses.get(0);
+            YearMonth ym = YearMonth.of(hoy.getYear(), primerMes);
+            if (ym.isBefore(YearMonth.from(hoy))) ym = ym.plusYears(1);
+            inicio = ym.atDay(Math.min(dia, ym.lengthOfMonth()));
+
+            // Último mes de la lista
+            int ultimoMes = meses.get(meses.size() - 1);
+            YearMonth ymFin = YearMonth.of(inicio.getYear(), ultimoMes);
+            fin = ymFin.atDay(Math.min(dia, ymFin.lengthOfMonth()));
+        } else {
+            inicio = hoy;
+            fin = hoy.plusYears(1);
+        }
+
+        Evento.TipoEvento tipo = inferirTipo(texto);
+        String titulo = inferirTitulo(texto, tipo, null);
+
+        Evento plantilla = new Evento();
+        plantilla.setTipo(tipo);
+        plantilla.setTitulo(titulo);
+        plantilla.setFechaInicio(inicio);
+        plantilla.setFechaFin(fin);
+        plantilla.setHoraInicio(hora);
+        plantilla.setLugar(lugar);
+        plantilla.setTextoOriginalVoz(texto);
+
+        Map<String, Object> datosExtra = new HashMap<>();
+        datosExtra.put("recurrente", true);
+        datosExtra.put("patron", "MONTHLY");
+        datosExtra.put("diaDelMes", dia);
+        if (meses != null) {
+            datosExtra.put("meses", meses);
+        }
+        plantilla.setDatosExtra(datosExtra);
+
+        return Optional.of(new EventoParseResult(plantilla, true));
+    }
+
+    private Optional<EventoParseResult> crearRecurrenteMensualRelativo(String texto, LocalDate hoy, 
+                                                                         int posicion, DayOfWeek dow, Integer mes) {
+        LocalTime hora = extraerHora(texto);
+        String lugar = extraerLugar(texto);
+
+        LocalDate inicio, fin;
+        if (mes != null) {
+            YearMonth ym = YearMonth.of(hoy.getYear(), mes);
+            if (ym.isBefore(YearMonth.from(hoy))) ym = ym.plusYears(1);
+            inicio = ym.atDay(1);
+            fin = ym.atEndOfMonth();
+        } else {
+            inicio = hoy;
+            fin = hoy.plusYears(1);
+        }
+
+        Evento.TipoEvento tipo = inferirTipo(texto);
+        String titulo = inferirTitulo(texto, tipo, null);
+
+        Evento plantilla = new Evento();
+        plantilla.setTipo(tipo);
+        plantilla.setTitulo(titulo);
+        plantilla.setFechaInicio(inicio);
+        plantilla.setFechaFin(fin);
+        plantilla.setHoraInicio(hora);
+        plantilla.setLugar(lugar);
+        plantilla.setTextoOriginalVoz(texto);
+
+        Map<String, Object> datosExtra = new HashMap<>();
+        datosExtra.put("recurrente", true);
+        datosExtra.put("patron", "MONTHLY_RELATIVE");
+        datosExtra.put("diaSemana", dow.name());
+        datosExtra.put("posicion", posicion);
+        if (mes != null) {
+            datosExtra.put("mes", mes);
+        }
+        plantilla.setDatosExtra(datosExtra);
+
+        return Optional.of(new EventoParseResult(plantilla, true));
+    }
+
+    private Optional<EventoParseResult> crearRecurrenteAnual(String texto, LocalDate hoy, int dia, int mes) {
+        LocalTime hora = extraerHora(texto);
+        String lugar = extraerLugar(texto);
+
+        LocalDate inicio = LocalDate.of(hoy.getYear(), mes, dia);
+        if (inicio.isBefore(hoy)) inicio = inicio.plusYears(1);
+        LocalDate fin = inicio.plusYears(5);
+
+        Evento.TipoEvento tipo = inferirTipo(texto);
+        String titulo = inferirTitulo(texto, tipo, null);
+
+        Evento plantilla = new Evento();
+        plantilla.setTipo(tipo);
+        plantilla.setTitulo(titulo);
+        plantilla.setFechaInicio(inicio);
+        plantilla.setFechaFin(fin);
+        plantilla.setHoraInicio(hora);
+        plantilla.setLugar(lugar);
+        plantilla.setTextoOriginalVoz(texto);
+
+        Map<String, Object> datosExtra = new HashMap<>();
+        datosExtra.put("recurrente", true);
+        datosExtra.put("patron", "YEARLY");
+        datosExtra.put("diaDelMes", dia);
+        datosExtra.put("mes", mes);
+        plantilla.setDatosExtra(datosExtra);
+
+        return Optional.of(new EventoParseResult(plantilla, true));
+    }
+
+    private Optional<EventoParseResult> crearRecurrenteRango(String texto, LocalDate hoy, 
+                                                               DayOfWeek dow, int mesInicio, int mesFin) {
+        LocalTime hora = extraerHora(texto);
+        String lugar = extraerLugar(texto);
+
+        YearMonth ymInicio = YearMonth.of(hoy.getYear(), mesInicio);
+        if (ymInicio.isBefore(YearMonth.from(hoy))) ymInicio = ymInicio.plusYears(1);
+        
+        YearMonth ymFin = YearMonth.of(ymInicio.getYear(), mesFin);
+        if (mesFin < mesInicio) ymFin = ymFin.plusYears(1);
+
+        LocalDate inicio = ymInicio.atDay(1);
+        LocalDate fin = ymFin.atEndOfMonth();
+
+        Evento.TipoEvento tipo = inferirTipo(texto);
+        String titulo = inferirTitulo(texto, tipo, null);
+
+        Evento plantilla = new Evento();
+        plantilla.setTipo(tipo);
+        plantilla.setTitulo(titulo);
+        plantilla.setFechaInicio(inicio);
+        plantilla.setFechaFin(fin);
+        plantilla.setHoraInicio(hora);
+        plantilla.setLugar(lugar);
+        plantilla.setTextoOriginalVoz(texto);
+
+        Map<String, Object> datosExtra = new HashMap<>();
+        datosExtra.put("recurrente", true);
+        if (dow != null) {
+            datosExtra.put("patron", "WEEKLY");
+            datosExtra.put("diasSemana", List.of(dow.name()));
+        } else {
+            datosExtra.put("patron", "DAILY");
+        }
+        plantilla.setDatosExtra(datosExtra);
+
         return Optional.of(new EventoParseResult(plantilla, true));
     }
 
     // ══════════════════════════════════════════════════════════
-    //  PARSERS DE EVENTOS ÚNICOS
+    //  PARSERS DE EVENTOS ÚNICOS (igual que antes)
     // ══════════════════════════════════════════════════════════
 
     private Optional<EventoParseResult> parseCumpleanos(String texto, LocalDate hoy) {
@@ -313,8 +689,25 @@ public class EventoParserRegex {
     }
 
     // ══════════════════════════════════════════════════════════
-    //  EXTRACTORES INTELIGENTES
+    //  UTILIDADES
     // ══════════════════════════════════════════════════════════
+
+    private String normalizarDia(String dia) {
+        if (dia == null) return null;
+        dia = dia.toLowerCase().trim();
+        
+        Set<String> diasSingulares = Set.of("lunes", "martes", "miércoles", "miercoles", "jueves", "viernes");
+        
+        if (diasSingulares.contains(dia)) {
+            return dia;
+        }
+        
+        if (dia.endsWith("s")) {
+            return dia.substring(0, dia.length() - 1);
+        }
+        
+        return dia;
+    }
 
     private LocalTime extraerHora(String texto) {
         Pattern p = Pattern.compile("(?i)a\\s+las\\s+(\\d{1,2})(?::(\\d{2}))?");
