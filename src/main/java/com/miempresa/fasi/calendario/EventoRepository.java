@@ -53,4 +53,19 @@ public interface EventoRepository extends JpaRepository<Evento, UUID> {
     @Query(value = "SELECT * FROM eventos WHERE datos_extra @> '{\"pendienteHora\": true}'::jsonb OR datos_extra @> '{\"pendienteLugar\": true}'::jsonb ORDER BY fecha_inicio ASC", nativeQuery = true)
     List<Evento> findEventosPendientesDatos();
 
+    // ── Consultas optimizadas con JOIN FETCH para evitar N+1 ──
+    @Query("SELECT DISTINCT e FROM Evento e LEFT JOIN FETCH e.etiquetas " +
+           "WHERE e.fechaInicio <= :fin AND (e.fechaFin IS NULL OR e.fechaFin >= :inicio) " +
+           "ORDER BY e.fechaInicio, e.horaInicio")
+    List<Evento> findByRangoOptimizado(@Param("inicio") LocalDate inicio, 
+                                        @Param("fin") LocalDate fin);
+
+    @Query("SELECT DISTINCT e FROM Evento e LEFT JOIN FETCH e.etiquetas " +
+           "WHERE e.fechaInicio >= :desde " +
+           "ORDER BY e.fechaInicio, e.horaInicio")
+    List<Evento> findProximosOptimizado(@Param("desde") LocalDate desde);
+
+    @Query("SELECT DISTINCT e FROM Evento e LEFT JOIN FETCH e.etiquetas " +
+           "ORDER BY e.fechaInicio, e.horaInicio")
+    List<Evento> findAllOptimizado();
 }

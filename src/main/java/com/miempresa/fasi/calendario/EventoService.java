@@ -43,7 +43,7 @@ public class EventoService {
     }
 
     public List<Evento> findProximos(int limite) {
-        return repo.findProximos(LocalDate.now())
+        return repo.findProximosOptimizado(LocalDate.now())
                    .stream().limit(limite).toList();
     }
 
@@ -187,10 +187,43 @@ public class EventoService {
 
     // ── Obtener todas las etiquetas únicas usadas ────────────
     public List<String> getAllEtiquetas() {
-        return repo.findAll().stream()
+        return repo.findAllOptimizado().stream()
                 .flatMap(e -> e.getEtiquetas().stream())
                 .distinct()
                 .sorted()
                 .toList();
+    }
+
+    @Transactional
+    public void saveRecurrente(Evento plantilla, String patron) {
+        LocalDate inicio = plantilla.getFechaInicio();
+        LocalDate fin = plantilla.getFechaFin() != null ? plantilla.getFechaFin() : inicio.plusMonths(3);
+        log.info("🔄 Generando eventos recurrentes: {} desde {} hasta {}", patron, inicio, fin);
+        LocalDate actual = inicio;
+        int count = 0;
+        while (!actual.isAfter(fin) && count < 100) {
+            Evento copia = new Evento();
+            copia.setTipo(plantilla.getTipo());
+            copia.setTitulo(plantilla.getTitulo());
+            copia.setFechaInicio(actual);
+            copia.setFechaFin(actual);
+            copia.setHoraInicio(plantilla.getHoraInicio());
+            copia.setHoraFin(plantilla.getHoraFin());
+            copia.setTodoDia(plantilla.isTodoDia());
+            copia.setLugar(plantilla.getLugar());
+            copia.setPersonasRelacionadas(plantilla.getPersonasRelacionadas());
+            copia.setDescripcion(plantilla.getDescripcion());
+            copia.setRecordatorioMinutos(plantilla.getRecordatorioMinutos());
+            copia.setEtiquetas(plantilla.getEtiquetas());
+            repo.save(copia);
+            count++;
+            switch (patron.toUpperCase()) {
+                case "DAILY": actual = actual.plusDays(1); break;
+                case "WEEKLY": actual = actual.plusWeeks(1); break;
+                case "MONTHLY": actual = actual.plusMonths(1); break;
+                default: log.warn("Patrón desconocido: {}", patron); return;
+            }
+        }
+        log.info("✅ Creados {} eventos recurrentes", count);
     }
 }

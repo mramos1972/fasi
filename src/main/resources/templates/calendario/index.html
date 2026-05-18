@@ -192,7 +192,6 @@
           var titulo = e.titulo || '';
 
           var pill = document.createElement('div');
-          // Badge pendiente de datos
           var tienePendiente = e.datosExtra && e.datosExtra.pendienteHora;
           pill.className = 'text-xs px-1 py-0.5 rounded mb-0.5 text-white font-medium flex items-center gap-0.5 group truncate';
           pill.style.backgroundColor = color;
@@ -279,7 +278,7 @@
       recognition.lang           = 'es-ES';
       recognition.continuous     = true;
       recognition.interimResults = true;
-            var textoAcumulado = '';
+      var textoAcumulado = '';
       recognition.onresult = function(event) {
         var interino = '';
         for (var i = event.resultIndex; i < event.results.length; i++) {
@@ -289,22 +288,18 @@
             interino += event.results[i][0].transcript;
           }
         }
-        // Mostrar texto final acumulado + interino en gris
         var textarea = document.getElementById('voz-texto');
         textarea.value = textoAcumulado + interino;
-      };
-      recognition.onend = function() {
-        // Si estaba grabando, reiniciar para mantener continuo
-        if (grabando) {
-          try { recognition.start(); } catch(e) {}
-        }
       };
       recognition.onend = function() {
         if (grabando) setTimeout(function() { try { recognition.start(); } catch(e){} }, 300);
       };
       recognition.onerror = function(e) {
         console.error('Speech error:', e.error);
-        if (e.error === 'no-speech') return;
+        if (e.error === 'no-speech') {
+          grabando = false; actualizarBotonMicro(false);
+          return;
+        }
         if (e.error === 'not-allowed') { alert('Permiso de micrófono denegado. Revisa la configuración del navegador.'); }
         if (e.error === 'network')     { alert('Error de red en reconocimiento de voz.'); }
         grabando = false; actualizarBotonMicro(false);
@@ -315,16 +310,6 @@
       recognition.maxAlternatives = 1;
       recognition.start();
       console.log('SpeechRecognition iniciado');
-      // Reintentar automaticamente si no-speech
-      recognition.onerror = function(e) {
-        console.error('Speech error:', e.error);
-        if (e.error === 'no-speech') {
-          grabando = false; actualizarBotonMicro(false);
-          return; // No alert, simplemente para
-        }
-        if (e.error === 'not-allowed') { alert('Permiso de micrófono denegado.'); }
-        grabando = false; actualizarBotonMicro(false);
-      };
       grabando = true;
       actualizarBotonMicro(true);
     }
@@ -376,7 +361,6 @@
     }
 
     function mostrarPreview(evento) {
-      // Aviso si no tiene hora
       var avisoHora = (!evento.horaInicio && !evento.todoDia)
         ? '<div class="mt-2 p-2 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 rounded text-xs text-yellow-700 dark:text-yellow-300">⚠️ No se especificó hora — se guardará como <strong>pendiente de hora</strong></div>'
         : '';
@@ -406,12 +390,12 @@
       if (evento.lugar)                html += '<p><strong>Lugar:</strong> ' + evento.lugar + '</p>';
       if (evento.personasRelacionadas) html += '<p><strong>Personas:</strong> ' + evento.personasRelacionadas + '</p>';
       if (evento.descripcion)          html += '<p><strong>Notas:</strong> ' + evento.descripcion + '</p>';
-      if (esRec) html += '<p class="mt-2 text-indigo-600 font-semibold text-xs">Recurrente (' + (patron || 'periodico') + ')' + (diaSem ? ' cada ' + diaSem : '') + '</p>';
+      if (esRec) html += '<p class="mt-2 text-indigo-600 font-semibold text-xs">🔄 Recurrente (' + (patron || 'periodico') + ')' + (diaSem ? ' cada ' + diaSem : '') + '</p>';
       c.innerHTML = html;
 
       var btnConf = document.getElementById('btn-confirmar');
       if (btnConf) {
-        btnConf.textContent = esRec ? 'Confirmar todos' : 'Confirmar';
+        btnConf.textContent = esRec ? '✅ Confirmar todos' : '✅ Confirmar';
         btnConf.className = btnConf.className
           .replace('bg-green-600','').replace('hover:bg-green-700','')
           .replace('bg-indigo-600','').replace('hover:bg-indigo-700','');
@@ -419,7 +403,6 @@
       }
       document.getElementById('preview-evento').style.display = 'block';
     }
-
 
     function mostrarPreviewMultiple(eventos) {
       var c    = document.getElementById('preview-contenido');
@@ -444,7 +427,6 @@
     async function confirmarEvento() {
       if (!eventoActual) return;
 
-      // ── Lista de eventos ──────────────────────────────────
       if (Array.isArray(eventoActual)) {
         var guardados = 0; var errores = 0;
         for (var i = 0; i < eventoActual.length; i++) {
@@ -468,7 +450,6 @@
         return;
       }
 
-      // ── Evento único ──────────────────────────────────────
       var esRec    = eventoActual.datosExtra && eventoActual.datosExtra.recurrente === true;
       var endpoint = esRec ? '/calendario/api/confirmar-recurrente' : '/calendario/api/confirmar';
       try {
@@ -572,8 +553,8 @@
   let touchStartY = 0;
   let touchEndX   = 0;
   let touchEndY   = 0;
-  const MIN_SWIPE = 60;   // píxeles mínimos para considerar swipe
-  const MAX_VERT  = 80;   // tolerancia vertical (evita confundir con scroll)
+  const MIN_SWIPE = 60;
+  const MAX_VERT  = 80;
 
   grid.addEventListener('touchstart', e => {
     touchStartX = e.changedTouches[0].screenX;
@@ -590,10 +571,10 @@
     const dx = touchEndX - touchStartX;
     const dy = Math.abs(touchEndY - touchStartY);
     if (Math.abs(dx) < MIN_SWIPE) return;
-    if (dy > MAX_VERT) return;  // fue más vertical que horizontal → scroll
+    if (dy > MAX_VERT) return;
     if (typeof cambiarMes !== 'function') return;
-    if (dx > 0) cambiarMes(-1);  // swipe derecha → mes anterior
-    else        cambiarMes(1);   // swipe izquierda → mes siguiente
+    if (dx > 0) cambiarMes(-1);
+    else        cambiarMes(1);
   }
 })();
 </script>

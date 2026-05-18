@@ -160,6 +160,36 @@ public class EventoIaService {
                         "descripcion":"...","etiquetas":["tag1","tag2"]}]}
 
             REGLAS:
+- recurrencia: null (evento único) o "DAILY", "WEEKLY", "MONTHLY"
+- Si menciona "todos los [días]", "cada [día]", "semanalmente" → WEEKLY
+- Si menciona "diariamente", "todos los días" → DAILY
+- Si menciona "mensualmente", "cada mes" → MONTHLY
+
+EJEMPLOS DE RECURRENCIA:
+- "Trabajo presencial en Madrid todos los lunes y martes de junio" →
+  Crear DOS eventos WEEKLY: uno para lunes, otro para martes
+- "Clases de teatro todos los jueves a las 17:00" → WEEKLY (jueves)
+- "Reunión cada primer lunes de mes" → MONTHLY
+- recurrencia: null (evento único) o "DAILY", "WEEKLY", "MONTHLY"
+- Si menciona "todos los [días]", "cada [día]", "semanalmente" → WEEKLY
+- Si menciona "diariamente", "todos los días" → DAILY
+- Si menciona "mensualmente", "cada mes" → MONTHLY
+
+EJEMPLOS DE RECURRENCIA:
+- "Trabajo presencial en Madrid todos los lunes y martes de junio" →
+  Crear DOS eventos WEEKLY: uno para lunes, otro para martes
+- "Clases de teatro todos los jueves a las 17:00" → WEEKLY (jueves)
+- "Reunión cada primer lunes de mes" → MONTHLY
+- recurrencia: null (evento único) o "DAILY", "WEEKLY", "MONTHLY"
+- Si menciona "todos los [días]", "cada [día]", "semanalmente" → WEEKLY
+- Si menciona "diariamente", "todos los días" → DAILY
+- Si menciona "mensualmente", "cada mes" → MONTHLY
+
+EJEMPLOS DE RECURRENCIA:
+- "Trabajo presencial en Madrid todos los lunes y martes de junio" →
+  Crear DOS eventos WEEKLY: uno para lunes, otro para martes
+- "Clases de teatro todos los jueves a las 17:00" → WEEKLY (jueves)
+- "Reunión cada primer lunes de mes" → MONTHLY
             - tipo: UNO de [PERSONAL, SOCIAL, SALUD, TRABAJO, FAMILIA, VIAJE,
                             APRENDIZAJE, OCIO, GESTION, OTRO]
             - etiquetas: array de 1-3 strings cortos en minúsculas y sin tildes
