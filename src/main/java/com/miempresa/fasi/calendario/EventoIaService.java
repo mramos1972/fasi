@@ -11,95 +11,51 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
+import java.util.*;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class EventoIaService {
 
-    private final OllamaClient     ollamaClient;
-    private final EventoRepository repo;
-    private final ObjectMapper     objectMapper;
-    private final IaContextBuilder contextBuilder;
+    private final OllamaClient           ollamaClient;
+    private final EventoRepository       repo;
+    private final ObjectMapper           objectMapper;
+    private final IaContextBuilder       contextBuilder;
+    private final EventoParserRegex      parserRegex;
 
-    private static final int CTX_INTERPRETAR    = 1536;
-    private static final int MAX_OUTPUT_TOKENS  = 800;
+    private static final int CTX_INTERPRETAR   = 512;
+    private static final int MAX_OUTPUT_TOKENS = 600;
+
+    // ══════════════════════════════════════════════════════════
+    //  SISTEMA HÍBRIDO: REGEX → IA
+    // ══════════════════════════════════════════════════════════
 
     public EventoIaResponse interpretar(EventoIaRequest request) {
         long inicio = System.currentTimeMillis();
+        LocalDate fechaContexto = request.getFechaContexto() != null && !request.getFechaContexto().isBlank()
+            ? LocalDate.parse(request.getFechaContexto())
+            : LocalDate.now();
+
         try {
-            String prompt = buildPromptInterpretarMinimo(request);
-            String json   = ollamaClient.generateJson(prompt, CTX_INTERPRETAR, MAX_OUTPUT_TOKENS);
+            // ── PASO 1: Intentar REGEX (< 50ms) ──────────────────
+            Optional<EventoParserRegex.EventoParseResult> resultado =
+                parserRegex.parse(request.getTexto(), fechaContexto);
 
-            log.info("📥 IA RAW: {}", json);
+            if (resultado.isPresent()) {
+                long elapsed = System.currentTimeMillis() - inicio;
+                Evento evento = resultado.get().evento();
+                boolean esRecurrente = resultado.get().esRecurrente();
 
-            String jsonLimpio = extraerJson(json);
-            log.info("📋 IA LIMPIO: {}", jsonLimpio);
+                log.info("⚡ REGEX exitoso en {}ms (recurrente: {})", elapsed, esRecurrente);
 
-            // ── Parseamos el envoltorio {"eventos":[...]} ────
-            JsonNode root = objectMapper.readTree(jsonLimpio);
-            JsonNode eventosNode = root.has("eventos") ? root.get("eventos") : root;
-
-            // Convertir SIEMPRE a array para uniformar
-            List<ObjectNode> nodos = new ArrayList<>();
-            if (eventosNode.isArray()) {
-                eventosNode.forEach(n -> { if (n.isObject()) nodos.add((ObjectNode) n); });
-            } else if (eventosNode.isObject()) {
-                nodos.add((ObjectNode) eventosNode);
+                return new EventoIaResponse(true, null, evento, null, elapsed);
             }
 
-            if (nodos.isEmpty()) {
-                throw new IllegalStateException("La IA no devolvió eventos en el JSON.");
-            }
+            log.info("⏩ REGEX no coincide → usando IA");
 
-            // ── Procesar cada nodo: normalizaciones y mapping ─
-            List<Evento> eventos = new ArrayList<>();
-            for (ObjectNode node : nodos) {
-                normalizarHora(node, "horaInicio");
-                normalizarHora(node, "horaFin");
-                normalizarPersonas(node);
-
-                boolean esRecurrente = node.has("recurrente")
-                        && node.get("recurrente").asBoolean(false);
-                String  patron = node.has("patron")
-                        ? node.get("patron").asText(null) : null;
-
-                node.remove("recurrente");
-                node.remove("patron");
-
-                Evento evento = objectMapper.treeToValue(node, Evento.class);
-                evento.setTextoOriginalVoz(request.getTexto());
-
-                if (esRecurrente && patron != null) {
-                    java.util.Map<String, Object> extra = evento.getDatosExtra() != null
-                        ? new HashMap<>(evento.getDatosExtra())
-                        : new HashMap<>();
-                    extra.put("recurrente", true);
-                    extra.put("patron", patron);
-                    extra.put("textoRecurrencia", request.getTexto());
-                    if (node.has("diaSemana") && !node.get("diaSemana").isNull()) {
-                        extra.put("diaSemana", node.get("diaSemana").asText());
-                    }
-                    evento.setDatosExtra(extra);
-                }
-
-                eventos.add(evento);
-            }
-
-            long elapsed = System.currentTimeMillis() - inicio;
-
-            // ── Devolver según cantidad ──────────────────────
-            if (eventos.size() == 1) {
-                log.info("✅ IA detectó 1 evento en {}ms", elapsed);
-                return new EventoIaResponse(true, null, eventos.get(0), null, elapsed);
-            } else {
-                log.info("✅ IA detectó {} eventos múltiples en {}ms", eventos.size(), elapsed);
-                return new EventoIaResponse(true, null, null, eventos, elapsed);
-            }
+            // ── PASO 2: Usar IA para casos complejos ─────────────
+            return interpretarConIA(request, fechaContexto, inicio);
 
         } catch (Exception e) {
             log.error("❌ Error interpretando texto: {}", e.getMessage(), e);
@@ -109,7 +65,76 @@ public class EventoIaService {
         }
     }
 
-    /** Normaliza horas tipo "10h", "10:00", "10" -> "HH:mm:ss". */
+    private EventoIaResponse interpretarConIA(EventoIaRequest request, LocalDate fechaContexto, long inicio) throws Exception {
+        String prompt = construirPrompt(request.getTexto(), fechaContexto);
+        String json   = ollamaClient.generateJson(prompt, CTX_INTERPRETAR, MAX_OUTPUT_TOKENS);
+
+        log.info("📥 IA RAW: {}", json);
+
+        String jsonLimpio = extraerJson(json);
+        log.info("📋 IA LIMPIO: {}", jsonLimpio);
+
+        JsonNode root = objectMapper.readTree(jsonLimpio);
+        JsonNode eventosNode = root.has("eventos") ? root.get("eventos") : root;
+
+        List<ObjectNode> nodos = new ArrayList<>();
+        if (eventosNode.isArray()) {
+            eventosNode.forEach(n -> { if (n.isObject()) nodos.add((ObjectNode) n); });
+        } else if (eventosNode.isObject()) {
+            nodos.add((ObjectNode) eventosNode);
+        }
+
+        if (nodos.isEmpty()) {
+            throw new IllegalStateException("La IA no devolvió eventos en el JSON.");
+        }
+
+        List<Evento> eventos = new ArrayList<>();
+        for (ObjectNode node : nodos) {
+            normalizarHora(node, "horaInicio");
+            normalizarHora(node, "horaFin");
+            normalizarPersonas(node);
+
+            boolean esRecurrente = node.has("recurrente") && node.get("recurrente").asBoolean(false);
+            String  patron = node.has("patron") ? node.get("patron").asText(null) : null;
+
+            node.remove("recurrente");
+            node.remove("patron");
+
+            Evento evento = objectMapper.treeToValue(node, Evento.class);
+            evento.setTextoOriginalVoz(request.getTexto());
+
+            if (esRecurrente && patron != null) {
+                Map<String, Object> extra = evento.getDatosExtra() != null
+                    ? new HashMap<>(evento.getDatosExtra())
+                    : new HashMap<>();
+                extra.put("recurrente", true);
+                extra.put("patron", patron);
+                extra.put("textoRecurrencia", request.getTexto());
+                if (node.has("diaSemana") && !node.get("diaSemana").isNull()) {
+                    extra.put("diaSemana", node.get("diaSemana").asText());
+                }
+                if (node.has("diasSemana") && node.get("diasSemana").isArray()) {
+                    List<String> dias = new ArrayList<>();
+                    node.get("diasSemana").forEach(d -> dias.add(d.asText()));
+                    extra.put("diasSemana", dias);
+                }
+                evento.setDatosExtra(extra);
+            }
+
+            eventos.add(evento);
+        }
+
+        long elapsed = System.currentTimeMillis() - inicio;
+
+        if (eventos.size() == 1) {
+            log.info("✅ IA detectó 1 evento en {}ms", elapsed);
+            return new EventoIaResponse(true, null, eventos.get(0), null, elapsed);
+        } else {
+            log.info("✅ IA detectó {} eventos múltiples en {}ms", eventos.size(), elapsed);
+            return new EventoIaResponse(true, null, null, eventos, elapsed);
+        }
+    }
+
     private void normalizarHora(ObjectNode node, String campo) {
         if (!node.has(campo) || node.get(campo).isNull()) return;
         String val = node.get(campo).asText("").trim()
@@ -120,7 +145,6 @@ public class EventoIaService {
         node.put(campo, val);
     }
 
-    /** Si la IA devuelve personasRelacionadas como array, lo convierte a string. */
     private void normalizarPersonas(ObjectNode node) {
         if (!node.has("personasRelacionadas")) return;
         JsonNode pr = node.get("personasRelacionadas");
@@ -144,84 +168,34 @@ public class EventoIaService {
         return ollamaClient.generate(prompt, 1536);
     }
 
-    // ════════════════════════════════════════════════════════
-    //  Prompt con ENVOLTORIO obligatorio: {"eventos":[...]}
-    // ════════════════════════════════════════════════════════
-    private String buildPromptInterpretarMinimo(EventoIaRequest request) {
-        String hoy = (request.getFechaContexto() != null && !request.getFechaContexto().isBlank())
-                ? request.getFechaContexto()
-                : java.time.LocalDate.now().toString();
-
+    private String construirPrompt(String texto, LocalDate fechaContexto) {
         return """
-            Eres extractor de eventos de calendario. Devuelve SOLO JSON válido,
-            sin texto explicativo, en este formato exacto:
-            {"eventos":[{"tipo":"...","titulo":"...","fechaInicio":"YYYY-MM-DD",
-                        "horaInicio":"HH:mm:ss","lugar":"...","personasRelacionadas":"...",
-                        "descripcion":"...","etiquetas":["tag1","tag2"]}]}
+            Eres extractor de eventos de calendario. Devuelve SOLO JSON válido:
+            {"eventos":[{"tipo":"TRABAJO","titulo":"...","fechaInicio":"YYYY-MM-DD","fechaFin":"YYYY-MM-DD","horaInicio":"HH:mm:ss",...}]}
 
-            REGLAS:
-- recurrencia: null (evento único) o "DAILY", "WEEKLY", "MONTHLY"
-- Si menciona "todos los [días]", "cada [día]", "semanalmente" → WEEKLY
-- Si menciona "diariamente", "todos los días" → DAILY
-- Si menciona "mensualmente", "cada mes" → MONTHLY
+            TIPOS: PERSONAL, SOCIAL, SALUD, TRABAJO, FAMILIA, VIAJE, APRENDIZAJE, OCIO, GESTION, OTRO
 
-EJEMPLOS DE RECURRENCIA:
-- "Trabajo presencial en Madrid todos los lunes y martes de junio" →
-  Crear DOS eventos WEEKLY: uno para lunes, otro para martes
-- "Clases de teatro todos los jueves a las 17:00" → WEEKLY (jueves)
-- "Reunión cada primer lunes de mes" → MONTHLY
-- recurrencia: null (evento único) o "DAILY", "WEEKLY", "MONTHLY"
-- Si menciona "todos los [días]", "cada [día]", "semanalmente" → WEEKLY
-- Si menciona "diariamente", "todos los días" → DAILY
-- Si menciona "mensualmente", "cada mes" → MONTHLY
+            RECURRENCIA:
+            - "todos los lunes" → "recurrente":true, "patron":"WEEKLY", "diasSemana":["MONDAY"], fechaFin: 3 meses después
+            - "cada día de julio" → "recurrente":true, "patron":"DAILY", fechaInicio:"2026-07-01", fechaFin:"2026-07-31"
+            - "primer lunes de cada mes" → "recurrente":true, "patron":"MONTHLY", "diaSemana":"MONDAY", "posicion":"primero"
+            - Si NO es recurrente → NO incluyas estos campos
 
-EJEMPLOS DE RECURRENCIA:
-- "Trabajo presencial en Madrid todos los lunes y martes de junio" →
-  Crear DOS eventos WEEKLY: uno para lunes, otro para martes
-- "Clases de teatro todos los jueves a las 17:00" → WEEKLY (jueves)
-- "Reunión cada primer lunes de mes" → MONTHLY
-- recurrencia: null (evento único) o "DAILY", "WEEKLY", "MONTHLY"
-- Si menciona "todos los [días]", "cada [día]", "semanalmente" → WEEKLY
-- Si menciona "diariamente", "todos los días" → DAILY
-- Si menciona "mensualmente", "cada mes" → MONTHLY
+            FECHA CONTEXTO: %s
+            TEXTO: "%s"
 
-EJEMPLOS DE RECURRENCIA:
-- "Trabajo presencial en Madrid todos los lunes y martes de junio" →
-  Crear DOS eventos WEEKLY: uno para lunes, otro para martes
-- "Clases de teatro todos los jueves a las 17:00" → WEEKLY (jueves)
-- "Reunión cada primer lunes de mes" → MONTHLY
-            - tipo: UNO de [PERSONAL, SOCIAL, SALUD, TRABAJO, FAMILIA, VIAJE,
-                            APRENDIZAJE, OCIO, GESTION, OTRO]
-            - etiquetas: array de 1-3 strings cortos en minúsculas y sin tildes
-              (ej: ["cumpleanos", "amigos"], ["dentista"], ["futbol", "hijo"])
-            - personasRelacionadas: SIEMPRE string separado por comas, NUNCA array
-            - fechaInicio: SIEMPRE YYYY-MM-DD, sin hora
-            - horaInicio: HH:mm:ss o null si no se especifica
-            - Hoy es %s
-
-            EJEMPLOS de mapeo tipo + etiquetas:
-            - "cumple Noa el viernes" -> tipo=SOCIAL, etiquetas=["cumpleanos"]
-            - "médico jueves 10h" -> tipo=SALUD, etiquetas=["medico"]
-            - "claustro lunes" -> tipo=TRABAJO, etiquetas=["claustro"]
-            - "tutoría Rocío martes 18h" -> tipo=FAMILIA, etiquetas=["tutoria","colegio"]
-            - "extraescolar Rocío martes 18h" -> tipo=FAMILIA, etiquetas=["extraescolar"]
-            - "comprar pan" -> tipo=GESTION, etiquetas=["compras"]
-            - "viaje Madrid 5-7 junio" -> tipo=VIAJE, etiquetas=["viaje"]
-            - "curso Spring Boot" -> tipo=APRENDIZAJE, etiquetas=["curso","formacion"]
-            - "cine sábado" -> tipo=OCIO, etiquetas=["cine"]
-            - "comida con Alberto" -> tipo=SOCIAL, etiquetas=["comida","amigos"]
-
-            Texto del usuario: %s
-            """.formatted(hoy, request.getTexto());
+            Responde SOLO con JSON, sin explicaciones.
+            """.formatted(fechaContexto, texto);
     }
 
     private String extraerJson(String respuesta) {
-        String trimmed = respuesta.trim();
-        int objInicio = trimmed.indexOf('{');
-        int objFin    = trimmed.lastIndexOf('}');
+        if (respuesta == null) return "{}";
+        respuesta = respuesta.trim();
+        int objInicio = respuesta.indexOf('{');
+        int objFin    = respuesta.lastIndexOf('}');
         if (objInicio >= 0 && objFin > objInicio) {
-            return trimmed.substring(objInicio, objFin + 1);
+            return respuesta.substring(objInicio, objFin + 1);
         }
-        return trimmed;
+        return respuesta;
     }
 }
