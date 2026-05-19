@@ -265,27 +265,33 @@ public class CalendarioController {
         if (fechas.isEmpty()) return "No se generarán eventos";
         
         StringBuilder sb = new StringBuilder();
-        sb.append("Se crearán ").append(fechas.size()).append(" eventos:\n");
+        sb.append("Se crearán ").append(fechas.size()).append(" evento");
+        if (fechas.size() > 1) sb.append("s");
+        sb.append(":\n\n");
         
         int limite = Math.min(10, fechas.size());
         for (int i = 0; i < limite; i++) {
             LocalDate fecha = fechas.get(i);
             String diaSemana = switch (fecha.getDayOfWeek()) {
-                case MONDAY -> "Lunes";
-                case TUESDAY -> "Martes";
-                case WEDNESDAY -> "Miércoles";
-                case THURSDAY -> "Jueves";
-                case FRIDAY -> "Viernes";
-                case SATURDAY -> "Sábado";
-                case SUNDAY -> "Domingo";
+                case MONDAY -> "Lun";
+                case TUESDAY -> "Mar";
+                case WEDNESDAY -> "Mié";
+                case THURSDAY -> "Jue";
+                case FRIDAY -> "Vie";
+                case SATURDAY -> "Sáb";
+                case SUNDAY -> "Dom";
             };
-            sb.append("• ").append(diaSemana).append(" ")
-              .append(String.format("%02d/%02d/%d", fecha.getDayOfMonth(), fecha.getMonthValue(), fecha.getYear()))
-              .append("\n");
+            
+            sb.append(String.format("%-3s %02d/%02d/%d\n", 
+                diaSemana, 
+                fecha.getDayOfMonth(), 
+                fecha.getMonthValue(), 
+                fecha.getYear()
+            ));
         }
         
         if (fechas.size() > 10) {
-            sb.append("... y ").append(fechas.size() - 10).append(" más");
+            sb.append("\n... y ").append(fechas.size() - 10).append(" más");
         }
         
         return sb.toString();

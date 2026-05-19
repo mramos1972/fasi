@@ -16,7 +16,7 @@
     <div class="text-center">
       <h2 class="text-lg font-bold text-gray-800 dark:text-gray-100 capitalize"
           th:text="${#temporals.format(yearMonth.atDay(1),'MMMM yyyy')}"></h2>
-      </div>
+    </div>
     <a th:href="@{/calendario(year=${yearMonth.plusMonths(1).year},month=${yearMonth.plusMonths(1).monthValue})}"
        class="w-10 h-10 flex items-center justify-center rounded-full
               hover:bg-gray-200 dark:hover:bg-gray-700 transition text-xl
@@ -34,7 +34,8 @@
 
   <!-- GRID CALENDARIO -->
   <div id="grid-calendario"
-       class="grid grid-cols-7 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden flex-1" style="grid-auto-rows: 1fr;"></div>
+       class="grid grid-cols-7 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden flex-1" 
+       style="grid-auto-rows: 1fr;"></div>
 
   <!-- MODAL VOZ -->
   <div id="modal-voz" class="hidden fixed inset-0 z-50 flex items-end justify-center
@@ -105,16 +106,12 @@
     </div>
   </div>
 
-  <!-- ═══════════════════════════════════════════════════════ -->
-  <!-- SCRIPTS CALENDARIO                                      -->
-  <!-- ═══════════════════════════════════════════════════════ -->
   <script th:inline="javascript">
     /*<![CDATA[*/
     const EVENTOS_MES = /*[[${eventos}]]*/ [];
     const YEAR_MONTH  = /*[[${yearMonth.toString()}]]*/ '';
     const HOY         = /*[[${hoy.toString()}]]*/ '';
 
-    // ── Renderizar grid ──────────────────────────────────────
     function renderCalendario() {
       const parts  = YEAR_MONTH.split('-');
       const year   = parseInt(parts[0], 10);
@@ -128,14 +125,12 @@
       const grid = document.getElementById('grid-calendario');
       grid.innerHTML = '';
 
-      // Celdas vacías iniciales
       for (let i = 0; i < col0; i++) {
         const vacia = document.createElement('div');
         vacia.className = 'border-b border-r border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/20';
         grid.appendChild(vacia);
       }
 
-      // Celdas de días
       for (let dia = 1; dia <= ultimo; dia++) {
         const mm       = String(month).padStart(2, '0');
         const dd       = String(dia).padStart(2, '0');
@@ -155,7 +150,6 @@
           return false;
         });
 
-        // Celda contenedor
         const celda = document.createElement('div');
         celda.className = 'border-b border-r border-gray-100 dark:border-gray-700 p-1 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition'
           + (esFinde ? ' bg-gray-50/80 dark:bg-gray-800/50' : '');
@@ -163,7 +157,6 @@
           window.location = '/calendario/dia/' + fechaStr;
         });
 
-        // Fila superior: número + botón +
         const fila = document.createElement('div');
         fila.className = 'flex justify-between items-start';
 
@@ -185,14 +178,12 @@
         fila.appendChild(btnNuevo);
         celda.appendChild(fila);
 
-        // Eventos del día (máx 2)
         eventosDia.slice(0, 2).forEach(function(e) {
           var emoji = (e.tipo && e.tipo.emoji) ? e.tipo.emoji : '';
           var color = (e.tipo && e.tipo.color) ? e.tipo.color : '#6366f1';
           var titulo = e.titulo || '';
 
           var pill = document.createElement('div');
-          var tienePendiente = e.datosExtra && e.datosExtra.pendienteHora;
           pill.className = 'text-xs px-1 py-0.5 rounded mb-0.5 text-white font-medium flex items-center gap-0.5 group truncate';
           pill.style.backgroundColor = color;
 
@@ -223,7 +214,6 @@
           celda.appendChild(pill);
         });
 
-        // +N más
         if (eventosDia.length > 2) {
           var mas = document.createElement('div');
           mas.className = 'text-xs text-gray-400 dark:text-gray-500 pl-1';
@@ -235,7 +225,6 @@
       }
     }
 
-    // ── Modal voz ────────────────────────────────────────────
     var recognition  = null;
     var grabando     = false;
     var eventoActual = null;
@@ -256,12 +245,8 @@
     function toggleMicrofono() { grabando ? pararMicrofono() : iniciarMicrofono(); }
 
     function iniciarMicrofono() {
-      console.log('iniciarMicrofono llamado');
       if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-        alert('Tu navegador no soporta reconocimiento de voz. Usa Chrome o Edge.'); return;
-      }
-      if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-        alert('El micrófono requiere HTTPS. Accede via localhost o activa HTTPS.'); return;
+        alert('Tu navegador no soporta reconocimiento de voz.'); return;
       }
       navigator.mediaDevices.getUserMedia({ audio: true })
         .then(function(stream) {
@@ -272,11 +257,12 @@
           alert('Permiso de micrófono denegado: ' + err.message);
         });
     }
+
     function _iniciarReconocimiento() {
       var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
       recognition = new SR();
-      recognition.lang           = 'es-ES';
-      recognition.continuous     = true;
+      recognition.lang = 'es-ES';
+      recognition.continuous = true;
       recognition.interimResults = true;
       var textoAcumulado = '';
       recognition.onresult = function(event) {
@@ -288,28 +274,17 @@
             interino += event.results[i][0].transcript;
           }
         }
-        var textarea = document.getElementById('voz-texto');
-        textarea.value = textoAcumulado + interino;
+        document.getElementById('voz-texto').value = textoAcumulado + interino;
       };
       recognition.onend = function() {
         if (grabando) setTimeout(function() { try { recognition.start(); } catch(e){} }, 300);
       };
       recognition.onerror = function(e) {
-        console.error('Speech error:', e.error);
-        if (e.error === 'no-speech') {
-          grabando = false; actualizarBotonMicro(false);
-          return;
-        }
-        if (e.error === 'not-allowed') { alert('Permiso de micrófono denegado. Revisa la configuración del navegador.'); }
-        if (e.error === 'network')     { alert('Error de red en reconocimiento de voz.'); }
+        if (e.error === 'no-speech') { grabando = false; actualizarBotonMicro(false); return; }
+        if (e.error === 'not-allowed') alert('Permiso de micrófono denegado.');
         grabando = false; actualizarBotonMicro(false);
       };
-      recognition.continuous = false;
-      recognition.interimResults = false;
-      recognition.lang = 'es-ES';
-      recognition.maxAlternatives = 1;
       recognition.start();
-      console.log('SpeechRecognition iniciado');
       grabando = true;
       actualizarBotonMicro(true);
     }
@@ -324,14 +299,14 @@
       var label = document.getElementById('micro-label');
       var btn   = document.getElementById('btn-micro');
       label.textContent = activo ? 'Parar' : 'Grabar';
-      if (activo) { btn.classList.add('bg-red-700'); }
-      else        { btn.classList.remove('bg-red-700'); }
+      if (activo) btn.classList.add('bg-red-700');
+      else btn.classList.remove('bg-red-700');
     }
 
     async function interpretarTexto() {
       var texto = document.getElementById('voz-texto').value.trim();
       if (!texto) { alert('Escribe o dicta algo primero.'); return; }
-      document.getElementById('ia-spinner').style.display     = 'flex';
+      document.getElementById('ia-spinner').style.display = 'flex';
       document.getElementById('preview-evento').style.display = 'none';
       try {
         var resp = await fetch('/calendario/api/interpretar-preview', {
@@ -340,8 +315,6 @@
           body: JSON.stringify({ texto: texto })
         });
         var data = await resp.json();
-        
-        // Nueva API devuelve: { evento, esRecurrente, totalEventos, primerasFechas, descripcionPreview }
         if (data.evento) {
           eventoActual = data.evento;
           eventoActual.esRecurrente = data.esRecurrente;
@@ -357,98 +330,68 @@
       }
     }
 
-    // NUEVA FUNCIÓN: mostrarPreview actualizada
     function mostrarPreview(evento, dataExtra) {
-      var avisoHora = (!evento.horaInicio && !evento.todoDia)
-        ? '<div class="mt-2 p-2 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 rounded text-xs text-yellow-700 dark:text-yellow-300">⚠️ No se especificó hora — se guardará como <strong>pendiente de hora</strong></div>'
-        : '';
-      var c         = document.getElementById('preview-contenido');
+      var c = document.getElementById('preview-contenido');
       var tipoLabel = (evento.tipo && evento.tipo.label) ? evento.tipo.label : (evento.tipo || '');
       var tipoEmoji = (evento.tipo && evento.tipo.emoji) ? evento.tipo.emoji : '';
-      var esRec     = evento.datosExtra && evento.datosExtra.recurrente === true;
-      var patron    = esRec ? evento.datosExtra.patron : null;
-      var diaSem    = (esRec && evento.datosExtra.diaSemana) ? evento.datosExtra.diaSemana : null;
+      var esRec = evento.datosExtra && evento.datosExtra.recurrente === true;
 
-      var fechaStr = evento.fechaInicio || '-';
-      if (esRec && evento.fechaFin) {
-        var fi = evento.fechaInicio.split('-').reverse().slice(0,2).join('/');
-        var ff = evento.fechaFin.split('-').reverse().slice(0,2).join('/');
-        fechaStr = 'del ' + fi + ' al ' + ff;
-      } else if (evento.fechaFin && evento.fechaFin !== evento.fechaInicio) {
-        var d1   = new Date(evento.fechaInicio + 'T00:00:00');
-        var d2   = new Date(evento.fechaFin    + 'T00:00:00');
-        var dias = Math.round((d2 - d1) / 86400000) + 1;
-        fechaStr += ' a ' + evento.fechaFin + ' (' + dias + ' dias)';
+      var html = '<div class="space-y-2">';
+      html += '<p><strong>Tipo:</strong> ' + tipoEmoji + ' ' + tipoLabel + '</p>';
+      html += '<p><strong>Titulo:</strong> ' + (evento.titulo || '-') + '</p>';
+
+      if (evento.horaInicio) {
+        html += '<p><strong>Hora:</strong> ' + evento.horaInicio.substring(0,5);
+        if (evento.horaFin) html += ' - ' + evento.horaFin.substring(0,5);
+        html += '</p>';
       }
-      if (evento.horaInicio) fechaStr += ' a las ' + evento.horaInicio.substring(0,5);
 
-      var html = '<p><strong>Tipo:</strong> ' + tipoEmoji + ' ' + tipoLabel + '</p>'
-               + '<p><strong>Titulo:</strong> ' + (evento.titulo || '-') + '</p>'
-               + '<p><strong>Fecha:</strong> ' + fechaStr + '</p>';
-      if (evento.lugar)                html += '<p><strong>Lugar:</strong> ' + evento.lugar + '</p>';
+      if (evento.lugar) html += '<p><strong>Lugar:</strong> ' + evento.lugar + '</p>';
       if (evento.personasRelacionadas) html += '<p><strong>Personas:</strong> ' + evento.personasRelacionadas + '</p>';
-      if (evento.descripcion)          html += '<p><strong>Notas:</strong> ' + evento.descripcion + '</p>';
-      if (esRec) html += '<p class="mt-2 text-indigo-600 font-semibold text-xs">🔄 Recurrente (' + (patron || 'periodico') + ')' + (diaSem ? ' cada ' + diaSem : '') + '</p>';
+      if (evento.descripcion) html += '<p><strong>Notas:</strong> ' + evento.descripcion + '</p>';
+
+      if (esRec && dataExtra.descripcionPreview) {
+        html += '<div class="mt-3 p-3 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg border border-indigo-200 dark:border-indigo-700">';
+        html += '<p class="text-xs font-semibold text-indigo-700 dark:text-indigo-300 mb-2">🔄 Eventos recurrentes:</p>';
+        html += '<pre class="text-xs text-gray-700 dark:text-gray-200 whitespace-pre-wrap font-mono leading-relaxed">' + escapeHtml(dataExtra.descripcionPreview) + '</pre>';
+        html += '</div>';
+      } else {
+        var fechaStr = evento.fechaInicio || '-';
+        if (evento.fechaFin && evento.fechaFin !== evento.fechaInicio) {
+          var d1 = new Date(evento.fechaInicio + 'T00:00:00');
+          var d2 = new Date(evento.fechaFin + 'T00:00:00');
+          var dias = Math.round((d2 - d1) / 86400000) + 1;
+          fechaStr += ' al ' + evento.fechaFin + ' (' + dias + ' dia' + (dias > 1 ? 's' : '') + ')';
+        }
+        html += '<p><strong>Fecha:</strong> ' + fechaStr + '</p>';
+      }
+
+      if (!evento.horaInicio && !evento.todoDia) {
+        html += '<div class="mt-2 p-2 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 rounded text-xs text-yellow-700 dark:text-yellow-300">';
+        html += '⚠️ No se especifico hora - se guardara como <strong>pendiente de hora</strong>';
+        html += '</div>';
+      }
+
+      html += '</div>';
       c.innerHTML = html;
 
       var btnConf = document.getElementById('btn-confirmar');
       if (btnConf) {
-        btnConf.textContent = esRec ? '✅ Confirmar todos' : '✅ Confirmar';
-        btnConf.className = btnConf.className
-          .replace('bg-green-600','').replace('hover:bg-green-700','')
-          .replace('bg-indigo-600','').replace('hover:bg-indigo-700','');
-        btnConf.className += esRec ? ' bg-indigo-600 hover:bg-indigo-700' : ' bg-green-600 hover:bg-green-700';
+        if (esRec && dataExtra.totalEventos) {
+          btnConf.textContent = '✅ Confirmar ' + dataExtra.totalEventos + ' evento' + (dataExtra.totalEventos > 1 ? 's' : '');
+          btnConf.className = 'flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg font-semibold transition text-sm';
+        } else {
+          btnConf.textContent = '✅ Confirmar';
+          btnConf.className = 'flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-semibold transition text-sm';
+        }
       }
-      document.getElementById('preview-evento').style.display = 'block';
-    }
 
-    function mostrarPreviewMultiple(eventos) {
-      var c    = document.getElementById('preview-contenido');
-      var html = '<p class="font-semibold text-sm mb-2 text-indigo-600">' + eventos.length + ' eventos detectados:</p>';
-      eventos.forEach(function(e) {
-        var emoji = (e.tipo && e.tipo.emoji) ? e.tipo.emoji : '';
-        var color = (e.tipo && e.tipo.color) ? e.tipo.color : '#6366f1';
-        var hora  = e.horaInicio ? ' · ' + e.horaInicio.substring(0,5) : '';
-        var lugar = e.lugar ? ' · ' + e.lugar : '';
-        var pers  = e.personasRelacionadas ? ' · ' + e.personasRelacionadas : '';
-        html += '<div class="border-l-2 pl-2 mb-2 py-0.5" style="border-color:' + color + '">'
-              + '<p class="text-xs font-semibold text-gray-800 dark:text-gray-100">' + emoji + ' ' + e.titulo + '</p>'
-              + '<p class="text-xs text-gray-400">' + (e.fechaInicio || '') + hora + lugar + pers + '</p>'
-              + '</div>';
-      });
-      c.innerHTML = html;
-      var btn = document.getElementById('btn-confirmar');
-      if (btn) btn.textContent = '\u2705 Confirmar ' + eventos.length + ' eventos';
       document.getElementById('preview-evento').style.display = 'block';
     }
 
     async function confirmarEvento() {
       if (!eventoActual) return;
-
-      if (Array.isArray(eventoActual)) {
-        var guardados = 0; var errores = 0;
-        for (var i = 0; i < eventoActual.length; i++) {
-          var ev    = eventoActual[i];
-          var esR   = ev.datosExtra && ev.datosExtra.recurrente === true;
-          var ep    = esR ? '/calendario/api/confirmar-recurrente' : '/calendario/api/confirmar';
-          try {
-            var r = await fetch(ep, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(ev)
-            });
-            if (r.ok) guardados++; else errores++;
-          } catch(e) { errores++; }
-        }
-        var msg = guardados + ' evento' + (guardados !== 1 ? 's' : '') + ' creado' + (guardados !== 1 ? 's' : '');
-        if (errores > 0) msg += ' (' + errores + ' con error)';
-        alert(msg);
-        cerrarModalVoz();
-        window.location.reload();
-        return;
-      }
-
-      var esRec    = eventoActual.datosExtra && eventoActual.datosExtra.recurrente === true;
+      var esRec = eventoActual.datosExtra && eventoActual.datosExtra.recurrente === true;
       var endpoint = esRec ? '/calendario/api/confirmar-recurrente' : '/calendario/api/confirmar';
       try {
         var resp = await fetch(endpoint, {
@@ -481,99 +424,15 @@
       else alert('Error al eliminar.');
     }
 
-    // ── Recordatorios ────────────────────────────────────────
-    var DISPARADOS = new Set();
-
-    async function iniciarRecordatorios() {
-      if (!('Notification' in window)) return;
-      if (Notification.permission === 'default') await Notification.requestPermission();
-      if (Notification.permission !== 'granted') return;
-      comprobarRecordatorios();
-      setInterval(comprobarRecordatorios, 60000);
+    function escapeHtml(text) {
+      var div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
     }
 
-    async function comprobarRecordatorios() {
-      if (Notification.permission !== 'granted') return;
-      try {
-        var ahora  = new Date();
-        var parts2 = YEAR_MONTH.split('-');
-        var y = parseInt(parts2[0],10);
-        var m = parseInt(parts2[1],10);
-        var r1 = await fetch('/calendario/api/mes?year=' + y + '&month=' + m);
-        var eventos = await r1.json();
-        eventos.forEach(function(e) {
-          if (!e.recordatorioMinutos || !e.fechaInicio) return;
-          var horaStr  = e.horaInicio ? e.horaInicio.substring(0,5) : '00:00';
-          var eventoTs = new Date(e.fechaInicio + 'T' + horaStr + ':00');
-          if (isNaN(eventoTs.getTime())) return;
-          var dispararEn = new Date(eventoTs.getTime() - e.recordatorioMinutos * 60000);
-          if (Math.abs(ahora - dispararEn) > 90000) return;
-          var clave = e.id + '-' + e.recordatorioMinutos;
-          if (DISPARADOS.has(clave)) return;
-          DISPARADOS.add(clave);
-          var minRest = Math.round((eventoTs - ahora) / 60000);
-          var tiempo  = minRest <= 0 ? 'ahora' : 'en ' + minRest + ' min';
-          var emoji   = (e.tipo && e.tipo.emoji) ? e.tipo.emoji : '';
-          var label   = (e.tipo && e.tipo.label) ? e.tipo.label : '';
-          var notif   = new Notification(
-            emoji + ' ' + e.titulo + ' - ' + tiempo,
-            { body: label + ' ' + e.fechaInicio + ' ' + horaStr + (e.lugar ? ' ' + e.lugar : ''),
-              tag: clave, requireInteraction: minRest <= 5 }
-          );
-          notif.onclick = function() {
-            window.focus();
-            window.location = '/calendario/' + e.id + '/editar';
-            notif.close();
-          };
-        });
-      } catch(err) {
-        console.warn('Recordatorios:', err);
-      }
-    }
-
-    // ── Init ─────────────────────────────────────────────────
     renderCalendario();
-    iniciarRecordatorios();
     /*]]>*/
   </script>
 </section>
-
-<!-- ═══════════════════════════════════════════════════════ -->
-<!-- SWIPE HORIZONTAL — cambiar de mes en móvil             -->
-<!-- ═══════════════════════════════════════════════════════ -->
-<script>
-(function() {
-  const grid = document.querySelector('#calendario-grid, .calendario-grid, #calendar-grid, main');
-  if (!grid) return;
-
-  let touchStartX = 0;
-  let touchStartY = 0;
-  let touchEndX   = 0;
-  let touchEndY   = 0;
-  const MIN_SWIPE = 60;
-  const MAX_VERT  = 80;
-
-  grid.addEventListener('touchstart', e => {
-    touchStartX = e.changedTouches[0].screenX;
-    touchStartY = e.changedTouches[0].screenY;
-  }, { passive: true });
-
-  grid.addEventListener('touchend', e => {
-    touchEndX = e.changedTouches[0].screenX;
-    touchEndY = e.changedTouches[0].screenY;
-    handleSwipe();
-  }, { passive: true });
-
-  function handleSwipe() {
-    const dx = touchEndX - touchStartX;
-    const dy = Math.abs(touchEndY - touchStartY);
-    if (Math.abs(dx) < MIN_SWIPE) return;
-    if (dy > MAX_VERT) return;
-    if (typeof cambiarMes !== 'function') return;
-    if (dx > 0) cambiarMes(-1);
-    else        cambiarMes(1);
-  }
-})();
-</script>
 </body>
 </html>
