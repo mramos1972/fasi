@@ -81,7 +81,7 @@
     <!-- Botones (derecha) -->
     <div class="flex items-center gap-1">
 
-      <button onclick="if(typeof window.abrirModalVoz==='function') window.abrirModalVoz(); else window.location='/calendario/nuevo'"
+      <button onclick="abrirModalVozGlobal()"
               class="w-10 h-10 flex items-center justify-center rounded-full
                      bg-indigo-600 hover:bg-indigo-500 text-white
                      transition text-xl font-bold"
@@ -141,7 +141,7 @@
         📅 <span>Calendario</span>
       </a>
 
-      <button onclick="cerrarMenu(); if(typeof window.abrirModalVoz==='function') window.abrirModalVoz();"
+      <button onclick="cerrarMenu(); abrirModalVozGlobal();"
               class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-700 transition text-left">
         ➕ <span>Nuevo evento</span>
       </button>
@@ -360,6 +360,18 @@
       d.appendChild(document.createTextNode(String(text)));
       return d.innerHTML;
     }
+
+    // ── Botón "+" global ─────────────────────────────────────
+    function abrirModalVozGlobal() {
+      // Si estamos en /calendario y existe el modal, abrirlo
+      if (typeof window.abrirModalVoz === 'function') {
+        window.abrirModalVoz();
+      } else {
+        // Si no, redirigir a /calendario (donde SÍ está el modal)
+        window.location = '/calendario';
+      }
+    }
+
     // ── Init ─────────────────────────────────────────────────
     // ── PWA Service Worker ───────────────────────────────────
     if ('serviceWorker' in navigator) {
