@@ -38,24 +38,31 @@
        style="grid-auto-rows: 1fr;"></div>
 
   <!-- MODAL VOZ CON CONVERSACIÓN -->
-  <div id="modal-voz" class="hidden fixed inset-0 z-50 flex items-end justify-center
-                              sm:items-center bg-black/60">
-    <div class="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl
-                p-6 w-full max-w-lg mx-0 sm:mx-4 relative">
+<!-- MODAL VOZ CON CONVERSACIÓN (VERSIÓN CORREGIDA) -->
+<div id="modal-voz" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4">
+  <div class="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl
+              w-full sm:max-w-lg mx-0 sm:mx-4 relative
+              max-h-[90vh] sm:max-h-[85vh] flex flex-col">
 
+    <!-- HEADER FIJO -->
+    <div class="flex-shrink-0 p-6 pb-3 border-b border-gray-200 dark:border-gray-700">
       <button onclick="cerrarModalVoz()"
               class="absolute top-4 right-4 w-8 h-8 flex items-center justify-center
                      bg-gray-200 dark:bg-gray-600 hover:bg-red-100 dark:hover:bg-red-900
-                     text-gray-600 dark:text-gray-200 rounded-full text-lg font-bold transition">
+                     text-gray-600 dark:text-gray-200 rounded-full text-lg font-bold transition z-10">
         &#x2715;
       </button>
 
       <h3 class="text-lg font-bold text-gray-800 dark:text-gray-100 mb-1">
         &#127908; Nuevo evento
       </h3>
-      <p class="text-xs text-gray-400 mb-4">
+      <p class="text-xs text-gray-400">
         Habla o escribe: <em>"Cita médica el jueves para Rocío a las 10"</em>
       </p>
+    </div>
+
+    <!-- CONTENIDO CON SCROLL -->
+    <div class="flex-1 overflow-y-auto px-6 py-4 space-y-3">
 
       <!-- PASO 1: Input inicial -->
       <div id="paso-inicial">
@@ -64,9 +71,9 @@
                   class="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3
                          bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
                          focus:outline-none focus:ring-2 focus:ring-red-400 text-sm
-                         resize-none mb-3"></textarea>
+                         resize-none"></textarea>
 
-        <div class="flex gap-2 mb-3">
+        <div class="flex gap-2 mt-3">
           <button id="btn-micro" onclick="toggleMicrofono()"
                   class="flex-1 flex items-center justify-center gap-2 bg-red-500
                          hover:bg-red-600 text-white py-2.5 rounded-xl font-semibold transition text-sm">
@@ -83,7 +90,7 @@
       <!-- PASO 2: Pregunta por límite -->
       <div id="paso-limite" style="display:none">
         <div class="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 
-                    rounded-xl p-4 mb-3">
+                    rounded-xl p-4">
           <p class="text-sm text-yellow-800 dark:text-yellow-200 whitespace-pre-wrap" 
              id="mensaje-limite"></p>
         </div>
@@ -93,9 +100,9 @@
                   class="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3
                          bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
                          focus:outline-none focus:ring-2 focus:ring-yellow-400 text-sm
-                         resize-none mb-3"></textarea>
+                         resize-none mt-3"></textarea>
 
-        <div class="flex gap-2 mb-3">
+        <div class="flex gap-2 mt-3">
           <button onclick="procesarLimite()"
                   class="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white py-2.5
                          rounded-xl font-semibold transition text-sm">
@@ -110,16 +117,18 @@
         </div>
       </div>
 
+      <!-- SPINNER IA -->
       <div id="ia-spinner" style="display:none"
-           class="flex items-center gap-2 text-xs text-gray-400 mb-3">
+           class="flex items-center gap-2 text-xs text-gray-400">
         <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce"></div>
         <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:150ms"></div>
         <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:300ms"></div>
         <span>La IA está interpretando...</span>
       </div>
 
+      <!-- PREVIEW EVENTO -->
       <div id="preview-evento" style="display:none"
-           class="bg-gray-50 dark:bg-gray-700 rounded-xl p-4 mb-3">
+           class="bg-gray-50 dark:bg-gray-700 rounded-xl p-4">
         <h4 class="font-semibold text-sm text-gray-700 dark:text-gray-200 mb-2">Vista previa:</h4>
         <div id="preview-contenido" class="text-sm space-y-1 text-gray-700 dark:text-gray-200"></div>
         <div class="flex gap-2 mt-3">
@@ -136,8 +145,10 @@
           </button>
         </div>
       </div>
+
     </div>
   </div>
+</div>
 
   <script th:inline="javascript">
     /*<![CDATA[*/
