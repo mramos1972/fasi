@@ -1,6 +1,6 @@
 package com.miempresa.fasi.calendario;
 
-
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.web.bind.annotation.RequestParam;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -197,14 +197,16 @@ public class CalendarioController {
                 .collect(java.util.stream.Collectors.toCollection(java.util.HashSet::new));
     }
 
-
     // ── API: Obtener todas las etiquetas existentes ──────────
     @GetMapping("/api/etiquetas")
     @ResponseBody
     public ResponseEntity<List<String>> getEtiquetas() {
         return ResponseEntity.ok(eventoService.getAllEtiquetas());
     }
-// Añadir al final de CalendarioController.java, antes del último }
+
+    // ══════════════════════════════════════════════════════════
+    //  API MEJORADA: INTERPRETAR CON PREVIEW + CONVERSACIÓN
+    // ══════════════════════════════════════════════════════════
 
     @PostMapping("/api/interpretar-preview")
     @ResponseBody
@@ -219,11 +221,17 @@ public class CalendarioController {
         
         Evento evento;
         boolean esRecurrente;
+        boolean necesitaLimite = false;
         
         if (resultadoRegex.isPresent()) {
             log.info("⚡ REGEX exitoso");
             evento = resultadoRegex.get().evento();
             esRecurrente = resultadoRegex.get().esRecurrente();
+            
+            // Verificar si necesita límite
+            if (esRecurrente && evento.getDatosExtra() != null) {
+                necesitaLimite = Boolean.TRUE.equals(evento.getDatosExtra().get("necesitaLimite"));
+            }
         } else {
             log.info("⏩ REGEX no coincide → usando IA");
             EventoIaRequest request = new EventoIaRequest();
@@ -232,6 +240,17 @@ public class CalendarioController {
             
             EventoIaResponse iaResponse = eventoIaService.interpretar(request);
             
+            // ── CASO 1: IA pide límite ────────────────────────────
+            if (!iaResponse.isExito() && iaResponse.getMensajeError() != null 
+                && iaResponse.getEventoPreview() != null) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("necesitaLimite", true);
+                response.put("mensajeLimite", iaResponse.getMensajeError());
+                response.put("eventoBase", iaResponse.getEventoPreview());
+                return response;
+            }
+            
+            // ── CASO 2: Error real ────────────────────────────────
             if (!iaResponse.isExito() || iaResponse.getEventoPreview() == null) {
                 Map<String, Object> errorResponse = new HashMap<>();
                 errorResponse.put("error", iaResponse.getMensajeError());
@@ -243,6 +262,16 @@ public class CalendarioController {
                           Boolean.TRUE.equals(evento.getDatosExtra().get("recurrente"));
         }
 
+        // ── Si necesita límite, devolver pregunta ─────────────────
+        if (necesitaLimite) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("necesitaLimite", true);
+            response.put("mensajeLimite", construirMensajeLimite(evento));
+            response.put("eventoBase", evento);
+            return response;
+        }
+
+        // ── Respuesta normal con preview ──────────────────────────
         Map<String, Object> response = new HashMap<>();
         response.put("evento", evento);
         response.put("esRecurrente", esRecurrente);
@@ -252,13 +281,67 @@ public class CalendarioController {
             List<LocalDate> fechas = eventoService.generarVistaPrevia(evento);
             response.put("totalEventos", fechas.size());
             response.put("primerasFechas", fechas.stream().limit(10).toList());
-
-            // Generar descripción legible
-            String descripcion = generarDescripcionPreview(fechas);
-            response.put("descripcionPreview", descripcion);
+            response.put("descripcionPreview", generarDescripcionPreview(fechas));
         }
 
         return response;
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  API: PROCESAR LÍMITE (SEGUNDA INTERACCIÓN)
+    // ══════════════════════════════════════════════════════════
+
+    @PostMapping("/api/procesar-limite")
+    @ResponseBody
+    public Map<String, Object> procesarLimite(@RequestBody Map<String, Object> body) {
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> eventoBaseMap = (Map<String, Object>) body.get("eventoBase");
+            String respuestaLimite = (String) body.get("respuestaLimite");
+
+            // Reconstruir el evento base
+            Evento eventoBase = objectMapper.convertValue(eventoBaseMap, Evento.class);
+
+            // Procesar el límite
+            EventoIaResponse response = eventoIaService.procesarLimite(eventoBase, respuestaLimite);
+
+            if (!response.isExito()) {
+                Map<String, Object> errorResponse = new HashMap<>();
+                errorResponse.put("error", response.getMensajeError());
+                return errorResponse;
+            }
+
+            Evento eventoCompleto = response.getEventoPreview();
+            List<LocalDate> fechas = eventoService.generarVistaPrevia(eventoCompleto);
+
+            Map<String, Object> result = new HashMap<>();
+            result.put("evento", eventoCompleto);
+            result.put("esRecurrente", true);
+            result.put("totalEventos", fechas.size());
+            result.put("primerasFechas", fechas.stream().limit(10).toList());
+            result.put("descripcionPreview", generarDescripcionPreview(fechas));
+
+            return result;
+
+        } catch (Exception e) {
+            log.error("Error procesando límite", e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "Error al procesar el límite: " + e.getMessage());
+            return errorResponse;
+        }
+    }
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    
+    private String construirMensajeLimite(Evento evento) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("📅 Evento recurrente detectado\n\n");
+        sb.append("⚠️ ¿Hasta cuándo quieres que se repita?\n\n");
+        sb.append("Responde con:\n");
+        sb.append("• Un mes: 'hasta agosto', 'hasta diciembre'\n");
+        sb.append("• Una fecha: 'hasta el 31 de julio'\n");
+        sb.append("• Indefinido: 'indefinido' o 'sin límite' (hasta fin de año)");
+        return sb.toString();
     }
     
     private String generarDescripcionPreview(List<LocalDate> fechas) {
