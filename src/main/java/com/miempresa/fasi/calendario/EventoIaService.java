@@ -351,47 +351,73 @@ public class EventoIaService {
     //  PROMPT MEJORADO CON DIFERENCIACIÓN ESTRICTA
     // ══════════════════════════════════════════════════════════
 
-    private String construirPrompt(String texto, LocalDate fechaContexto) {
-        return """
-            Eres extractor de eventos de calendario. Devuelve SOLO JSON válido:
-            {"eventos":[{"tipo":"TRABAJO","titulo":"...","fechaInicio":"YYYY-MM-DD","fechaFin":"YYYY-MM-DD","horaInicio":"HH:mm:ss",...}]}
+private String construirPrompt(String texto, LocalDate fechaContexto) {
+    return """
+        Eres extractor de eventos de calendario. Devuelve SOLO JSON válido:
+        {"eventos":[{"tipo":"TRABAJO","titulo":"...","fechaInicio":"YYYY-MM-DD","fechaFin":"YYYY-MM-DD","horaInicio":"HH:mm:ss",...}]}
 
-            TIPOS: PERSONAL, SOCIAL, SALUD, TRABAJO, FAMILIA, VIAJE, APRENDIZAJE, OCIO, GESTION, OTRO
+        TIPOS: PERSONAL, SOCIAL, SALUD, TRABAJO, FAMILIA, VIAJE, APRENDIZAJE, OCIO, GESTION, OTRO
 
-            ═══════════════════════════════════════════════════════════════════════════
-            REGLAS CRÍTICAS — DIFERENCIACIÓN ÚNICO vs RECURRENTE
-            ═══════════════════════════════════════════════════════════════════════════
+        ═══════════════════════════════════════════════════════════════════════════
+        REGLAS CRÍTICAS — CUMPLEAÑOS
+        ═══════════════════════════════════════════════════════════════════════════
 
-            ✅ EVENTO ÚNICO (recurrente: false):
-            - "tutoría el lunes" → próximo lunes, NO se repite
-            - "claustro el viernes" → próximo viernes, NO se repite
-            - "cita médica el jueves" → próximo jueves, NO se repite
-            - "cumpleaños de X el 15 de marzo" → solo ese día
-            - Regla: "el [día]" SIN "todos" ni plural → ÚNICO
+        ✅ CUMPLEAÑOS ÚNICO (por defecto):
+        - "cumpleaños de Rocío el 23 de marzo" → ÚNICO, NO recurrente
+        - "cumpleaños de Alberto el 5 de junio" → ÚNICO, NO recurrente
+        - Regla: Si NO dice "cada año", "todos los años", "anual" → ÚNICO
 
-            ✅ EVENTO RECURRENTE (recurrente: true):
-            - "todos los lunes" → recurrente, patron: WEEKLY, diasSemana: ["MONDAY"]
-            - "los lunes" (plural) → recurrente, patron: WEEKLY, diasSemana: ["MONDAY"]
-            - "cada viernes" → recurrente, patron: WEEKLY, diasSemana: ["FRIDAY"]
-            - "gimnasio los martes y jueves" → recurrente, patron: WEEKLY, diasSemana: ["TUESDAY","THURSDAY"]
-            - "todos los días de julio" → recurrente, patron: DAILY, fechaInicio: 2026-07-01, fechaFin: 2026-07-31
-            - "el día 15 de cada mes" → recurrente, patron: MONTHLY, diaDelMes: 15
-            - "cada primer lunes de cada mes" → recurrente, patron: MONTHLY_RELATIVE, diaSemana: MONDAY, posicion: 1
+        ✅ CUMPLEAÑOS RECURRENTE (solo si lo especifica):
+        - "cumpleaños de Rocío el 23 de marzo cada año" → recurrente: true, patron: YEARLY
+        - "cumpleaños de mi madre el 10 de mayo todos los años" → recurrente: true, patron: YEARLY
+        - Regla: SOLO si dice "cada año", "todos los años", "anual" → recurrente
 
-            ⚠️ LÍMITE DE FECHA:
-            - Si el texto NO especifica "hasta [fecha/mes]" → fechaFin: null
-            - Si dice "hasta agosto" → fechaFin: 2026-08-31
-            - Si dice "hasta el 31 de diciembre" → fechaFin: 2026-12-31
-            - Si dice "de junio a agosto" → fechaInicio: 2026-06-01, fechaFin: 2026-08-31
+        ═══════════════════════════════════════════════════════════════════════════
+        REGLAS CRÍTICAS — DIFERENCIACIÓN ÚNICO vs RECURRENTE
+        ═══════════════════════════════════════════════════════════════════════════
 
-            ═══════════════════════════════════════════════════════════════════════════
+        ✅ EVENTO ÚNICO (recurrente: false):
+        - "tutoría el lunes" → próximo lunes, NO se repite
+        - "claustro el viernes" → próximo viernes, NO se repite
+        - "cita médica el jueves" → próximo jueves, NO se repite
+        - "dentista el 27 de mayo" → solo ese día
+        - Regla: "el [día]" SIN "todos" ni plural → ÚNICO
 
-            FECHA CONTEXTO: %s
-            TEXTO: "%s"
+        ✅ EVENTO RECURRENTE (recurrente: true):
+        - "todos los lunes" → recurrente, patron: WEEKLY, diasSemana: ["MONDAY"]
+        - "los lunes" (plural) → recurrente, patron: WEEKLY, diasSemana: ["MONDAY"]
+        - "cada viernes" → recurrente, patron: WEEKLY, diasSemana: ["FRIDAY"]
+        - "gimnasio los martes y jueves" → recurrente, patron: WEEKLY, diasSemana: ["TUESDAY","THURSDAY"]
+        - "todos los días de julio" → recurrente, patron: DAILY, fechaInicio: 2026-07-01, fechaFin: 2026-07-31
+        - "el día 15 de cada mes" → recurrente, patron: MONTHLY, diaDelMes: 15
+        - "cada primer lunes de cada mes" → recurrente, patron: MONTHLY_RELATIVE, diaSemana: MONDAY, posicion: 1
 
-            Responde SOLO con JSON, sin explicaciones.
-            """.formatted(fechaContexto, texto);
-    }
+        ⚠️ MÚLTIPLES FECHAS (crear eventos separados):
+        - "dentista el 27 de mayo y el 29 de mayo" → CREAR 2 EVENTOS:
+          [
+            {"tipo":"SALUD","titulo":"Dentista","fechaInicio":"2026-05-27"},
+            {"tipo":"SALUD","titulo":"Dentista","fechaInicio":"2026-05-29"}
+          ]
+
+        ⚠️ LÍMITE DE FECHA:
+        - Si el texto NO especifica "hasta [fecha/mes]" → fechaFin: null
+        - Si dice "hasta agosto" → fechaFin: 2026-08-31
+        - Si dice "hasta el 31 de diciembre" → fechaFin: 2026-12-31
+        - Si dice "de junio a agosto" → fechaInicio: 2026-06-01, fechaFin: 2026-08-31
+
+        ⚠️ CAMPOS OBLIGATORIOS:
+        - tipo: DEBE ser uno de los 10 tipos válidos
+        - titulo: NUNCA vacío, NUNCA null
+        - fechaInicio: SIEMPRE formato YYYY-MM-DD
+
+        ═══════════════════════════════════════════════════════════════════════════
+
+        FECHA CONTEXTO: %s
+        TEXTO: "%s"
+
+        Responde SOLO con JSON, sin explicaciones.
+        """.formatted(fechaContexto, texto);
+}
 
     private String extraerJson(String respuesta) {
         if (respuesta == null) return "{}";
