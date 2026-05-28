@@ -78,7 +78,6 @@ public class EventoIaService {
     // ══════════════════════════════════════════════════════════
 
     private EventoIaResponse crearRespuestaNecesitaLimite(Evento evento, long tiempoMs) {
-        // Marcar el evento como "esperando límite"
         Map<String, Object> datosExtra = evento.getDatosExtra();
         datosExtra.put("esperandoLimite", true);
         evento.setDatosExtra(datosExtra);
@@ -87,7 +86,7 @@ public class EventoIaService {
         String mensaje = construirMensajeLimite(patron, evento);
 
         EventoIaResponse response = new EventoIaResponse();
-        response.setExito(false); // No está listo para confirmar
+        response.setExito(false);
         response.setMensajeError(mensaje);
         response.setEventoPreview(evento);
         response.setTiempoMs(tiempoMs);
@@ -144,7 +143,6 @@ public class EventoIaService {
                     null, System.currentTimeMillis() - inicio);
             }
 
-            // Actualizar el evento con el límite
             eventoBase.setFechaFin(fechaLimite);
             Map<String, Object> datosExtra = eventoBase.getDatosExtra();
             datosExtra.remove("necesitaLimite");
@@ -165,12 +163,10 @@ public class EventoIaService {
     private LocalDate parsearLimite(String texto, LocalDate hoy) {
         texto = texto.toLowerCase().trim();
 
-        // "indefinido" / "sin límite" → fin de año
         if (texto.matches("(?i).*(indefinido|sin\\s+l[ií]mite|fin\\s+de\\s+año|final\\s+del\\s+año).*")) {
             return LocalDate.of(hoy.getYear(), 12, 31);
         }
 
-        // "hasta agosto" / "hasta diciembre"
         Map<String, Integer> meses = Map.ofEntries(
             Map.entry("enero", 1), Map.entry("febrero", 2), Map.entry("marzo", 3),
             Map.entry("abril", 4), Map.entry("mayo", 5), Map.entry("junio", 6),
@@ -189,7 +185,6 @@ public class EventoIaService {
             }
         }
 
-        // "hasta el 31 de julio" / "31/07" / "31-07-2026"
         java.util.regex.Pattern p1 = java.util.regex.Pattern.compile(
             "(\\d{1,2})\\s+de\\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)"
         );
@@ -202,7 +197,6 @@ public class EventoIaService {
             return LocalDate.of(anio, mes, dia);
         }
 
-        // "31/12" / "31-12"
         java.util.regex.Pattern p2 = java.util.regex.Pattern.compile("(\\d{1,2})[/-](\\d{1,2})");
         java.util.regex.Matcher m2 = p2.matcher(texto);
         if (m2.find()) {
@@ -213,7 +207,6 @@ public class EventoIaService {
             return LocalDate.of(anio, mes, dia);
         }
 
-        // "2026-12-31"
         java.util.regex.Pattern p3 = java.util.regex.Pattern.compile("(\\d{4})-(\\d{1,2})-(\\d{1,2})");
         java.util.regex.Matcher m3 = p3.matcher(texto);
         if (m3.find()) {
@@ -286,14 +279,12 @@ public class EventoIaService {
                     extra.put("diasSemana", dias);
                 }
 
-                // ── VERIFICAR SI TIENE FECHA FIN ──────────────────
                 if (evento.getFechaFin() == null) {
                     extra.put("necesitaLimite", true);
                 }
 
                 evento.setDatosExtra(extra);
 
-                // ── SI NECESITA LÍMITE, DEVOLVER PREGUNTA ─────────
                 if (evento.getFechaFin() == null) {
                     long elapsed = System.currentTimeMillis() - inicio;
                     return crearRespuestaNecesitaLimite(evento, elapsed);
@@ -348,76 +339,151 @@ public class EventoIaService {
     }
 
     // ══════════════════════════════════════════════════════════
-    //  PROMPT MEJORADO CON DIFERENCIACIÓN ESTRICTA
+    //  🎯 PROMPT A PRUEBA DE BOMBAS
     // ══════════════════════════════════════════════════════════
 
-private String construirPrompt(String texto, LocalDate fechaContexto) {
-    return """
-        Eres extractor de eventos de calendario. Devuelve SOLO JSON válido:
-        {"eventos":[{"tipo":"TRABAJO","titulo":"...","fechaInicio":"YYYY-MM-DD","fechaFin":"YYYY-MM-DD","horaInicio":"HH:mm:ss",...}]}
-
-        TIPOS: PERSONAL, SOCIAL, SALUD, TRABAJO, FAMILIA, VIAJE, APRENDIZAJE, OCIO, GESTION, OTRO
-
-        ═══════════════════════════════════════════════════════════════════════════
-        REGLAS CRÍTICAS — CUMPLEAÑOS
-        ═══════════════════════════════════════════════════════════════════════════
-
-        ✅ CUMPLEAÑOS ÚNICO (por defecto):
-        - "cumpleaños de Rocío el 23 de marzo" → ÚNICO, NO recurrente
-        - "cumpleaños de Alberto el 5 de junio" → ÚNICO, NO recurrente
-        - Regla: Si NO dice "cada año", "todos los años", "anual" → ÚNICO
-
-        ✅ CUMPLEAÑOS RECURRENTE (solo si lo especifica):
-        - "cumpleaños de Rocío el 23 de marzo cada año" → recurrente: true, patron: YEARLY
-        - "cumpleaños de mi madre el 10 de mayo todos los años" → recurrente: true, patron: YEARLY
-        - Regla: SOLO si dice "cada año", "todos los años", "anual" → recurrente
-
-        ═══════════════════════════════════════════════════════════════════════════
-        REGLAS CRÍTICAS — DIFERENCIACIÓN ÚNICO vs RECURRENTE
-        ═══════════════════════════════════════════════════════════════════════════
-
-        ✅ EVENTO ÚNICO (recurrente: false):
-        - "tutoría el lunes" → próximo lunes, NO se repite
-        - "claustro el viernes" → próximo viernes, NO se repite
-        - "cita médica el jueves" → próximo jueves, NO se repite
-        - "dentista el 27 de mayo" → solo ese día
-        - Regla: "el [día]" SIN "todos" ni plural → ÚNICO
-
-        ✅ EVENTO RECURRENTE (recurrente: true):
-        - "todos los lunes" → recurrente, patron: WEEKLY, diasSemana: ["MONDAY"]
-        - "los lunes" (plural) → recurrente, patron: WEEKLY, diasSemana: ["MONDAY"]
-        - "cada viernes" → recurrente, patron: WEEKLY, diasSemana: ["FRIDAY"]
-        - "gimnasio los martes y jueves" → recurrente, patron: WEEKLY, diasSemana: ["TUESDAY","THURSDAY"]
-        - "todos los días de julio" → recurrente, patron: DAILY, fechaInicio: 2026-07-01, fechaFin: 2026-07-31
-        - "el día 15 de cada mes" → recurrente, patron: MONTHLY, diaDelMes: 15
-        - "cada primer lunes de cada mes" → recurrente, patron: MONTHLY_RELATIVE, diaSemana: MONDAY, posicion: 1
-
-        ⚠️ MÚLTIPLES FECHAS (crear eventos separados):
-        - "dentista el 27 de mayo y el 29 de mayo" → CREAR 2 EVENTOS:
-          [
-            {"tipo":"SALUD","titulo":"Dentista","fechaInicio":"2026-05-27"},
-            {"tipo":"SALUD","titulo":"Dentista","fechaInicio":"2026-05-29"}
-          ]
-
-        ⚠️ LÍMITE DE FECHA:
-        - Si el texto NO especifica "hasta [fecha/mes]" → fechaFin: null
-        - Si dice "hasta agosto" → fechaFin: 2026-08-31
-        - Si dice "hasta el 31 de diciembre" → fechaFin: 2026-12-31
-        - Si dice "de junio a agosto" → fechaInicio: 2026-06-01, fechaFin: 2026-08-31
-
-        ⚠️ CAMPOS OBLIGATORIOS:
-        - tipo: DEBE ser uno de los 10 tipos válidos
-        - titulo: NUNCA vacío, NUNCA null
-        - fechaInicio: SIEMPRE formato YYYY-MM-DD
-
-        ═══════════════════════════════════════════════════════════════════════════
-
-        FECHA CONTEXTO: %s
-        TEXTO: "%s"
-
-        Responde SOLO con JSON, sin explicaciones.
-        """.formatted(fechaContexto, texto);
-}
+    private String construirPrompt(String texto, LocalDate fechaContexto) {
+        return """
+            Eres un extractor de eventos de calendario. Tu ÚNICA tarea es convertir texto en español natural a JSON válido.
+            
+            ═══════════════════════════════════════════════════════════════════════════
+            📋 FORMATO DE SALIDA (OBLIGATORIO)
+            ═══════════════════════════════════════════════════════════════════════════
+            
+            Devuelve SOLO JSON en este formato:
+            {
+              "eventos": [
+                {
+                  "tipo": "SALUD",
+                  "titulo": "Cita Médica",
+                  "fechaInicio": "2026-06-23",
+                  "fechaFin": null,
+                  "horaInicio": "10:00:00",
+                  "horaFin": null,
+                  "todoDia": false,
+                  "lugar": "Jerez",
+                  "personasRelacionadas": "Rocío",
+                  "descripcion": null,
+                  "recordatorioMinutos": null,
+                  "recurrente": false,
+                  "patron": null
+                }
+              ]
+            }
+            
+            ═══════════════════════════════════════════════════════════════════════════
+            🎯 TIPOS DE EVENTO (ELIGE EL MÁS APROPIADO)
+            ═══════════════════════════════════════════════════════════════════════════
+            
+            PERSONAL    → Eventos privados, cuidado personal, tiempo libre
+            SOCIAL      → Cumpleaños, fiestas, comidas, reuniones con amigos
+            SALUD       → Médico, dentista, fisio, gimnasio, terapia
+            TRABAJO     → Oficina, reuniones laborales, claustros, formación
+            FAMILIA     → Tutorías, colegio, extraescolares, eventos familiares
+            VIAJE       → Vacaciones, escapadas, vuelos, hoteles
+            APRENDIZAJE → Cursos, clases, talleres, conferencias
+            OCIO        → Hobbies, deportes, cine, teatro, museos
+            GESTION     → Compras, trámites, banco, ITV, gestiones
+            OTRO        → Cuando no encaje en ninguna categoría anterior
+            
+            ═══════════════════════════════════════════════════════════════════════════
+            🔥 REGLAS CRÍTICAS — DIFERENCIACIÓN ÚNICO vs RECURRENTE
+            ═══════════════════════════════════════════════════════════════════════════
+            
+            ✅ EVENTO ÚNICO (recurrente: false):
+            • "cita médica de rocío el 23 de junio jerez"
+              → fechaInicio: "2026-06-23", recurrente: false
+            
+            • "tutoría el lunes"
+              → fechaInicio: [próximo lunes], recurrente: false
+            
+            • "dentista el 27 de mayo"
+              → fechaInicio: "2026-05-27", recurrente: false
+            
+            • "cumpleaños de Alberto el 5 de junio"
+              → fechaInicio: "2026-06-05", recurrente: false, tipo: "SOCIAL"
+            
+            • "dentista el 27 y el 29 de mayo"
+              → CREAR 2 EVENTOS SEPARADOS:
+              [
+                {"fechaInicio": "2026-05-27", "recurrente": false},
+                {"fechaInicio": "2026-05-29", "recurrente": false}
+              ]
+            
+            ✅ EVENTO RECURRENTE (recurrente: true):
+            • "todos los lunes"
+              → recurrente: true, patron: "WEEKLY", diasSemana: ["MONDAY"], fechaFin: null
+            
+            • "los martes y jueves"
+              → recurrente: true, patron: "WEEKLY", diasSemana: ["TUESDAY","THURSDAY"]
+            
+            • "cada viernes de agosto"
+              → recurrente: true, patron: "WEEKLY", diasSemana: ["FRIDAY"],
+                 fechaInicio: "2026-08-01", fechaFin: "2026-08-31"
+            
+            • "todos los días de julio"
+              → recurrente: true, patron: "DAILY",
+                 fechaInicio: "2026-07-01", fechaFin: "2026-07-31"
+            
+            • "el día 15 de cada mes"
+              → recurrente: true, patron: "MONTHLY", diaDelMes: 15, fechaFin: null
+            
+            • "cada primer lunes de cada mes"
+              → recurrente: true, patron: "MONTHLY_RELATIVE",
+                 diaSemana: "MONDAY", posicion: 1, fechaFin: null
+            
+            • "cumpleaños de Rocío el 23 de marzo cada año"
+              → recurrente: true, patron: "YEARLY", diaDelMes: 23, mes: 3
+            
+            ═══════════════════════════════════════════════════════════════════════════
+            📅 RESOLUCIÓN DE FECHAS
+            ═══════════════════════════════════════════════════════════════════════════
+            
+            HOY: %s
+            
+            • "el lunes" → próximo lunes desde HOY
+            • "mañana" → HOY + 1 día
+            • "el 23 de junio" → 2026-06-23 (si ya pasó, año siguiente)
+            • "el 15" → día 15 del mes actual (si ya pasó, mes siguiente)
+            
+            ═══════════════════════════════════════════════════════════════════════════
+            🕐 HORA
+            ═══════════════════════════════════════════════════════════════════════════
+            
+            • "a las 10" → horaInicio: "10:00:00"
+            • "a las 10:30" → horaInicio: "10:30:00"
+            • "de 10 a 12" → horaInicio: "10:00:00", horaFin: "12:00:00"
+            • Sin hora → horaInicio: null, todoDia: false
+            
+            ═══════════════════════════════════════════════════════════════════════════
+            📍 LUGAR Y PERSONAS
+            ═══════════════════════════════════════════════════════════════════════════
+            
+            • "en Jerez" → lugar: "Jerez"
+            • "de Rocío" / "para Rocío" → personasRelacionadas: "Rocío"
+            • "de Rocío y Alberto" → personasRelacionadas: "Rocío, Alberto"
+            
+            ═══════════════════════════════════════════════════════════════════════════
+            🚨 ERRORES COMUNES A EVITAR
+            ═══════════════════════════════════════════════════════════════════════════
+            
+            ❌ NO uses "el lunes" como recurrente → es ÚNICO (próximo lunes)
+            ❌ NO uses "los lunes" como único → es RECURRENTE (todos los lunes)
+            ❌ NO inventes fechas → si no está claro, usa HOY o pregunta
+            ❌ NO uses tipo "OTRO" si encaja en alguna categoría específica
+            ❌ NO dejes titulo vacío → siempre debe tener un título descriptivo
+            
+            ═══════════════════════════════════════════════════════════════════════════
+            📝 TEXTO A INTERPRETAR
+            ═══════════════════════════════════════════════════════════════════════════
+            
+            "%s"
+            
+            ═══════════════════════════════════════════════════════════════════════════
+            
+            Responde SOLO con JSON válido. Sin explicaciones. Sin markdown.
+            """.formatted(fechaContexto, texto);
+    }
 
     private String extraerJson(String respuesta) {
         if (respuesta == null) return "{}";
