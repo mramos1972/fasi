@@ -461,12 +461,12 @@ public class EventoIaService {
             SALUD       → Médico, dentista, fisio
             TRABAJO     → Oficina, reuniones, claustros
             FAMILIA     → Tutorías, colegio, extraescolares
-            VIAJE       → Vacaciones, escapadas
+            VIAJE       → Desplazamientos con transporte (avión, tren, coche)
+            VACACIONES  → Periodos de descanso (con o sin viaje)
             APRENDIZAJE → Cursos, clases
             OCIO        → Hobbies, deportes, cine
             GESTION     → Compras, trámites, banco
-            OTRO        → Cuando no encaje
-            
+            OTRO        → Cuando no encaje            
             ═══════════════════════════════════════════════════════════════════════════
             📅 RESOLUCIÓN DE FECHAS (HOY: %s)
             ═══════════════════════════════════════════════════════════════════════════

@@ -74,7 +74,7 @@ public class Evento extends BaseEntity {
 
     public enum TipoEvento {
         PERSONAL, SOCIAL, SALUD, TRABAJO, FAMILIA,
-        VIAJE, APRENDIZAJE, OCIO, GESTION, OTRO;
+        VIAJE, VACACIONES, APRENDIZAJE, OCIO, GESTION, OTRO;
 
         public String getEmoji() {
             return switch (this) {
@@ -84,6 +84,7 @@ public class Evento extends BaseEntity {
                 case TRABAJO     -> "💼";
                 case FAMILIA     -> "🏠";
                 case VIAJE       -> "✈️";
+                case VACACIONES  -> "🏖️";
                 case APRENDIZAJE -> "📚";
                 case OCIO        -> "🎨";
                 case GESTION     -> "📋";
@@ -99,6 +100,7 @@ public class Evento extends BaseEntity {
                 case TRABAJO     -> "#8b5cf6";
                 case FAMILIA     -> "#10b981";
                 case VIAJE       -> "#f59e0b";
+                case VACACIONES  -> "#06b6d4"; // Cyan (color playa/descanso)
                 case APRENDIZAJE -> "#6366f1";
                 case OCIO        -> "#14b8a6";
                 case GESTION     -> "#64748b";
@@ -114,6 +116,7 @@ public class Evento extends BaseEntity {
                 case TRABAJO     -> "Trabajo";
                 case FAMILIA     -> "Familia";
                 case VIAJE       -> "Viaje";
+                case VACACIONES  -> "Vacaciones";
                 case APRENDIZAJE -> "Aprendizaje";
                 case OCIO        -> "Ocio";
                 case GESTION     -> "Gestión";
@@ -151,4 +154,5 @@ public class Evento extends BaseEntity {
             return OTRO;
         }
     }
+
 }
