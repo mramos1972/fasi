@@ -3,6 +3,8 @@ package com.miempresa.fasi.calendario;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.miempresa.fasi.calendario.service.EventoParserService;
+import com.miempresa.fasi.calendario.dto.EventoMinimo;
 import org.springframework.web.bind.annotation.RequestParam;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -24,22 +26,25 @@ import java.util.Optional;
 public class CalendarioController {
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(CalendarioController.class);
 
-    private final EventoService       eventoService;
-    private final EventoIaService     eventoIaService;
-    private final EventoParserRegex   regexParser;
-    private final ObjectMapper        objectMapper;
+    private final EventoService           eventoService;
+    private final EventoIaService         eventoIaService;
+    private final EventoParserRegex       regexParser;
+    private final EventoParserService     parserService;
+    private final ObjectMapper            objectMapper;
 
     // ══════════════════════════════════════════════════════════
     //  🔥 CONSTRUCTOR CON FIX DE JACKSON
     // ══════════════════════════════════════════════════════════
-    
-    public CalendarioController(EventoService eventoService, 
+
+    public CalendarioController(EventoService eventoService,
                                EventoIaService eventoIaService,
-                               EventoParserRegex regexParser) {
+                               EventoParserRegex regexParser,
+                               EventoParserService parserService) {
         this.eventoService = eventoService;
         this.eventoIaService = eventoIaService;
         this.regexParser = regexParser;
-        
+        this.parserService = parserService;
+
         // Configurar ObjectMapper con soporte para LocalDate/LocalTime
         this.objectMapper = new ObjectMapper();
         this.objectMapper.registerModule(new JavaTimeModule());
@@ -222,90 +227,102 @@ public class CalendarioController {
     }
 
     // ══════════════════════════════════════════════════════════
-    //  API MEJORADA: INTERPRETAR CON PREVIEW + CONVERSACIÓN
+    //  🚀 V2: NUEVOS ENDPOINTS CON EventoParserService
     // ══════════════════════════════════════════════════════════
 
-    @PostMapping("/api/interpretar-preview")
-    @ResponseBody
-    public Map<String, Object> interpretarConPreview(@RequestBody Map<String, String> body) {
-        String texto = body.get("texto");
-        LocalDate hoy = LocalDate.now();
+    /**
+     * POST /api/interpretar-v2
+     *
+     * Interpreta texto (dictado o escrito) usando REGEX + IA.
+     * Devuelve:
+     * - 200 OK: Evento interpretado correctamente
+     * - 202 Accepted: Necesita límite de recurrencia
+     * - 400 Bad Request: Error en interpretación
+     */
+    @PostMapping("/api/interpretar-v2")
+    public ResponseEntity<?> interpretarV2(@RequestBody Map<String, String> body) {
+        try {
+            String texto = body.get("texto");
+            LocalDate hoy = LocalDate.now();
 
-        log.info("📥 Interpretando con preview: {}", texto);
+            log.info("🚀 [V2] Interpretando: {}", texto);
 
-        // Intentar REGEX primero
-        Optional<EventoParserRegex.EventoParseResult> resultadoRegex = regexParser.parse(texto, hoy);
-        
-        Evento evento;
-        boolean esRecurrente;
-        boolean necesitaLimite = false;
-        
-        if (resultadoRegex.isPresent()) {
-            log.info("⚡ REGEX exitoso");
-            evento = resultadoRegex.get().evento();
-            esRecurrente = resultadoRegex.get().esRecurrente();
-            
-            // Verificar si necesita límite
-            if (esRecurrente && evento.getDatosExtra() != null) {
-                necesitaLimite = Boolean.TRUE.equals(evento.getDatosExtra().get("necesitaLimite"));
+            EventoParserService.EventoParseResponse resp =
+                parserService.interpretar(texto, hoy);
+
+            // ── CASO 1: Éxito ────────────────────────────────────
+            if ("success".equals(resp.getPaso())) {
+                log.info("✅ [V2] Interpretación exitosa en {}ms", resp.getTiempoMs());
+                return ResponseEntity.ok(resp);
             }
-        } else {
-            log.info("⏩ REGEX no coincide → usando IA");
-            EventoIaRequest request = new EventoIaRequest();
-            request.setTexto(texto);
-            request.setFechaContexto(hoy.toString());
-            
-            EventoIaResponse iaResponse = eventoIaService.interpretar(request);
-            
-            // ── CASO 1: IA pide límite ────────────────────────────
-            if (!iaResponse.isExito() && iaResponse.getMensajeError() != null 
-                && iaResponse.getEventoPreview() != null) {
-                Map<String, Object> response = new HashMap<>();
-                response.put("necesitaLimite", true);
-                response.put("mensajeLimite", iaResponse.getMensajeError());
-                response.put("eventoBase", iaResponse.getEventoPreview());
-                return response;
+
+            // ── CASO 2: Necesita límite ──────────────────────────
+            if ("necesita_limite".equals(resp.getPaso())) {
+                log.info("⏸️  [V2] Necesita límite de recurrencia");
+                return ResponseEntity.accepted().body(resp);
             }
-            
-            // ── CASO 2: Error real ────────────────────────────────
-            if (!iaResponse.isExito() || iaResponse.getEventoPreview() == null) {
-                Map<String, Object> errorResponse = new HashMap<>();
-                errorResponse.put("error", iaResponse.getMensajeError());
-                return errorResponse;
+
+            // ── CASO 3: Error ────────────────────────────────────
+            log.warn("❌ [V2] Error: {}", resp.getMensaje());
+            return ResponseEntity.badRequest().body(resp);
+
+        } catch (Exception e) {
+            log.error("💥 [V2] Error no controlado", e);
+            return ResponseEntity.internalServerError().body(
+                Map.of("error", e.getMessage())
+            );
+        }
+    }
+
+    /**
+     * POST /api/procesar-limite-v2
+     *
+     * Procesa la respuesta del usuario sobre el límite de recurrencia.
+     * Devuelve:
+     * - 200 OK: Límite procesado correctamente
+     * - 400 Bad Request: Error al procesar
+     */
+    @PostMapping("/api/procesar-limite-v2")
+    public ResponseEntity<?> procesarLimiteV2(@RequestBody Map<String, Object> body) {
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> eventoBaseMap = (Map<String, Object>) body.get("eventoBase");
+            String respuestaLimite = (String) body.get("respuestaLimite");
+
+            if (eventoBaseMap == null || respuestaLimite == null) {
+                return ResponseEntity.badRequest().body(
+                    Map.of("error", "Faltan parámetros: eventoBase o respuestaLimite")
+                );
             }
-            
-            evento = iaResponse.getEventoPreview();
-            esRecurrente = evento.getDatosExtra() != null && 
-                          Boolean.TRUE.equals(evento.getDatosExtra().get("recurrente"));
+
+            // Convertir Map a EventoMinimo
+            EventoMinimo eventoBase = objectMapper.convertValue(eventoBaseMap, EventoMinimo.class);
+
+            log.info("🔄 [V2] Procesando límite: {}", respuestaLimite);
+
+            EventoParserService.EventoParseResponse resp =
+                parserService.procesarLimite(eventoBase, respuestaLimite);
+
+            // ── CASO 1: Éxito ────────────────────────────────────
+            if ("success".equals(resp.getPaso())) {
+                log.info("✅ [V2] Límite procesado en {}ms", resp.getTiempoMs());
+                return ResponseEntity.ok(resp);
+            }
+
+            // ── CASO 2: Error ────────────────────────────────────
+            log.warn("❌ [V2] Error procesando límite: {}", resp.getMensaje());
+            return ResponseEntity.badRequest().body(resp);
+
+        } catch (Exception e) {
+            log.error("💥 [V2] Error procesando límite", e);
+            return ResponseEntity.internalServerError().body(
+                Map.of("error", e.getMessage())
+            );
         }
-
-        // ── Si necesita límite, devolver pregunta ─────────────────
-        if (necesitaLimite) {
-            Map<String, Object> response = new HashMap<>();
-            response.put("necesitaLimite", true);
-            response.put("mensajeLimite", construirMensajeLimite(evento));
-            response.put("eventoBase", evento);
-            return response;
-        }
-
-        // ── Respuesta normal con preview ──────────────────────────
-        Map<String, Object> response = new HashMap<>();
-        response.put("evento", evento);
-        response.put("esRecurrente", esRecurrente);
-
-        // Si es recurrente, generar vista previa de fechas
-        if (esRecurrente) {
-            List<LocalDate> fechas = eventoService.generarVistaPrevia(evento);
-            response.put("totalEventos", fechas.size());
-            response.put("primerasFechas", fechas.stream().limit(10).toList());
-            response.put("descripcionPreview", generarDescripcionPreview(fechas));
-        }
-
-        return response;
     }
 
     // ══════════════════════════════════════════════════════════
-    //  🔥 API: PROCESAR LÍMITE (CON FIX DE JACKSON)
+    //  🔥 API: PROCESAR LÍMITE (ENDPOINT ANTIGUO - DEPRECADO)
     // ══════════════════════════════════════════════════════════
 
     @PostMapping("/api/procesar-limite")
@@ -348,6 +365,10 @@ public class CalendarioController {
         }
     }
 
+    // ══════════════════════════════════════════════════════════
+    //  🛠️ MÉTODOS AUXILIARES
+    // ══════════════════════════════════════════════════════════
+
     private String construirMensajeLimite(Evento evento) {
         StringBuilder sb = new StringBuilder();
         sb.append("📅 Evento recurrente detectado\n\n");
@@ -361,12 +382,12 @@ public class CalendarioController {
 
     private String generarDescripcionPreview(List<LocalDate> fechas) {
         if (fechas.isEmpty()) return "No se generarán eventos";
-        
+
         StringBuilder sb = new StringBuilder();
         sb.append("Se crearán ").append(fechas.size()).append(" evento");
         if (fechas.size() > 1) sb.append("s");
         sb.append(":\n\n");
-        
+
         int limite = Math.min(10, fechas.size());
         for (int i = 0; i < limite; i++) {
             LocalDate fecha = fechas.get(i);
@@ -379,19 +400,19 @@ public class CalendarioController {
                 case SATURDAY -> "Sáb";
                 case SUNDAY -> "Dom";
             };
-            
-            sb.append(String.format("%-3s %02d/%02d/%d\n", 
-                diaSemana, 
-                fecha.getDayOfMonth(), 
-                fecha.getMonthValue(), 
+
+            sb.append(String.format("%-3s %02d/%02d/%d\n",
+                diaSemana,
+                fecha.getDayOfMonth(),
+                fecha.getMonthValue(),
                 fecha.getYear()
             ));
         }
-        
+
         if (fechas.size() > 10) {
             sb.append("\n... y ").append(fechas.size() - 10).append(" más");
         }
-        
+
         return sb.toString();
     }
 
