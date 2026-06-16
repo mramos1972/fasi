@@ -1,6 +1,8 @@
 package com.miempresa.fasi.calendario;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.web.bind.annotation.RequestParam;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -11,7 +13,6 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
-import java.time.YearMonth;
 import java.util.List;
 import java.util.UUID;
 import java.util.Map;
@@ -20,14 +21,30 @@ import java.util.Optional;
 
 @Controller
 @RequestMapping("/calendario")
-@RequiredArgsConstructor
 public class CalendarioController {
-
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(CalendarioController.class);
 
-    private final EventoService    eventoService;
-    private final EventoIaService  eventoIaService;
-    private final EventoParserRegex regexParser;
+    private final EventoService       eventoService;
+    private final EventoIaService     eventoIaService;
+    private final EventoParserRegex   regexParser;
+    private final ObjectMapper        objectMapper;
+
+    // ══════════════════════════════════════════════════════════
+    //  🔥 CONSTRUCTOR CON FIX DE JACKSON
+    // ══════════════════════════════════════════════════════════
+    
+    public CalendarioController(EventoService eventoService, 
+                               EventoIaService eventoIaService,
+                               EventoParserRegex regexParser) {
+        this.eventoService = eventoService;
+        this.eventoIaService = eventoIaService;
+        this.regexParser = regexParser;
+        
+        // Configurar ObjectMapper con soporte para LocalDate/LocalTime
+        this.objectMapper = new ObjectMapper();
+        this.objectMapper.registerModule(new JavaTimeModule());
+        this.objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+    }
 
     // ── Vista principal (mes actual por defecto) ─────────────
     @GetMapping
@@ -42,7 +59,7 @@ public class CalendarioController {
         int       mes     = month != null ? month : hoy.getMonthValue();
         String    vistaSel = vista != null ? vista : "mes";
 
-        YearMonth ym      = YearMonth.of(anio, mes);
+        java.time.YearMonth ym = java.time.YearMonth.of(anio, mes);
 
         model.addAttribute("eventos",     eventoService.findByMes(anio, mes));
         model.addAttribute("proximos",    eventoService.findProximos(5));
@@ -288,7 +305,7 @@ public class CalendarioController {
     }
 
     // ══════════════════════════════════════════════════════════
-    //  API: PROCESAR LÍMITE (SEGUNDA INTERACCIÓN)
+    //  🔥 API: PROCESAR LÍMITE (CON FIX DE JACKSON)
     // ══════════════════════════════════════════════════════════
 
     @PostMapping("/api/procesar-limite")
@@ -299,7 +316,7 @@ public class CalendarioController {
             Map<String, Object> eventoBaseMap = (Map<String, Object>) body.get("eventoBase");
             String respuestaLimite = (String) body.get("respuestaLimite");
 
-            // Reconstruir el evento base
+            // 🔥 Usar el ObjectMapper configurado con JavaTimeModule
             Evento eventoBase = objectMapper.convertValue(eventoBaseMap, Evento.class);
 
             // Procesar el límite
@@ -324,15 +341,13 @@ public class CalendarioController {
             return result;
 
         } catch (Exception e) {
-            log.error("Error procesando límite", e);
+            log.error("❌ Error procesando límite", e);
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("error", "Error al procesar el límite: " + e.getMessage());
             return errorResponse;
         }
     }
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
-    
     private String construirMensajeLimite(Evento evento) {
         StringBuilder sb = new StringBuilder();
         sb.append("📅 Evento recurrente detectado\n\n");
@@ -343,7 +358,7 @@ public class CalendarioController {
         sb.append("• Indefinido: 'indefinido' o 'sin límite' (hasta fin de año)");
         return sb.toString();
     }
-    
+
     private String generarDescripcionPreview(List<LocalDate> fechas) {
         if (fechas.isEmpty()) return "No se generarán eventos";
         
@@ -379,4 +394,5 @@ public class CalendarioController {
         
         return sb.toString();
     }
+
 }
