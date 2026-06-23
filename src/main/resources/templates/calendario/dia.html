@@ -11,15 +11,24 @@
       <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100"
           th:text="${#temporals.format(fecha, 'EEEE, d MMMM yyyy')}"></h2>
     </div>
-    <a th:href="@{/calendario/nuevo(fecha=${fecha})}"
-       class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition text-sm font-semibold">
-      + Nuevo evento
-    </a>
+    <!-- Botones de acción -->
+    <div class="flex items-center gap-2">
+      <button onclick="abrirModalVozDia()"
+              class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700
+                     transition text-sm font-semibold flex items-center gap-1"
+              title="Nuevo evento por voz">
+        🎙️ Voz
+      </button>
+      <a th:href="@{/calendario/nuevo(fecha=${fecha})}"
+         class="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200
+                px-4 py-2 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600
+                transition text-sm font-semibold">
+        ✏️ Manual
+      </a>
+    </div>
   </div>
 
-  <!-- ═══════════════════════════════════════════════════════ -->
-  <!-- BARRA CONTEXTUAL DEL DÍA — mareas, sol, ubicación      -->
-  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- BARRA CONTEXTUAL DEL DÍA -->
   <div id="contexto-dia"
        class="mb-6 bg-gray-900 dark:bg-gray-800 text-white rounded-xl shadow
               overflow-x-auto scrollbar-hide">
@@ -87,6 +96,23 @@
         console.warn('Contexto del día no disponible:', e.message);
       }
     })();
+
+    // Abre el modal global con la fecha del día pre-sugerida en el placeholder
+    function abrirModalVozDia() {
+      const fechaStr = /*[[${#temporals.format(fecha, 'yyyy-MM-dd')}]]*/ '';
+      // Usar el modal global del base.html
+      // (en esta página no hay abrirModalVoz local)
+      if (typeof abrirModalVozGlobal === 'function') {
+        abrirModalVozGlobal();
+        // Sugerir la fecha en el textarea después de que el modal abra
+        setTimeout(() => {
+          const ta = document.getElementById('gp-voz-texto');
+          if (ta && !ta.value) {
+            ta.placeholder = 'Ej: "Cita médica a las 10" (se usará el ' + fechaStr + ')';
+          }
+        }, 150);
+      }
+    }
     /*]]>*/
   </script>
 
@@ -108,11 +134,11 @@
         </div>
         <h3 class="font-semibold text-gray-800 dark:text-gray-100 text-lg"
             th:text="${e.titulo}"></h3>
-        <!-- Chips de etiquetas -->
         <div th:if="${e.etiquetas != null and !e.etiquetas.isEmpty()}"
              class="flex flex-wrap gap-1 mt-1">
           <span th:each="tag : ${e.etiquetas}"
-                class="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 font-medium"
+                class="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700
+                       text-gray-600 dark:text-gray-300 font-medium"
                 th:text="'#' + ${tag}"></span>
         </div>
         <p th:if="${e.lugar != null}"
@@ -132,17 +158,13 @@
         </form>
       </div>
     </div>
+<div th:if="${#lists.isEmpty(eventos)}"
+     class="bg-white dark:bg-gray-800 rounded-xl shadow p-12 text-center">
+  <p class="text-5xl mb-3">📭</p>
+  <p class="text-gray-400">No hay eventos para este día.</p>
+  <p class="text-xs text-gray-400 mt-2">Usa los botones de arriba para añadir uno.</p>
+</div>
 
-    <div th:if="${#lists.isEmpty(eventos)}"
-         class="bg-white dark:bg-gray-800 rounded-xl shadow p-12 text-center">
-      <p class="text-5xl mb-3">📭</p>
-      <p class="text-gray-400">No hay eventos para este día.</p>
-      <a th:href="@{/calendario/nuevo(fecha=${fecha})}"
-         class="inline-block mt-4 bg-indigo-600 text-white px-6 py-2 rounded-lg
-                hover:bg-indigo-700 transition text-sm">
-        + Añadir evento
-      </a>
-    </div>
   </div>
 </section>
 </body>

@@ -34,127 +34,171 @@
 
   <!-- GRID CALENDARIO -->
   <div id="grid-calendario"
-       class="grid grid-cols-7 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden flex-1" 
+       class="grid grid-cols-7 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden flex-1"
        style="grid-auto-rows: 1fr;"></div>
 
   <!-- MODAL VOZ CON CONVERSACIÓN -->
-<!-- MODAL VOZ CON CONVERSACIÓN (VERSIÓN CORREGIDA) -->
-<div id="modal-voz" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4">
-  <div class="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl
-              w-full sm:max-w-lg mx-0 sm:mx-4 relative
-              max-h-[90vh] sm:max-h-[85vh] flex flex-col">
+  <div id="modal-voz" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4">
+    <div class="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl
+                w-full sm:max-w-lg mx-0 sm:mx-4 relative
+                max-h-[90vh] sm:max-h-[85vh] flex flex-col">
 
-    <!-- HEADER FIJO -->
-    <div class="flex-shrink-0 p-6 pb-3 border-b border-gray-200 dark:border-gray-700">
-      <button onclick="cerrarModalVoz()"
-              class="absolute top-4 right-4 w-8 h-8 flex items-center justify-center
-                     bg-gray-200 dark:bg-gray-600 hover:bg-red-100 dark:hover:bg-red-900
-                     text-gray-600 dark:text-gray-200 rounded-full text-lg font-bold transition z-10">
-        &#x2715;
-      </button>
+      <!-- HEADER FIJO -->
+      <div class="flex-shrink-0 p-6 pb-3 border-b border-gray-200 dark:border-gray-700">
+        <button onclick="cerrarModalVoz()"
+                class="absolute top-4 right-4 w-8 h-8 flex items-center justify-center
+                       bg-gray-200 dark:bg-gray-600 hover:bg-red-100 dark:hover:bg-red-900
+                       text-gray-600 dark:text-gray-200 rounded-full text-lg font-bold transition z-10">
+          &#x2715;
+        </button>
 
-      <h3 class="text-lg font-bold text-gray-800 dark:text-gray-100 mb-1">
-        &#127908; Nuevo evento
-      </h3>
-      <p class="text-xs text-gray-400">
-        Habla o escribe: <em>"Cita médica el jueves para Rocío a las 10"</em>
-      </p>
-    </div>
-
-    <!-- CONTENIDO CON SCROLL -->
-    <div class="flex-1 overflow-y-auto px-6 py-4 space-y-3">
-
-      <!-- PASO 1: Input inicial -->
-      <div id="paso-inicial">
-        <textarea id="voz-texto" rows="3"
-                  placeholder="Pulsa el micrófono o escribe aquí..."
-                  class="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3
-                         bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
-                         focus:outline-none focus:ring-2 focus:ring-red-400 text-sm
-                         resize-none"></textarea>
-
-        <div class="flex gap-2 mt-3">
-          <button id="btn-micro" onclick="toggleMicrofono()"
-                  class="flex-1 flex items-center justify-center gap-2 bg-red-500
-                         hover:bg-red-600 text-white py-2.5 rounded-xl font-semibold transition text-sm">
-            &#127908; <span id="micro-label">Grabar</span>
-          </button>
-          <button onclick="interpretarTexto()"
-                  class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5
-                         rounded-xl font-semibold transition text-sm">
-            &#10024; Interpretar
-          </button>
-        </div>
+        <h3 class="text-lg font-bold text-gray-800 dark:text-gray-100 mb-1">
+          &#127908; Nuevo evento
+        </h3>
+        <p class="text-xs text-gray-400">
+          Habla o escribe: <em>"Cita médica el jueves para Rocío a las 10"</em>
+        </p>
       </div>
 
-      <!-- PASO 2: Pregunta por límite -->
-      <div id="paso-limite" style="display:none">
-        <div class="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 
-                    rounded-xl p-4">
-          <p class="text-sm text-yellow-800 dark:text-yellow-200 whitespace-pre-wrap" 
-             id="mensaje-limite"></p>
+      <!-- CONTENIDO CON SCROLL -->
+      <div class="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+
+        <!-- PASO 1: Input inicial -->
+        <div id="paso-inicial">
+          <textarea id="voz-texto" rows="3"
+                    placeholder="Pulsa el micrófono o escribe aquí..."
+                    class="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3
+                           bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
+                           focus:outline-none focus:ring-2 focus:ring-red-400 text-sm
+                           resize-none"></textarea>
+
+          <div class="flex gap-2 mt-3">
+            <button id="btn-micro" onclick="toggleMicrofono()"
+                    class="flex-1 flex items-center justify-center gap-2 bg-red-500
+                           hover:bg-red-600 text-white py-2.5 rounded-xl font-semibold transition text-sm">
+              &#127908; <span id="micro-label">Grabar</span>
+            </button>
+            <button onclick="interpretarTexto()"
+                    class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5
+                           rounded-xl font-semibold transition text-sm">
+              &#10024; Interpretar
+            </button>
+          </div>
         </div>
 
-        <textarea id="limite-texto" rows="2"
-                  placeholder="Escribe: 'hasta agosto', 'hasta el 31/12', o 'indefinido'..."
-                  class="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3
-                         bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
-                         focus:outline-none focus:ring-2 focus:ring-yellow-400 text-sm
-                         resize-none mt-3"></textarea>
+        <!-- PASO 2: Pregunta por límite -->
+        <div id="paso-limite" style="display:none">
+          <div class="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700
+                      rounded-xl p-4">
+            <p class="text-sm text-yellow-800 dark:text-yellow-200 whitespace-pre-wrap"
+               id="mensaje-limite"></p>
+          </div>
 
-        <div class="flex gap-2 mt-3">
-          <button onclick="procesarLimite()"
-                  class="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white py-2.5
-                         rounded-xl font-semibold transition text-sm">
-            ✅ Establecer límite
-          </button>
-          <button onclick="volverAlInicio()"
-                  class="px-4 py-2.5 border border-gray-300 dark:border-gray-600
-                         text-gray-700 dark:text-gray-200 rounded-xl text-sm
-                         hover:bg-gray-50 dark:hover:bg-gray-700 transition">
-            ← Volver
-          </button>
+          <textarea id="limite-texto" rows="2"
+                    placeholder="Escribe: 'hasta agosto', 'hasta el 31/12', o 'indefinido'..."
+                    class="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3
+                           bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
+                           focus:outline-none focus:ring-2 focus:ring-yellow-400 text-sm
+                           resize-none mt-3"></textarea>
+
+          <div class="flex gap-2 mt-3">
+            <button onclick="procesarLimite()"
+                    class="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white py-2.5
+                           rounded-xl font-semibold transition text-sm">
+              ✅ Establecer límite
+            </button>
+            <button onclick="volverAlInicio()"
+                    class="px-4 py-2.5 border border-gray-300 dark:border-gray-600
+                           text-gray-700 dark:text-gray-200 rounded-xl text-sm
+                           hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+              ← Volver
+            </button>
+          </div>
         </div>
-      </div>
 
-      <!-- SPINNER IA -->
-      <div id="ia-spinner" style="display:none"
-           class="flex items-center gap-2 text-xs text-gray-400">
-        <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce"></div>
-        <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:150ms"></div>
-        <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:300ms"></div>
-        <span>La IA está interpretando...</span>
-      </div>
-
-      <!-- PREVIEW EVENTO -->
-      <div id="preview-evento" style="display:none"
-           class="bg-gray-50 dark:bg-gray-700 rounded-xl p-4">
-        <h4 class="font-semibold text-sm text-gray-700 dark:text-gray-200 mb-2">Vista previa:</h4>
-        <div id="preview-contenido" class="text-sm space-y-1 text-gray-700 dark:text-gray-200"></div>
-        <div class="flex gap-2 mt-3">
-          <button id="btn-confirmar" onclick="confirmarEvento()"
-                  class="flex-1 bg-green-600 hover:bg-green-700 text-white py-2
-                         rounded-lg font-semibold transition text-sm">
-            &#9989; Confirmar
-          </button>
-          <button onclick="editarManual()"
-                  class="flex-1 border border-gray-300 dark:border-gray-500
-                         text-gray-700 dark:text-gray-200 py-2 rounded-lg text-sm
-                         hover:bg-gray-50 dark:hover:bg-gray-600 transition">
-            &#9999;&#65039; Editar
-          </button>
+        <!-- SPINNER IA -->
+        <div id="ia-spinner" style="display:none"
+             class="flex items-center gap-2 text-xs text-gray-400">
+          <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce"></div>
+          <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:150ms"></div>
+          <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:300ms"></div>
+          <span>La IA está interpretando...</span>
         </div>
-      </div>
 
+        <!-- PREVIEW EVENTO -->
+        <div id="preview-evento" style="display:none"
+             class="bg-gray-50 dark:bg-gray-700 rounded-xl p-4">
+          <h4 class="font-semibold text-sm text-gray-700 dark:text-gray-200 mb-2">Vista previa:</h4>
+          <div id="preview-contenido" class="text-sm space-y-1 text-gray-700 dark:text-gray-200"></div>
+          <div class="flex gap-2 mt-3">
+            <button id="btn-confirmar" onclick="confirmarEvento()"
+                    class="flex-1 bg-green-600 hover:bg-green-700 text-white py-2
+                           rounded-lg font-semibold transition text-sm">
+              &#9989; Confirmar
+            </button>
+            <button onclick="editarManual()"
+                    class="flex-1 border border-gray-300 dark:border-gray-500
+                           text-gray-700 dark:text-gray-200 py-2 rounded-lg text-sm
+                           hover:bg-gray-50 dark:hover:bg-gray-600 transition">
+              &#9999;&#65039; Editar
+            </button>
+          </div>
+        </div>
+
+      </div>
     </div>
   </div>
-</div>
 
   <script th:inline="javascript">
     /*<![CDATA[*/
     const EVENTOS_MES = /*[[${eventos}]]*/ [];
     const YEAR_MONTH  = /*[[${yearMonth.toString()}]]*/ '';
     const HOY         = /*[[${hoy.toString()}]]*/ '';
+
+    // ══════════════════════════════════════════════════════════
+    //  HELPERS — Normalización de fechas y horas
+    //  Jackson puede serializar LocalDate como [2026,6,23]
+    //  o como "2026-06-23" dependiendo del contexto.
+    //  Estos helpers manejan ambos casos.
+    // ══════════════════════════════════════════════════════════
+
+    function normalizarFecha(val) {
+      if (!val) return null;
+      // Array [año, mes, dia]
+      if (Array.isArray(val) && val.length >= 3) {
+        const y = val[0];
+        const m = String(val[1]).padStart(2, '0');
+        const d = String(val[2]).padStart(2, '0');
+        return y + '-' + m + '-' + d;
+      }
+      // Ya es string "2026-06-23"
+      if (typeof val === 'string') return val;
+      return null;
+    }
+
+    function normalizarHora(val) {
+      if (!val) return null;
+      // Array [hora, minuto] o [hora, minuto, segundo]
+      if (Array.isArray(val) && val.length >= 2) {
+        return String(val[0]).padStart(2, '0') + ':' + String(val[1]).padStart(2, '0');
+      }
+      // Ya es string "10:30:00" → recortar a "10:30"
+      if (typeof val === 'string') return val.substring(0, 5);
+      return null;
+    }
+
+    function normalizarEvento(e) {
+      if (!e) return e;
+      e.fechaInicio = normalizarFecha(e.fechaInicio);
+      e.fechaFin    = normalizarFecha(e.fechaFin);
+      e.horaInicio  = normalizarHora(e.horaInicio);
+      e.horaFin     = normalizarHora(e.horaFin);
+      return e;
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  RENDER CALENDARIO
+    // ══════════════════════════════════════════════════════════
 
     function renderCalendario() {
       const parts  = YEAR_MONTH.split('-');
@@ -168,6 +212,9 @@
 
       const grid = document.getElementById('grid-calendario');
       grid.innerHTML = '';
+
+      // Normalizar todos los eventos del mes al cargar
+      const eventosMesNorm = EVENTOS_MES.map(normalizarEvento);
 
       for (let i = 0; i < col0; i++) {
         const vacia = document.createElement('div');
@@ -183,7 +230,7 @@
         const colIdx   = (col0 + dia - 1) % 7;
         const esFinde  = (colIdx >= 5);
 
-        const eventosDia = EVENTOS_MES.filter(function(e) {
+        const eventosDia = eventosMesNorm.filter(function(e) {
           if (e.fechaInicio === fechaStr) return true;
           if (e.fechaFin && e.fechaFin !== e.fechaInicio) {
             var d1 = new Date(e.fechaInicio + 'T00:00:00');
@@ -275,7 +322,7 @@
     var recognition  = null;
     var grabando     = false;
     var eventoActual = null;
-    var eventoBase   = null; // Para guardar el evento mientras pedimos límite
+    var eventoBase   = null;
 
     window.abrirModalVoz = function() {
       document.getElementById('modal-voz').classList.remove('hidden');
@@ -375,10 +422,10 @@
     async function interpretarTexto() {
       var texto = document.getElementById('voz-texto').value.trim();
       if (!texto) { alert('Escribe o dicta algo primero.'); return; }
-      
+
       document.getElementById('ia-spinner').style.display = 'flex';
       document.getElementById('preview-evento').style.display = 'none';
-      
+
       try {
         var resp = await fetch('/calendario/api/interpretar-preview', {
           method: 'POST',
@@ -404,7 +451,7 @@
 
         // ── CASO 3: Evento completo ───────────────────────────
         if (data.evento) {
-          eventoActual = data.evento;
+          eventoActual = normalizarEvento(data.evento);  // ← NORMALIZAR AQUÍ
           eventoActual.esRecurrente = data.esRecurrente;
           eventoActual.descripcionPreview = data.descripcionPreview;
           mostrarPreview(eventoActual, data);
@@ -446,12 +493,10 @@
           return;
         }
 
-        // Evento completo con límite
-        eventoActual = data.evento;
+        eventoActual = normalizarEvento(data.evento);  // ← NORMALIZAR AQUÍ
         eventoActual.esRecurrente = data.esRecurrente;
         eventoActual.descripcionPreview = data.descripcionPreview;
 
-        // Volver a paso inicial y mostrar preview
         document.getElementById('paso-limite').style.display = 'none';
         document.getElementById('paso-inicial').style.display = 'block';
         mostrarPreview(eventoActual, data);
@@ -476,15 +521,16 @@
       html += '<p><strong>Tipo:</strong> ' + tipoEmoji + ' ' + tipoLabel + '</p>';
       html += '<p><strong>Título:</strong> ' + (evento.titulo || '-') + '</p>';
 
+      // Hora ya normalizada a "HH:MM" por normalizarEvento()
       if (evento.horaInicio) {
-        html += '<p><strong>Hora:</strong> ' + evento.horaInicio.substring(0,5);
-        if (evento.horaFin) html += ' - ' + evento.horaFin.substring(0,5);
+        html += '<p><strong>Hora:</strong> ' + evento.horaInicio;
+        if (evento.horaFin) html += ' - ' + evento.horaFin;
         html += '</p>';
       }
 
-      if (evento.lugar) html += '<p><strong>Lugar:</strong> ' + evento.lugar + '</p>';
-      if (evento.personasRelacionadas) html += '<p><strong>Personas:</strong> ' + evento.personasRelacionadas + '</p>';
-      if (evento.descripcion) html += '<p><strong>Notas:</strong> ' + evento.descripcion + '</p>';
+      if (evento.lugar) html += '<p><strong>Lugar:</strong> ' + escapeHtml(evento.lugar) + '</p>';
+      if (evento.personasRelacionadas) html += '<p><strong>Personas:</strong> ' + escapeHtml(evento.personasRelacionadas) + '</p>';
+      if (evento.descripcion) html += '<p><strong>Notas:</strong> ' + escapeHtml(evento.descripcion) + '</p>';
 
       if (esRec && dataExtra.descripcionPreview) {
         html += '<div class="mt-3 p-3 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg border border-indigo-200 dark:border-indigo-700">';
@@ -492,6 +538,7 @@
         html += '<pre class="text-xs text-gray-700 dark:text-gray-200 whitespace-pre-wrap font-mono leading-relaxed">' + escapeHtml(dataExtra.descripcionPreview) + '</pre>';
         html += '</div>';
       } else {
+        // fechaInicio ya normalizada a "YYYY-MM-DD"
         var fechaStr = evento.fechaInicio || '-';
         if (evento.fechaFin && evento.fechaFin !== evento.fechaInicio) {
           var d1 = new Date(evento.fechaInicio + 'T00:00:00');
@@ -504,7 +551,7 @@
 
       if (!evento.horaInicio && !evento.todoDia) {
         html += '<div class="mt-2 p-2 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 rounded text-xs text-yellow-700 dark:text-yellow-300">';
-        html += '⚠️ No se especificó hora - se guardará como <strong>pendiente de hora</strong>';
+        html += '⚠️ No se especificó hora — se guardará como <strong>pendiente de hora</strong>';
         html += '</div>';
       }
 
@@ -544,7 +591,8 @@
           cerrarModalVoz();
           window.location.reload();
         } else {
-          alert('Error al guardar.');
+          var errText = await resp.text();
+          alert('Error al guardar: ' + errText);
         }
       } catch (err) {
         alert('Error: ' + err.message);

@@ -4,7 +4,9 @@ import lombok.Data;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 @Data
 public class EventoConfirmarRequest {
@@ -21,6 +23,7 @@ public class EventoConfirmarRequest {
     private Integer           recordatorioMinutos;
     private Map<String, Object> datosExtra;
     private String            textoOriginalVoz;
+    private Set<String>       etiquetas;   // ← NUEVO
 
     public Evento toEvento() {
         Evento e = new Evento();
@@ -36,12 +39,12 @@ public class EventoConfirmarRequest {
         e.setDescripcion(descripcion);
         e.setRecordatorioMinutos(recordatorioMinutos);
         e.setTextoOriginalVoz(textoOriginalVoz);
+        e.setEtiquetas(etiquetas != null ? etiquetas : new HashSet<>());  // ← NUEVO
 
         Map<String, Object> extra = datosExtra != null
             ? new HashMap<>(datosExtra)
             : new HashMap<>();
 
-        // Si no tiene hora y no es todo el día → marcar pendiente
         if (horaInicio == null && !todoDia) {
             extra.put("pendienteHora", true);
         }

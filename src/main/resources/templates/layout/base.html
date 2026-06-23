@@ -6,7 +6,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
   <title th:replace="${title}">FASI</title>
-  
+
   <!-- PWA Meta Tags -->
   <link rel="manifest" href="/manifest.json"/>
   <meta name="theme-color" content="#4f46e5"/>
@@ -14,18 +14,18 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="apple-mobile-web-app-title" content="FASI"/>
   <link rel="apple-touch-icon" href="/images/icon-192.png"/>
-  
+
   <script th:src="@{/js/tailwind.min.js}"></script>
   <script th:src="@{/js/htmx.min.js}"></script>
   <script>tailwind.config = { darkMode: 'class' };</script>
-  
+
   <style>
     *, *::before, *::after {
       transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
     }
     .scrollbar-hide::-webkit-scrollbar { display: none; }
     .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-    
+
     #hamburger-menu {
       transition: transform 0.3s ease, opacity 0.3s ease;
     }
@@ -34,18 +34,17 @@
       opacity: 0;
       pointer-events: none;
     }
-    
-    .main-content { 
-      display: flex; 
-      flex-direction: column; 
-      flex: 1; 
-      min-height: 0; 
+
+    .main-content {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
       overflow-y: auto;
       padding-top: 56px;
       padding-bottom: 16px;
     }
-    
-    /* Safe area para notch de iPhone */
+
     @supports (padding: env(safe-area-inset-top)) {
       header { padding-top: env(safe-area-inset-top); }
       .main-content { padding-top: calc(56px + env(safe-area-inset-top)); }
@@ -55,13 +54,7 @@
 <body class="bg-gray-100 dark:bg-gray-950 h-screen flex flex-col overflow-hidden">
 
   <!-- ═══════════════════════════════════════════════════════ -->
-  <!-- HEADER FIJO — Mobile-first con tabs integradas         -->
-  <!-- ═══════════════════════════════════════════════════════ -->
-    <!-- ═══════════════════════════════════════════════════════ -->
-  <!-- HEADER FIJO — Minimalista                              -->
-  <!-- ═══════════════════════════════════════════════════════ -->
-    <!-- ═══════════════════════════════════════════════════════ -->
-  <!-- HEADER FIJO — Minimalista (modo día: blanco roto)      -->
+  <!-- HEADER FIJO                                             -->
   <!-- ═══════════════════════════════════════════════════════ -->
   <header class="fixed top-0 left-0 right-0 z-50
                  bg-stone-50 dark:bg-gray-900
@@ -69,7 +62,6 @@
                  border-b border-stone-200 dark:border-gray-700
                  h-14 flex items-center justify-between shadow-sm px-2">
 
-    <!-- Logo (izquierda) — vuelve siempre al inicio -->
     <a th:href="@{/}"
        class="flex items-center justify-center w-12 h-12 text-2xl
               hover:bg-stone-200 dark:hover:bg-gray-700
@@ -78,9 +70,7 @@
       ⚡
     </a>
 
-    <!-- Botones (derecha) -->
     <div class="flex items-center gap-1">
-
       <button onclick="abrirModalVozGlobal()"
               class="w-10 h-10 flex items-center justify-center rounded-full
                      bg-indigo-600 hover:bg-indigo-500 text-white
@@ -96,7 +86,6 @@
               title="Menú">
         ☰
       </button>
-
     </div>
   </header>
 
@@ -243,6 +232,120 @@
   </div>
 
   <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- MODAL VOZ GLOBAL                                        -->
+  <!-- Funciona desde cualquier página.                        -->
+  <!-- En /calendario, window.abrirModalVoz() toma el control -->
+  <!-- y usa el modal local (más completo). Aquí el fallback.  -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div id="modal-voz-global"
+       class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4">
+    <div class="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl
+                w-full sm:max-w-lg mx-0 sm:mx-4 relative
+                max-h-[90vh] sm:max-h-[85vh] flex flex-col">
+
+      <!-- HEADER -->
+      <div class="flex-shrink-0 p-6 pb-3 border-b border-gray-200 dark:border-gray-700">
+        <button onclick="cerrarModalVozGlobal()"
+                class="absolute top-4 right-4 w-8 h-8 flex items-center justify-center
+                       bg-gray-200 dark:bg-gray-600 hover:bg-red-100 dark:hover:bg-red-900
+                       text-gray-600 dark:text-gray-200 rounded-full text-lg font-bold transition z-10">
+          &#x2715;
+        </button>
+        <h3 class="text-lg font-bold text-gray-800 dark:text-gray-100 mb-1">
+          &#127908; Nuevo evento
+        </h3>
+        <p class="text-xs text-gray-400">
+          Habla o escribe: <em>"Cita médica el jueves para Rocío a las 10"</em>
+        </p>
+      </div>
+
+      <!-- CONTENIDO -->
+      <div class="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+
+        <!-- Input + botones -->
+        <div id="gp-paso-inicial">
+          <textarea id="gp-voz-texto" rows="3"
+                    placeholder="Pulsa el micrófono o escribe aquí..."
+                    class="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3
+                           bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
+                           focus:outline-none focus:ring-2 focus:ring-red-400 text-sm resize-none"></textarea>
+
+          <div class="flex gap-2 mt-3">
+            <button id="gp-btn-micro" onclick="gpToggleMicrofono()"
+                    class="flex-1 flex items-center justify-center gap-2 bg-red-500
+                           hover:bg-red-600 text-white py-2.5 rounded-xl font-semibold transition text-sm">
+              &#127908; <span id="gp-micro-label">Grabar</span>
+            </button>
+            <button onclick="gpInterpretarTexto()"
+                    class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5
+                           rounded-xl font-semibold transition text-sm">
+              &#10024; Interpretar
+            </button>
+          </div>
+        </div>
+
+        <!-- Paso límite -->
+        <div id="gp-paso-limite" style="display:none">
+          <div class="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700
+                      rounded-xl p-4">
+            <p class="text-sm text-yellow-800 dark:text-yellow-200 whitespace-pre-wrap"
+               id="gp-mensaje-limite"></p>
+          </div>
+          <textarea id="gp-limite-texto" rows="2"
+                    placeholder="'hasta agosto', 'hasta el 31/12', 'indefinido'..."
+                    class="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3
+                           bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
+                           focus:outline-none focus:ring-2 focus:ring-yellow-400 text-sm
+                           resize-none mt-3"></textarea>
+          <div class="flex gap-2 mt-3">
+            <button onclick="gpProcesarLimite()"
+                    class="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white py-2.5
+                           rounded-xl font-semibold transition text-sm">
+              ✅ Establecer límite
+            </button>
+            <button onclick="gpVolverAlInicio()"
+                    class="px-4 py-2.5 border border-gray-300 dark:border-gray-600
+                           text-gray-700 dark:text-gray-200 rounded-xl text-sm
+                           hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+              ← Volver
+            </button>
+          </div>
+        </div>
+
+        <!-- Spinner -->
+        <div id="gp-spinner" style="display:none"
+             class="flex items-center gap-2 text-xs text-gray-400">
+          <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce"></div>
+          <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:150ms"></div>
+          <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:300ms"></div>
+          <span>Interpretando...</span>
+        </div>
+
+        <!-- Preview -->
+        <div id="gp-preview" style="display:none"
+             class="bg-gray-50 dark:bg-gray-700 rounded-xl p-4">
+          <h4 class="font-semibold text-sm text-gray-700 dark:text-gray-200 mb-2">Vista previa:</h4>
+          <div id="gp-preview-contenido" class="text-sm space-y-1 text-gray-700 dark:text-gray-200"></div>
+          <div class="flex gap-2 mt-3">
+            <button id="gp-btn-confirmar" onclick="gpConfirmarEvento()"
+                    class="flex-1 bg-green-600 hover:bg-green-700 text-white py-2
+                           rounded-lg font-semibold transition text-sm">
+              &#9989; Confirmar
+            </button>
+            <button onclick="gpEditarManual()"
+                    class="flex-1 border border-gray-300 dark:border-gray-500
+                           text-gray-700 dark:text-gray-200 py-2 rounded-lg text-sm
+                           hover:bg-gray-50 dark:hover:bg-gray-600 transition">
+              &#9999;&#65039; Editar
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
   <!-- CONTENIDO PRINCIPAL                                     -->
   <!-- ═══════════════════════════════════════════════════════ -->
   <main class="main-content w-full mx-auto px-3 lg:px-6">
@@ -254,20 +357,20 @@
   <!-- ═══════════════════════════════════════════════════════ -->
   <script>
     // ── Dark mode ────────────────────────────────────────────
-    const htmlEl  = document.documentElement;
+    const htmlEl = document.documentElement;
 
     function applyDark(isDark) {
       isDark ? htmlEl.classList.add('dark') : htmlEl.classList.remove('dark');
       const menuIcon = document.getElementById('menu-dark-icon');
       if (menuIcon) menuIcon.textContent = isDark ? '☀️' : '🌙';
     }
-    
+
     function toggleDark() {
       const isDark = !htmlEl.classList.contains('dark');
       localStorage.setItem('fasi-dark', isDark ? '1' : '0');
       applyDark(isDark);
     }
-    
+
     (function() {
       const saved = localStorage.getItem('fasi-dark');
       applyDark(saved !== null ? saved === '1'
@@ -287,7 +390,7 @@
         cerrarMenu();
       }
     }
-    
+
     function cerrarMenu() {
       hamburgerMenu.classList.add('hidden-menu');
       menuOverlay.classList.add('hidden');
@@ -298,7 +401,7 @@
       document.getElementById('modal-buscador').classList.remove('hidden');
       setTimeout(() => document.getElementById('ia-search-input').focus(), 100);
     }
-    
+
     function cerrarBuscadorIA() {
       document.getElementById('modal-buscador').classList.add('hidden');
     }
@@ -315,7 +418,7 @@
 
       const result  = document.getElementById('ia-search-result');
       const spinner = document.getElementById('ia-search-spinner');
-      result.innerHTML  = '';
+      result.innerHTML = '';
       spinner.style.display = 'flex';
 
       try {
@@ -344,41 +447,295 @@
       if (resp.ok) window.location.reload();
     }
 
-    // ── Footer: cargar datos contextuales ────────────────────
-    async function cargarDatosFooter(fecha) {
-      try {
-        const fechaStr = fecha || new Date().toISOString().split('T')[0];
-        const resp = await fetch(`/contexto/api/datos?fecha=${fechaStr}`);
-        const d    = await resp.json();
-      } catch (e) {
-        console.warn('Header datos contextuales no disponibles:', e.message);
-      }
-    }
-
     function escapeHtml(text) {
       const d = document.createElement('div');
       d.appendChild(document.createTextNode(String(text)));
       return d.innerHTML;
     }
 
-    // ── Botón "+" global ─────────────────────────────────────
-    function abrirModalVozGlobal() {
-      // Si estamos en /calendario y existe el modal, abrirlo
-      if (typeof window.abrirModalVoz === 'function') {
-        window.abrirModalVoz();
-      } else {
-        // Si no, redirigir a /calendario (donde SÍ está el modal)
-        window.location = '/calendario';
-      }
-    }
-
-    // ── Init ─────────────────────────────────────────────────
     // ── PWA Service Worker ───────────────────────────────────
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js')
-        .then(() => console.log('✅ PWA lista para instalar'))
+        .then(() => console.log('✅ PWA lista'))
         .catch(e => console.warn('⚠️ PWA no disponible:', e));
     }
+
+    // ══════════════════════════════════════════════════════════
+    //  MODAL VOZ GLOBAL — helpers compartidos
+    // ══════════════════════════════════════════════════════════
+
+    function normalizarFecha(val) {
+      if (!val) return null;
+      if (Array.isArray(val) && val.length >= 3) {
+        return val[0] + '-' + String(val[1]).padStart(2,'0') + '-' + String(val[2]).padStart(2,'0');
+      }
+      return typeof val === 'string' ? val : null;
+    }
+
+    function normalizarHora(val) {
+      if (!val) return null;
+      if (Array.isArray(val) && val.length >= 2) {
+        return String(val[0]).padStart(2,'0') + ':' + String(val[1]).padStart(2,'0');
+      }
+      return typeof val === 'string' ? val.substring(0,5) : null;
+    }
+
+    function normalizarEvento(e) {
+      if (!e) return e;
+      e.fechaInicio = normalizarFecha(e.fechaInicio);
+      e.fechaFin    = normalizarFecha(e.fechaFin);
+      e.horaInicio  = normalizarHora(e.horaInicio);
+      e.horaFin     = normalizarHora(e.horaFin);
+      return e;
+    }
+
+    // ── Punto de entrada del botón + ─────────────────────────
+    function abrirModalVozGlobal() {
+      // Si la página actual ya tiene su propio modal (calendario/index),
+      // usarlo — es más completo y ya tiene el estado del mes cargado.
+      if (typeof window.abrirModalVoz === 'function') {
+        window.abrirModalVoz();
+        return;
+      }
+      // Fallback: modal global del base
+      _gpResetear();
+      document.getElementById('modal-voz-global').classList.remove('hidden');
+      setTimeout(() => document.getElementById('gp-voz-texto').focus(), 100);
+    }
+
+    function cerrarModalVozGlobal() {
+      document.getElementById('modal-voz-global').classList.add('hidden');
+      if (gpGrabando) gpPararMicrofono();
+      _gpResetear();
+    }
+
+    function _gpResetear() {
+      document.getElementById('gp-paso-inicial').style.display = 'block';
+      document.getElementById('gp-paso-limite').style.display  = 'none';
+      document.getElementById('gp-preview').style.display      = 'none';
+      document.getElementById('gp-spinner').style.display      = 'none';
+      document.getElementById('gp-voz-texto').value            = '';
+      document.getElementById('gp-limite-texto').value         = '';
+      gpEventoActual = null;
+      gpEventoBase   = null;
+    }
+
+    function gpVolverAlInicio() {
+      document.getElementById('gp-paso-limite').style.display = 'none';
+      document.getElementById('gp-paso-inicial').style.display = 'block';
+      gpEventoBase = null;
+    }
+
+    // ── Micrófono global ─────────────────────────────────────
+    var gpGrabando     = false;
+    var gpRecognition  = null;
+    var gpEventoActual = null;
+    var gpEventoBase   = null;
+
+    function gpToggleMicrofono() { gpGrabando ? gpPararMicrofono() : gpIniciarMicrofono(); }
+
+    function gpIniciarMicrofono() {
+      if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        alert('Tu navegador no soporta reconocimiento de voz.'); return;
+      }
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => {
+          stream.getTracks().forEach(t => t.stop());
+          _gpIniciarReconocimiento();
+        })
+        .catch(err => alert('Permiso de micrófono denegado: ' + err.message));
+    }
+
+    function _gpIniciarReconocimiento() {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      gpRecognition = new SR();
+      gpRecognition.lang = 'es-ES';
+      gpRecognition.continuous = true;
+      gpRecognition.interimResults = true;
+      let acumulado = '';
+      gpRecognition.onresult = e => {
+        let interino = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          if (e.results[i].isFinal) acumulado += e.results[i][0].transcript + ' ';
+          else interino += e.results[i][0].transcript;
+        }
+        document.getElementById('gp-voz-texto').value = acumulado + interino;
+      };
+      gpRecognition.onend = () => {
+        if (gpGrabando) setTimeout(() => { try { gpRecognition.start(); } catch(e){} }, 300);
+      };
+      gpRecognition.onerror = e => {
+        if (e.error === 'no-speech') { gpGrabando = false; _gpActualizarMicro(false); return; }
+        gpGrabando = false; _gpActualizarMicro(false);
+      };
+      gpRecognition.start();
+      gpGrabando = true;
+      _gpActualizarMicro(true);
+    }
+
+    function gpPararMicrofono() {
+      gpGrabando = false;
+      if (gpRecognition) gpRecognition.stop();
+      _gpActualizarMicro(false);
+    }
+
+    function _gpActualizarMicro(activo) {
+      document.getElementById('gp-micro-label').textContent = activo ? 'Parar' : 'Grabar';
+      const btn = document.getElementById('gp-btn-micro');
+      activo ? btn.classList.add('bg-red-700') : btn.classList.remove('bg-red-700');
+    }
+
+    // ── Interpretar ──────────────────────────────────────────
+    async function gpInterpretarTexto() {
+      const texto = document.getElementById('gp-voz-texto').value.trim();
+      if (!texto) { alert('Escribe o dicta algo primero.'); return; }
+
+      document.getElementById('gp-spinner').style.display = 'flex';
+      document.getElementById('gp-preview').style.display = 'none';
+
+      try {
+        const resp = await fetch('/calendario/api/interpretar-preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ texto })
+        });
+        const data = await resp.json();
+
+        if (data.necesitaLimite) {
+          gpEventoBase = data.eventoBase;
+          document.getElementById('gp-mensaje-limite').textContent = data.mensajeLimite;
+          document.getElementById('gp-paso-inicial').style.display = 'none';
+          document.getElementById('gp-paso-limite').style.display  = 'block';
+          return;
+        }
+        if (data.error) { alert('Error: ' + data.error); return; }
+        if (data.evento) {
+          gpEventoActual = normalizarEvento(data.evento);
+          gpEventoActual.esRecurrente = data.esRecurrente;
+          gpEventoActual.descripcionPreview = data.descripcionPreview;
+          _gpMostrarPreview(gpEventoActual, data);
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      } finally {
+        document.getElementById('gp-spinner').style.display = 'none';
+      }
+    }
+
+    // ── Procesar límite ──────────────────────────────────────
+    async function gpProcesarLimite() {
+      const respuestaLimite = document.getElementById('gp-limite-texto').value.trim();
+      if (!respuestaLimite) { alert('Escribe un límite primero.'); return; }
+
+      document.getElementById('gp-spinner').style.display = 'flex';
+      try {
+        const resp = await fetch('/calendario/api/procesar-limite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ eventoBase: gpEventoBase, respuestaLimite })
+        });
+        const data = await resp.json();
+        if (data.error) { alert('Error: ' + data.error); return; }
+
+        gpEventoActual = normalizarEvento(data.evento);
+        gpEventoActual.esRecurrente = data.esRecurrente;
+        gpEventoActual.descripcionPreview = data.descripcionPreview;
+        document.getElementById('gp-paso-limite').style.display  = 'none';
+        document.getElementById('gp-paso-inicial').style.display = 'block';
+        _gpMostrarPreview(gpEventoActual, data);
+      } catch (err) {
+        alert('Error: ' + err.message);
+      } finally {
+        document.getElementById('gp-spinner').style.display = 'none';
+      }
+    }
+
+    // ── Preview ──────────────────────────────────────────────
+    function _gpMostrarPreview(evento, dataExtra) {
+      const tipoLabel = (evento.tipo && evento.tipo.label) ? evento.tipo.label : (evento.tipo || '');
+      const tipoEmoji = (evento.tipo && evento.tipo.emoji) ? evento.tipo.emoji : '';
+      const esRec     = evento.datosExtra && evento.datosExtra.recurrente === true;
+
+      let html = '<div class="space-y-2">';
+      html += '<p><strong>Tipo:</strong> ' + tipoEmoji + ' ' + tipoLabel + '</p>';
+      html += '<p><strong>Título:</strong> ' + escapeHtml(evento.titulo || '-') + '</p>';
+      if (evento.horaInicio) {
+        html += '<p><strong>Hora:</strong> ' + evento.horaInicio;
+        if (evento.horaFin) html += ' - ' + evento.horaFin;
+        html += '</p>';
+      }
+      if (evento.lugar) html += '<p><strong>Lugar:</strong> ' + escapeHtml(evento.lugar) + '</p>';
+      if (evento.personasRelacionadas) html += '<p><strong>Personas:</strong> ' + escapeHtml(evento.personasRelacionadas) + '</p>';
+
+      if (esRec && dataExtra.descripcionPreview) {
+        html += '<div class="mt-2 p-3 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg border border-indigo-200 dark:border-indigo-700">';
+        html += '<p class="text-xs font-semibold text-indigo-700 dark:text-indigo-300 mb-1">🔄 Recurrente:</p>';
+        html += '<pre class="text-xs whitespace-pre-wrap font-mono">' + escapeHtml(dataExtra.descripcionPreview) + '</pre>';
+        html += '</div>';
+      } else {
+        let fechaStr = evento.fechaInicio || '-';
+        if (evento.fechaFin && evento.fechaFin !== evento.fechaInicio) {
+          fechaStr += ' al ' + evento.fechaFin;
+        }
+        html += '<p><strong>Fecha:</strong> ' + fechaStr + '</p>';
+      }
+
+      if (!evento.horaInicio && !evento.todoDia) {
+        html += '<div class="mt-2 p-2 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 rounded text-xs text-yellow-700 dark:text-yellow-300">';
+        html += '⚠️ Sin hora — se guardará como pendiente';
+        html += '</div>';
+      }
+      html += '</div>';
+
+      document.getElementById('gp-preview-contenido').innerHTML = html;
+
+      const btnConf = document.getElementById('gp-btn-confirmar');
+      if (esRec && dataExtra.totalEventos) {
+        btnConf.textContent = '✅ Confirmar ' + dataExtra.totalEventos + ' evento' + (dataExtra.totalEventos > 1 ? 's' : '');
+        btnConf.className = 'flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg font-semibold transition text-sm';
+      } else {
+        btnConf.textContent = '✅ Confirmar';
+        btnConf.className = 'flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-semibold transition text-sm';
+      }
+
+      document.getElementById('gp-preview').style.display = 'block';
+    }
+
+    // ── Confirmar ────────────────────────────────────────────
+    async function gpConfirmarEvento() {
+      if (!gpEventoActual) return;
+      const esRec    = gpEventoActual.datosExtra && gpEventoActual.datosExtra.recurrente === true;
+      const endpoint = esRec ? '/calendario/api/confirmar-recurrente' : '/calendario/api/confirmar';
+      try {
+        const resp = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(gpEventoActual)
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (esRec && Array.isArray(data)) alert(data.length + ' eventos creados.');
+          cerrarModalVozGlobal();
+          // Si estamos en el calendario, recargar; si no, ir al calendario
+          if (window.location.pathname.startsWith('/calendario')) {
+            window.location.reload();
+          } else {
+            window.location = '/calendario';
+          }
+        } else {
+          alert('Error al guardar.');
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+
+    function gpEditarManual() {
+      if (!gpEventoActual) return;
+      cerrarModalVozGlobal();
+      window.location = '/calendario/nuevo?fecha=' + (gpEventoActual.fechaInicio || new Date().toISOString().split('T')[0]);
+    }
+
   </script>
 
 </body>

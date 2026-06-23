@@ -1470,21 +1470,68 @@ private Evento.TipoEvento inferirTipo(String texto) {
 }
 
 private String inferirTitulo(String texto, Evento.TipoEvento tipo, String persona) {
-    if (texto.contains("trabajo presencial") || texto.contains("presencial")) {
+    // ── Títulos fijos por palabras clave (máxima prioridad) ──
+    if (texto.contains("trabajo presencial") || texto.contains("presencial"))
         return "Trabajo presencial" + (persona != null ? " de " + persona : "");
-    }
-    if (texto.contains("gimnasio")) return "Gimnasio";
-    if (texto.contains("tutor")) return "Tutoría" + (persona != null ? " de " + persona : "");
-    if (texto.contains("claustro")) return "Claustro";
-    if (texto.contains("teatro")) return "Teatro" + (persona != null ? " de " + persona : "");
+    if (texto.contains("cita médica") || texto.contains("cita medica"))
+        return "Cita médica" + (persona != null ? " de " + persona : "");
+    if (texto.contains("médico") || texto.contains("medico"))
+        return "Médico" + (persona != null ? " de " + persona : "");
+    if (texto.contains("dentista"))
+        return "Dentista" + (persona != null ? " de " + persona : "");
+    if (texto.contains("fisio"))
+        return "Fisioterapia" + (persona != null ? " de " + persona : "");
+    if (texto.contains("gimnasio"))
+        return "Gimnasio" + (persona != null ? " de " + persona : "");
+    if (texto.contains("tutor"))
+        return "Tutoría" + (persona != null ? " de " + persona : "");
+    if (texto.contains("claustro"))
+        return "Claustro";
+    if (texto.contains("teatro"))
+        return "Teatro" + (persona != null ? " de " + persona : "");
+    if (texto.contains("reunion") || texto.contains("reunión"))
+        return "Reunión";
+    if (texto.contains("cumple"))
+        return "Cumpleaños" + (persona != null ? " de " + persona : "");
+    if (texto.contains("vacacion"))
+        return "Vacaciones" + (persona != null ? " de " + persona : "");
+    if (texto.contains("viaje"))
+        return "Viaje" + (persona != null ? " de " + persona : "");
+    if (texto.contains("feria"))
+        return "Feria";
+    if (texto.contains("curso"))
+        return "Curso";
+    if (texto.contains("clase"))
+        return "Clase";
 
-    String[] palabras = texto.split("\\s+");
-    for (String p : palabras) {
-        if (p.length() > 4 && !p.matches("(?i)(todos|cada|lunes|martes|miércoles|jueves|viernes|sábado|domingo|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|hasta|desde|del|al)")) {
-            return capitalize(p) + (persona != null ? " de " + persona : "");
+    // ── Fallback: reconstruir desde las primeras palabras significativas ──
+    String[] stopWords = {
+        "todos", "cada", "los", "las", "el", "la", "un", "una",
+        "lunes", "martes", "miercoles", "miércoles", "jueves", "viernes",
+        "sabado", "sábado", "domingo",
+        "enero", "febrero", "marzo", "abril", "mayo", "junio",
+        "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+        "hasta", "desde", "del", "al", "de", "a", "en", "para",
+        "manana", "mañana", "pasado", "proximo", "próximo",
+        "todos", "este", "esta"
+    };
+    Set<String> stop = new java.util.HashSet<>(java.util.Arrays.asList(stopWords));
+
+    StringBuilder titulo = new StringBuilder();
+    for (String p : texto.split("\\s+")) {
+        String pLimpio = p.replaceAll("[^a-záéíóúüñ]", "").toLowerCase();
+        if (pLimpio.length() > 2 && !stop.contains(pLimpio)) {
+            if (titulo.length() > 0) titulo.append(" ");
+            titulo.append(capitalize(p.replaceAll("[^a-záéíóúüñA-ZÁÉÍÓÚÜÑ]", "")));
+            if (titulo.length() > 30) break; // máximo ~3 palabras
         }
     }
-    return tipo.getLabel();
+
+    if (titulo.length() > 0) {
+        return titulo.toString() + (persona != null ? " de " + persona : "");
+    }
+
+    return tipo.getLabel() + (persona != null ? " de " + persona : "");
 }
 
 private String capitalize(String str) {

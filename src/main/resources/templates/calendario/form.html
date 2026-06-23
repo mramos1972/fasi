@@ -14,12 +14,14 @@
       <!-- Tipo de evento -->
       <div>
         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tipo de evento *</label>
-        <select th:field="*{tipo}" required
+        <select name="tipo" required
                 class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2
                        bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
           <option value="">— Selecciona un tipo —</option>
-          <option th:each="t : ${tipos}" th:value="${t}"
-                  th:text="${t.emoji + ' ' + t.label}"></option>
+          <option th:each="t : ${tipos}"
+                  th:value="${t.name()}"
+                  th:text="${t.emoji + ' ' + t.label}"
+                  th:selected="${evento.tipo != null and evento.tipo.name() == t.name()}"></option>
         </select>
       </div>
 
@@ -98,27 +100,25 @@
         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
           Etiquetas
         </label>
-        
-        <!-- Contenedor de chips -->
-        <div id="chips-container" 
+
+        <div id="chips-container"
              class="flex flex-wrap gap-1.5 mb-2 min-h-[32px] p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700">
         </div>
-        
-        <!-- Input con autocompletado -->
+
         <div class="relative">
-          <input type="text" 
+          <input type="text"
                  id="etiqueta-input"
                  placeholder="Escribe y pulsa Enter o coma..."
                  autocomplete="off"
                  class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm"/>
-          
-          <div id="etiquetas-dropdown" 
+
+          <div id="etiquetas-dropdown"
                class="hidden absolute z-10 w-full mt-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
           </div>
         </div>
-        
+
         <input type="hidden" name="etiquetasRaw" id="etiquetas-hidden"/>
-        
+
         <p class="text-xs text-gray-400 mt-1">
           💡 Escribe y pulsa Enter o coma para añadir
         </p>
@@ -131,7 +131,7 @@
           const input = document.getElementById('etiqueta-input');
           const hidden = document.getElementById('etiquetas-hidden');
           const dropdown = document.getElementById('etiquetas-dropdown');
-          
+
           let etiquetas = [];
           let sugerencias = [];
           let selectedIndex = -1;
@@ -180,10 +180,14 @@
 
           function mostrarSugerencias(query) {
             if (!query) { cerrarDropdown(); return; }
-            const filtradas = sugerencias.filter(s => normalizar(s).includes(normalizar(query))).filter(s => !etiquetas.includes(s)).slice(0, 8);
+            const filtradas = sugerencias
+              .filter(s => normalizar(s).includes(normalizar(query)))
+              .filter(s => !etiquetas.includes(s))
+              .slice(0, 8);
             if (filtradas.length === 0) { cerrarDropdown(); return; }
             dropdown.innerHTML = filtradas.map((s, i) => `
-              <div class="px-3 py-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 cursor-pointer text-sm text-gray-700 dark:text-gray-200 ${i === selectedIndex ? 'bg-indigo-100 dark:bg-indigo-900/50' : ''}" onclick="anadirEtiqueta('${escapeHtml(s)}')" data-index="${i}">${escapeHtml(s)}</div>
+              <div class="px-3 py-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 cursor-pointer text-sm text-gray-700 dark:text-gray-200 ${i === selectedIndex ? 'bg-indigo-100 dark:bg-indigo-900/50' : ''}"
+                   onclick="anadirEtiqueta('${escapeHtml(s)}')" data-index="${i}">${escapeHtml(s)}</div>
             `).join('');
             dropdown.classList.remove('hidden');
           }
@@ -261,6 +265,9 @@
         </select>
       </div>
 
+      <!-- Texto original voz (oculto, se preserva en edición) -->
+      <input type="hidden" th:field="*{textoOriginalVoz}"/>
+
       <!-- Botones -->
       <div class="flex gap-3 pt-2">
         <button type="submit"
@@ -272,7 +279,6 @@
                   dark:hover:bg-gray-700 transition">
           Cancelar
         </a>
-        <!-- Botón eliminar (solo en edición) -->
         <form th:if="${evento.id != null}"
               th:action="@{/calendario/{id}/eliminar(id=${evento.id})}" method="post"
               class="ml-auto" onsubmit="return confirm('¿Eliminar este evento?')">

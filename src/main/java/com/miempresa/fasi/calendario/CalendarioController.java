@@ -22,7 +22,8 @@ import java.util.HashMap;
 @Controller
 @RequestMapping("/calendario")
 public class CalendarioController {
-    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(CalendarioController.class);
+    private static final org.slf4j.Logger log =
+            org.slf4j.LoggerFactory.getLogger(CalendarioController.class);
 
     private final EventoService           eventoService;
     private final EventoIaService         eventoIaService;
@@ -31,14 +32,15 @@ public class CalendarioController {
     private final ObjectMapper            objectMapper;
 
     public CalendarioController(EventoService eventoService,
-                               EventoIaService eventoIaService,
-                               EventoParserRegex regexParser,
-                               EventoParserService parserService) {
-        this.eventoService = eventoService;
+                                EventoIaService eventoIaService,
+                                EventoParserRegex regexParser,
+                                EventoParserService parserService) {
+        this.eventoService  = eventoService;
         this.eventoIaService = eventoIaService;
-        this.regexParser = regexParser;
-        this.parserService = parserService;
+        this.regexParser    = regexParser;
+        this.parserService  = parserService;
 
+        // ObjectMapper con soporte completo de fechas Java 8
         this.objectMapper = new ObjectMapper();
         this.objectMapper.registerModule(new JavaTimeModule());
         this.objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
@@ -53,38 +55,43 @@ public class CalendarioController {
             Model model) {
 
         LocalDate hoy = LocalDate.now();
-        int anio = year != null ? year : hoy.getYear();
-        int mes = month != null ? month : hoy.getMonthValue();
+        int anio = year  != null ? year  : hoy.getYear();
+        int mes  = month != null ? month : hoy.getMonthValue();
 
         java.time.YearMonth ym = java.time.YearMonth.of(anio, mes);
 
-        model.addAttribute("eventos", eventoService.findByMes(anio, mes));
-        model.addAttribute("proximos", eventoService.findProximos(5));
-        model.addAttribute("tipos", Evento.TipoEvento.values());
-        model.addAttribute("yearMonth", ym);
-        model.addAttribute("hoy", hoy);
-        model.addAttribute("vista", vista != null ? vista : "mes");
-        model.addAttribute("nuevoEvento", new Evento());
+        model.addAttribute("eventos",      eventoService.findByMes(anio, mes));
+        model.addAttribute("proximos",     eventoService.findProximos(5));
+        model.addAttribute("tipos",        Evento.TipoEvento.values());
+        model.addAttribute("yearMonth",    ym);
+        model.addAttribute("hoy",          hoy);
+        model.addAttribute("vista",        vista != null ? vista : "mes");
+        model.addAttribute("nuevoEvento",  new Evento());
 
         return "calendario/index";
     }
 
     // ── Vista día ────────────────────────────────────────────
     @GetMapping("/dia/{fecha}")
-    public String viaDia(@PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha, Model model) {
-        model.addAttribute("fecha", fecha);
+    public String viaDia(
+            @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
+            Model model) {
+        model.addAttribute("fecha",  fecha);
         model.addAttribute("eventos", eventoService.findByDia(fecha));
-        model.addAttribute("tipos", Evento.TipoEvento.values());
+        model.addAttribute("tipos",  Evento.TipoEvento.values());
         return "calendario/dia";
     }
 
     // ── Formulario nuevo ─────────────────────────────────────
     @GetMapping("/nuevo")
-    public String nuevoForm(@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha, Model model) {
+    public String nuevoForm(
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
+            Model model) {
         Evento e = new Evento();
         e.setFechaInicio(fecha != null ? fecha : LocalDate.now());
         model.addAttribute("evento", e);
-        model.addAttribute("tipos", Evento.TipoEvento.values());
+        model.addAttribute("tipos",  Evento.TipoEvento.values());
         return "calendario/form";
     }
 
@@ -92,7 +99,7 @@ public class CalendarioController {
     @GetMapping("/{id}/editar")
     public String editarForm(@PathVariable UUID id, Model model) {
         model.addAttribute("evento", eventoService.findById(id));
-        model.addAttribute("tipos", Evento.TipoEvento.values());
+        model.addAttribute("tipos",  Evento.TipoEvento.values());
         return "calendario/form";
     }
 
@@ -102,17 +109,18 @@ public class CalendarioController {
             @RequestParam(value = "etiquetasRaw", required = false) String etiquetasRaw) {
         evento.setEtiquetas(parseEtiquetas(etiquetasRaw));
         eventoService.save(evento);
-        return "redirect:/calendario?year=" + evento.getFechaInicio().getYear()
+        return "redirect:/calendario?year="  + evento.getFechaInicio().getYear()
                 + "&month=" + evento.getFechaInicio().getMonthValue();
     }
 
     // ── Actualizar ───────────────────────────────────────────
     @PostMapping("/{id}")
-    public String actualizar(@PathVariable UUID id, @Valid @ModelAttribute Evento evento,
+    public String actualizar(@PathVariable UUID id,
+            @Valid @ModelAttribute Evento evento,
             @RequestParam(value = "etiquetasRaw", required = false) String etiquetasRaw) {
         evento.setEtiquetas(parseEtiquetas(etiquetasRaw));
         eventoService.update(id, evento);
-        return "redirect:/calendario?year=" + evento.getFechaInicio().getYear()
+        return "redirect:/calendario?year="  + evento.getFechaInicio().getYear()
                 + "&month=" + evento.getFechaInicio().getMonthValue();
     }
 
@@ -135,7 +143,8 @@ public class CalendarioController {
 
     @GetMapping("/api/mes")
     @ResponseBody
-    public ResponseEntity<List<Evento>> eventosMes(@RequestParam int year, @RequestParam int month) {
+    public ResponseEntity<List<Evento>> eventosMes(
+            @RequestParam int year, @RequestParam int month) {
         return ResponseEntity.ok(eventoService.findByMes(year, month));
     }
 
@@ -172,45 +181,40 @@ public class CalendarioController {
     }
 
     // ══════════════════════════════════════════════════════════
-    //  INTERPRETAR PREVIEW (endpoint principal del modal)
+    //  INTERPRETAR PREVIEW
     // ══════════════════════════════════════════════════════════
 
     @PostMapping("/api/interpretar-preview")
     @ResponseBody
     public Map<String, Object> interpretarPreview(@RequestBody Map<String, String> body) {
         Map<String, Object> result = new HashMap<>();
-
         try {
             String texto = body.get("texto");
             LocalDate hoy = LocalDate.now();
 
             EventoParserService.EventoParseResponse resp = parserService.interpretar(texto, hoy);
 
-            // Necesita límite
             if ("necesita_limite".equals(resp.getPaso())) {
                 result.put("necesitaLimite", true);
-                result.put("eventoBase", resp.getEvento());
-                result.put("mensajeLimite", resp.getMensaje());
+                result.put("eventoBase",     resp.getEvento());
+                result.put("mensajeLimite",  resp.getMensaje());
                 return result;
             }
-
-            // Error
             if ("error".equals(resp.getPaso())) {
                 result.put("error", resp.getMensaje());
                 return result;
             }
 
-            // Éxito
             Evento evento = resp.getEvento().toEvento();
             boolean esRecurrente = resp.getEsRecurrente() != null && resp.getEsRecurrente();
 
-            result.put("evento", evento);
+            result.put("evento",       evento);
             result.put("esRecurrente", esRecurrente);
 
             if (esRecurrente) {
                 List<LocalDate> fechas = eventoService.generarVistaPrevia(evento);
-                result.put("totalEventos", fechas.size());
-                result.put("descripcionPreview", generarDescripcionPreview(fechas));
+                result.put("totalEventos",        fechas.size());
+                result.put("descripcionPreview",  generarDescripcionPreview(fechas));
             }
 
             return result;
@@ -223,38 +227,35 @@ public class CalendarioController {
     }
 
     // ══════════════════════════════════════════════════════════
-    //  PROCESAR LÍMITE (para recurrentes)
+    //  PROCESAR LÍMITE
     // ══════════════════════════════════════════════════════════
 
     @PostMapping("/api/procesar-limite")
     @ResponseBody
     public Map<String, Object> procesarLimite(@RequestBody Map<String, Object> body) {
         Map<String, Object> result = new HashMap<>();
-
         try {
             @SuppressWarnings("unchecked")
             Map<String, Object> eventoBaseMap = (Map<String, Object>) body.get("eventoBase");
             String respuestaLimite = (String) body.get("respuestaLimite");
 
-            // Convertir a EventoMinimo (NO a Evento)
             EventoMinimo eventoMinimo = objectMapper.convertValue(eventoBaseMap, EventoMinimo.class);
 
-            // Procesar límite
-            EventoParserService.EventoParseResponse resp = parserService.procesarLimite(eventoMinimo, respuestaLimite);
+            EventoParserService.EventoParseResponse resp =
+                    parserService.procesarLimite(eventoMinimo, respuestaLimite);
 
             if ("error".equals(resp.getPaso())) {
                 result.put("error", resp.getMensaje());
                 return result;
             }
 
-            // Convertir a Evento para vista previa
             Evento evento = resp.getEvento().toEvento();
             List<LocalDate> fechas = eventoService.generarVistaPrevia(evento);
 
-            result.put("evento", evento);
-            result.put("esRecurrente", true);
-            result.put("totalEventos", fechas.size());
-            result.put("descripcionPreview", generarDescripcionPreview(fechas));
+            result.put("evento",              evento);
+            result.put("esRecurrente",        true);
+            result.put("totalEventos",        fechas.size());
+            result.put("descripcionPreview",  generarDescripcionPreview(fechas));
 
             return result;
 
@@ -267,19 +268,37 @@ public class CalendarioController {
 
     // ══════════════════════════════════════════════════════════
     //  CONFIRMAR EVENTOS
+    //  Acepta tanto EventoConfirmarRequest como el objeto Evento
+    //  serializado directamente desde el JS (con tipo como Map).
     // ══════════════════════════════════════════════════════════
 
     @PostMapping("/api/confirmar")
     @ResponseBody
-    public ResponseEntity<Evento> confirmarEvento(@RequestBody EventoConfirmarRequest dto) {
-        Evento evento = dto.toEvento();
-        return ResponseEntity.ok(eventoService.save(evento));
+    public ResponseEntity<Evento> confirmarEvento(
+            @RequestBody Map<String, Object> body) {
+        try {
+            EventoConfirmarRequest dto =
+                    objectMapper.convertValue(body, EventoConfirmarRequest.class);
+            Evento evento = dto.toEvento();
+            return ResponseEntity.ok(eventoService.save(evento));
+        } catch (Exception e) {
+            log.error("❌ Error confirmando evento", e);
+            return ResponseEntity.badRequest().build();
+        }
     }
 
     @PostMapping("/api/confirmar-recurrente")
     @ResponseBody
-    public ResponseEntity<List<Evento>> confirmarRecurrente(@RequestBody EventoConfirmarRequest dto) {
-        return ResponseEntity.ok(eventoService.saveRecurrente(dto));
+    public ResponseEntity<List<Evento>> confirmarRecurrente(
+            @RequestBody Map<String, Object> body) {
+        try {
+            EventoConfirmarRequest dto =
+                    objectMapper.convertValue(body, EventoConfirmarRequest.class);
+            return ResponseEntity.ok(eventoService.saveRecurrente(dto));
+        } catch (Exception e) {
+            log.error("❌ Error confirmando recurrente", e);
+            return ResponseEntity.badRequest().build();
+        }
     }
 
     // ══════════════════════════════════════════════════════════
@@ -297,7 +316,7 @@ public class CalendarioController {
                            .replaceAll("[íìï]", "i")
                            .replaceAll("[óòö]", "o")
                            .replaceAll("[úùü]", "u")
-                           .replaceAll("[ñ]", "n"))
+                           .replaceAll("[ñ]",   "n"))
                 .collect(java.util.stream.Collectors.toCollection(java.util.HashSet::new));
     }
 
@@ -313,15 +332,19 @@ public class CalendarioController {
         for (int i = 0; i < limite; i++) {
             LocalDate fecha = fechas.get(i);
             String diaSemana = switch (fecha.getDayOfWeek()) {
-                case MONDAY -> "Lun";
-                case TUESDAY -> "Mar";
+                case MONDAY    -> "Lun";
+                case TUESDAY   -> "Mar";
                 case WEDNESDAY -> "Mié";
-                case THURSDAY -> "Jue";
-                case FRIDAY -> "Vie";
-                case SATURDAY -> "Sáb";
-                case SUNDAY -> "Dom";
+                case THURSDAY  -> "Jue";
+                case FRIDAY    -> "Vie";
+                case SATURDAY  -> "Sáb";
+                case SUNDAY    -> "Dom";
             };
-            sb.append(String.format("%-3s %02d/%02d/%d\n", diaSemana, fecha.getDayOfMonth(), fecha.getMonthValue(), fecha.getYear()));
+            sb.append(String.format("%-3s %02d/%02d/%d\n",
+                    diaSemana,
+                    fecha.getDayOfMonth(),
+                    fecha.getMonthValue(),
+                    fecha.getYear()));
         }
 
         if (fechas.size() > 10) {

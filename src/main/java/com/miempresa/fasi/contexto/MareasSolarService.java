@@ -4,188 +4,268 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.time.*;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
-/**
- * Servicio de cálculo astronómico local para FASI.
- *
- * MAREAS: algoritmo semidiurno basado en pleamar de referencia.
- *   Ciclo: 12h 25min entre pleamares (ciclo lunar M2).
- *   Precisión: ±20-30 min respecto a tablas oficiales.
- *
- * SOL: fórmula NOAA simplificada con latitud/longitud reales.
- *   Precisión: ±2 min.
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class MareasSolarService {
 
-    private final ContextoFamiliarRepository repo;
+    private final ContextoFamiliarRepository  contextoRepo;
+    private final MareaConstanteRepository    mareaRepo;
 
-    // Ciclo M2 en minutos (12h 25min 14s)
-    private static final double CICLO_MAREA_MIN = 12.0 * 60.0 + 25.0 + 14.0 / 60.0;
+    // Intervalo de muestreo en minutos
+    private static final int PASO_MIN = 5;
 
-    // ── API pública ───────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════
+    //  API PÚBLICA — misma firma que antes, el controller no cambia
+    // ══════════════════════════════════════════════════════════
 
-    /**
-     * Devuelve todos los datos contextuales para una fecha dada.
-     * Formato listo para el footer del calendario.
-     */
     public Map<String, String> getDatosContextuales(LocalDate fecha) {
         Map<String, String> datos = new LinkedHashMap<>();
 
-        try {
-            double lat = getDouble("ubicacion_lat", 36.7749);
-            double lon = getDouble("ubicacion_lon", -6.3536);
-            ZoneId zona = ZoneId.of(getString("ubicacion_zona", "Europe/Madrid"));
+        // ── Sol ──────────────────────────────────────────────
+        calcularSol(fecha, datos);
 
-            // ── Sol ──────────────────────────────────────────
-            LocalTime[] sol = calcularSol(fecha, lat, lon, zona);
-            datos.put("amanecer",    formatHora(sol[0]));
-            datos.put("atardecer",   formatHora(sol[1]));
+        // ── Mareas ───────────────────────────────────────────
+        calcularMareas(fecha, datos);
 
-            // ── Mareas ───────────────────────────────────────
-            LocalDateTime refTs = LocalDateTime.parse(
-                getString("marea_referencia_ts", "2026-05-05T17:00:00"));
-            double refAltura = getDouble("marea_referencia_h", 3.45);
-
-            MareasDia mareas = calcularMareasDia(fecha, refTs, refAltura, zona);
-            datos.put("pleamar1",    mareas.pleamar1 != null ? formatHora(mareas.pleamar1.toLocalTime()) : "--:--");
-            datos.put("bajamar1",    mareas.bajamar1 != null ? formatHora(mareas.bajamar1.toLocalTime()) : "--:--");
-            datos.put("pleamar2",    mareas.pleamar2 != null ? formatHora(mareas.pleamar2.toLocalTime()) : "--:--");
-            datos.put("bajamar2",    mareas.bajamar2 != null ? formatHora(mareas.bajamar2.toLocalTime()) : "--:--");
-            datos.put("altura_pm",   String.format("%.1f m", refAltura));
-
-            // ── Ciudad ───────────────────────────────────────
-            datos.put("ciudad",      getString("ubicacion_ciudad", "Sanlúcar de Barrameda"));
-
-        } catch (Exception e) {
-            log.warn("Error calculando datos contextuales: {}", e.getMessage());
-            datos.put("amanecer",  "--:--");
-            datos.put("atardecer", "--:--");
-            datos.put("pleamar1",  "--:--");
-            datos.put("bajamar1",  "--:--");
-            datos.put("pleamar2",  "--:--");
-            datos.put("bajamar2",  "--:--");
-            datos.put("ciudad",    "Sanlúcar de Barrameda");
-        }
+        // ── Ciudad ───────────────────────────────────────────
+        String ciudad = contextoRepo.findByClave("ciudad_base")
+                .map(ContextoFamiliar::getValor)
+                .orElse("Sanlúcar de Barrameda");
+        datos.put("ciudad", ciudad);
 
         return datos;
     }
 
-    // ── Cálculo solar (NOAA simplificado) ────────────────────
+    // ══════════════════════════════════════════════════════════
+    //  MAREAS — análisis armónico con constantes de Bonanza
+    // ══════════════════════════════════════════════════════════
 
-    private LocalTime[] calcularSol(LocalDate fecha, double lat, double lon, ZoneId zona) {
-        // Día del año
-        int N = fecha.getDayOfYear();
+    private void calcularMareas(LocalDate fecha, Map<String, String> datos) {
+        List<MareaConstante> constantes = mareaRepo.findByActivoTrue();
 
-        // Declinación solar
-        double decl = Math.toRadians(23.45 * Math.sin(Math.toRadians(360.0 / 365.0 * (N - 81))));
+        if (constantes.isEmpty()) {
+            log.warn("⚠️ Sin constantes armónicas en BD — mareas no disponibles");
+            datos.put("pleamar1",  "--:--");
+            datos.put("pleamar2",  "--:--");
+            datos.put("bajamar1",  "--:--");
+            datos.put("bajamar2",  "--:--");
+            return;
+        }
 
-        // Ecuación del tiempo (minutos)
-        double B = Math.toRadians(360.0 / 365.0 * (N - 81));
-        double ET = 9.87 * Math.sin(2 * B) - 7.53 * Math.cos(B) - 1.5 * Math.sin(B);
+        double z0 = constantes.stream()
+                .filter(c -> "Z0".equals(c.getNombre()))
+                .mapToDouble(MareaConstante::getAmplitud)
+                .findFirst().orElse(1.98);
 
-        // Corrección de longitud (minutos)
-        double offsetUTC = zona.getRules().getOffset(fecha.atStartOfDay()).getTotalSeconds() / 3600.0;
-        double corrLon   = (lon - (offsetUTC * 15.0)) * 4.0; // 4 min por grado
+        List<MareaConstante> armonicos = constantes.stream()
+                .filter(c -> !"Z0".equals(c.getNombre()))
+                .toList();
 
-        // Hora solar del mediodía
-        double mediodiaSolar = 720.0 - corrLon - ET; // minutos desde medianoche
+        FactoresNodales fn = calcularFactoresNodales(fecha.getYear());
 
-        // Ángulo horario del amanecer/atardecer
-        double latRad = Math.toRadians(lat);
-        double cosH   = -Math.tan(latRad) * Math.tan(decl);
-        cosH = Math.max(-1.0, Math.min(1.0, cosH)); // clamp
-        double H = Math.toDegrees(Math.acos(cosH)) * 4.0; // minutos
+        // Muestrear curva de marea cada PASO_MIN minutos durante el día
+        int pasos = (24 * 60) / PASO_MIN;
+        double[] alturas = new double[pasos + 1];
+        for (int i = 0; i <= pasos; i++) {
+            alturas[i] = z0 + evaluarArmonicos(armonicos, fn, fecha, i * PASO_MIN / 60.0);
+        }
 
-        LocalTime amanecer  = minutosAHora((int)(mediodiaSolar - H));
-        LocalTime atardecer = minutosAHora((int)(mediodiaSolar + H));
+        // Detectar máximos y mínimos locales
+        List<String> pleamares = new ArrayList<>();
+        List<String> bajamares = new ArrayList<>();
 
-        return new LocalTime[]{ amanecer, atardecer };
-    }
+        for (int i = 1; i < pasos; i++) {
+            boolean esMax = alturas[i] > alturas[i - 1] && alturas[i] > alturas[i + 1];
+            boolean esMin = alturas[i] < alturas[i - 1] && alturas[i] < alturas[i + 1];
 
-    // ── Cálculo de mareas ────────────────────────────────────
+            if (esMax || esMin) {
+                // Refinamiento parabólico para mayor precisión
+                double delta = (alturas[i-1] - alturas[i+1])
+                             / (2.0 * (alturas[i-1] - 2*alturas[i] + alturas[i+1]));
+                int minutosExactos = (int) Math.round((i + delta) * PASO_MIN);
+                minutosExactos = Math.max(0, Math.min(minutosExactos, 24 * 60 - 1));
 
-    private MareasDia calcularMareasDia(LocalDate fecha, LocalDateTime refPleamar,
-                                         double alturaRef, ZoneId zona) {
-        // Minutos desde la pleamar de referencia hasta medianoche del día pedido
-        LocalDateTime medianoche = fecha.atStartOfDay();
-        long minDesdeRef = Duration.between(refPleamar, medianoche).toMinutes();
+                String hora = String.format("%02d:%02d",
+                        minutosExactos / 60, minutosExactos % 60);
 
-        // Encontrar la primera pleamar del día (avanzar en ciclos de CICLO_MAREA_MIN)
-        double ciclos = minDesdeRef / CICLO_MAREA_MIN;
-        long cicloBase = (long) Math.floor(ciclos);
-
-        MareasDia resultado = new MareasDia();
-        int encontradas = 0;
-
-        // Buscar hasta 4 eventos de marea en el día (2 pleamares + 2 bajamares)
-        for (long i = cicloBase - 1; i <= cicloBase + 4 && encontradas < 4; i++) {
-            // Pleamar
-            double minPleamar = refPleamar.atZone(zona).toEpochSecond() / 60.0
-                              + i * CICLO_MAREA_MIN;
-            LocalDateTime tsPleamar = LocalDateTime.ofEpochSecond(
-                (long)(minPleamar * 60), 0, zona.getRules().getOffset(medianoche));
-
-            if (tsPleamar.toLocalDate().equals(fecha)) {
-                if (resultado.pleamar1 == null) {
-                    resultado.pleamar1 = tsPleamar;
-                } else if (resultado.pleamar2 == null) {
-                    resultado.pleamar2 = tsPleamar;
-                }
-                encontradas++;
-            }
-
-            // Bajamar (media marea después de la pleamar)
-            double minBajamar = minPleamar + CICLO_MAREA_MIN / 2.0;
-            LocalDateTime tsBajamar = LocalDateTime.ofEpochSecond(
-                (long)(minBajamar * 60), 0, zona.getRules().getOffset(medianoche));
-
-            if (tsBajamar.toLocalDate().equals(fecha)) {
-                if (resultado.bajamar1 == null) {
-                    resultado.bajamar1 = tsBajamar;
-                } else if (resultado.bajamar2 == null) {
-                    resultado.bajamar2 = tsBajamar;
-                }
-                encontradas++;
+                if (esMax) pleamares.add(hora);
+                else       bajamares.add(hora);
             }
         }
 
-        return resultado;
+        datos.put("pleamar1", pleamares.size() > 0 ? pleamares.get(0) : "--:--");
+        datos.put("pleamar2", pleamares.size() > 1 ? pleamares.get(1) : "--:--");
+        datos.put("bajamar1", bajamares.size() > 0 ? bajamares.get(0) : "--:--");
+        datos.put("bajamar2", bajamares.size() > 1 ? bajamares.get(1) : "--:--");
+
+        log.info("🌊 Mareas {}: pleamares={} bajamares={}", fecha, pleamares, bajamares);
     }
 
-    // ── Helpers ──────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════
+    //  NÚCLEO MATEMÁTICO
+    // ══════════════════════════════════════════════════════════
 
-    private String getString(String clave, String defecto) {
-        return repo.findByClave(clave).map(ContextoFamiliar::getValor).orElse(defecto);
-    }
+    /**
+     * h(t) = Σ fᵢ · Hᵢ · cos(ωᵢ·t + V₀ᵢ + uᵢ - gᵢ)
+     *
+     * @param horaDecimal horas del día [0.0 – 24.0)
+     */
+    private double evaluarArmonicos(List<MareaConstante> armonicos,
+                                     FactoresNodales fn,
+                                     LocalDate fecha,
+                                     double horaDecimal) {
+        // Horas desde el 1 de enero del año a las 00:00 UTC
+        double horaDelAnio = (fecha.getDayOfYear() - 1) * 24.0 + horaDecimal;
 
-    private double getDouble(String clave, double defecto) {
-        try {
-            return Double.parseDouble(getString(clave, String.valueOf(defecto)));
-        } catch (NumberFormatException e) {
-            return defecto;
+        double suma = 0.0;
+        for (MareaConstante c : armonicos) {
+            double f   = fn.getF(c.getNombre());
+            double u   = fn.getU(c.getNombre());
+            double V0  = calcularV0(c.getNombre(), fecha.getYear());
+            double arg = c.getVelocidad() * horaDelAnio + V0 + u - c.getFase();
+            suma += f * c.getAmplitud() * Math.cos(Math.toRadians(arg));
         }
+        return suma;
     }
 
-    private LocalTime minutosAHora(int minutos) {
-        minutos = Math.max(0, Math.min(1439, minutos));
-        return LocalTime.of(minutos / 60, minutos % 60);
+    // ── Factores nodales (ciclo de 18.6 años) ────────────────
+
+    private FactoresNodales calcularFactoresNodales(int year) {
+        double diasDesdeJ2000 = (year - 2000) * 365.25;
+        double T  = diasDesdeJ2000 / 36525.0;
+        double N  = ((125.0445 - 1934.1363 * T) % 360 + 360) % 360;
+        double Nr = Math.toRadians(N);
+
+        Map<String, Double> f = new HashMap<>();
+        f.put("M2",  1.0 - 0.037 * Math.cos(Nr));
+        f.put("S2",  1.0);
+        f.put("N2",  1.0 - 0.037 * Math.cos(Nr));
+        f.put("K1",  1.006 + 0.115 * Math.cos(Nr) - 0.009 * Math.cos(2 * Nr));
+        f.put("O1",  1.009 + 0.187 * Math.cos(Nr) - 0.015 * Math.cos(2 * Nr));
+        f.put("M4",  Math.pow(1.0 - 0.037 * Math.cos(Nr), 2));
+        f.put("MS4", 1.0 - 0.037 * Math.cos(Nr));
+
+        Map<String, Double> u = new HashMap<>();
+        u.put("M2",  -2.14  * Math.sin(Nr));
+        u.put("S2",   0.0);
+        u.put("N2",  -2.14  * Math.sin(Nr));
+        u.put("K1",  -8.86  * Math.sin(Nr) + 0.68 * Math.sin(2 * Nr));
+        u.put("O1",   10.8  * Math.sin(Nr) - 1.34 * Math.sin(2 * Nr));
+        u.put("M4",  -4.28  * Math.sin(Nr));
+        u.put("MS4", -2.14  * Math.sin(Nr));
+
+        return new FactoresNodales(f, u);
     }
 
-    private String formatHora(LocalTime t) {
-        return t != null ? t.format(DateTimeFormatter.ofPattern("HH:mm")) : "--:--";
+    // ── Fase astronómica V0 al inicio del año ─────────────────
+
+    private double calcularV0(String nombre, int year) {
+        double d  = (year - 2000) * 365.25;
+        double s  = ((218.3164 + 13.1763966 * d) % 360 + 360) % 360;
+        double h  = ((280.4665 +  0.9856474 * d) % 360 + 360) % 360;
+        double p  = (( 83.3532 +  0.1114041 * d) % 360 + 360) % 360;
+
+        return switch (nombre) {
+            case "M2"  -> 2 * h - 2 * s;
+            case "S2"  -> 0.0;
+            case "N2"  -> 2 * h - 3 * s + p;
+            case "K1"  -> h + 90.0;
+            case "O1"  -> h - 2 * s - 90.0;
+            case "M4"  -> 4 * h - 4 * s;
+            case "MS4" -> 4 * h - 2 * s;
+            default    -> 0.0;
+        };
     }
 
-    // ── DTO interno ──────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════
+    //  SOL — igual que antes
+    // ══════════════════════════════════════════════════════════
 
-    static class MareasDia {
-        LocalDateTime pleamar1, bajamar1, pleamar2, bajamar2;
+    private void calcularSol(LocalDate fecha, Map<String, String> datos) {
+        // Coordenadas de Sanlúcar de Barrameda
+        double lat =  36.7833;
+        double lon =  -6.3500;
+
+        double[] sol = calcularSalPuestaSol(
+                fecha.getYear(), fecha.getMonthValue(), fecha.getDayOfMonth(),
+                lat, lon);
+
+        datos.put("amanecer",  minutosAHora((int) sol[0]));
+        datos.put("atardecer", minutosAHora((int) sol[1]));
     }
+
+    private double[] calcularSalPuestaSol(int year, int month, int day,
+                                           double lat, double lon) {
+        // Algoritmo NOAA simplificado
+        double jd = julianDay(year, month, day);
+        double n  = jd - 2451545.0;
+
+        double L = (280.460 + 0.9856474 * n) % 360;
+        double g = Math.toRadians((357.528 + 0.9856003 * n) % 360);
+        double lambda = Math.toRadians(L + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g));
+
+        double epsilon = Math.toRadians(23.439 - 0.0000004 * n);
+        double sinDec  = Math.sin(epsilon) * Math.sin(lambda);
+        double dec     = Math.asin(sinDec);
+
+        double cosH = (Math.cos(Math.toRadians(90.833))
+                      - Math.sin(Math.toRadians(lat)) * sinDec)
+                    / (Math.cos(Math.toRadians(lat)) * Math.cos(dec));
+
+        // Si el sol no sale/no se pone (polar)
+        if (cosH < -1 || cosH > 1) return new double[]{0, 0};
+
+        double H   = Math.toDegrees(Math.acos(cosH));
+        double eot = calcularEcuacionTiempo(n);
+
+        double salidaUTC  = 720 - 4 * (lon + H) - eot;
+        double puestaUTC  = 720 - 4 * (lon - H) - eot;
+
+        // Convertir a hora local (España peninsular: UTC+2 en verano)
+        int offsetMin = 120;
+        return new double[]{salidaUTC + offsetMin, puestaUTC + offsetMin};
+    }
+
+    private double calcularEcuacionTiempo(double n) {
+        double L0 = Math.toRadians(280.460 + 0.9856474 * n);
+        double e  = 0.016708;
+        double M  = Math.toRadians(357.528 + 0.9856003 * n);
+        return 4 * Math.toDegrees(
+                -2 * e * Math.sin(M)
+                + Math.sin(2 * L0)
+                - 2 * e * Math.sin(M) * Math.cos(2 * L0));
+    }
+
+    private double julianDay(int y, int m, int d) {
+        if (m <= 2) { y--; m += 12; }
+        int A = y / 100;
+        int B = 2 - A + A / 4;
+        return (int)(365.25 * (y + 4716))
+             + (int)(30.6001 * (m + 1))
+             + d + B - 1524.5;
+    }
+
+    private String minutosAHora(int minutos) {
+        minutos = Math.max(0, Math.min(minutos, 24 * 60 - 1));
+        return String.format("%02d:%02d", minutos / 60, minutos % 60);
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  CLASES INTERNAS
+    // ══════════════════════════════════════════════════════════
+
+    private record FactoresNodales(Map<String, Double> f, Map<String, Double> u) {
+        double getF(String n) { return f.getOrDefault(n, 1.0); }
+        double getU(String n) { return u.getOrDefault(n, 0.0); }
+    }
+
+    // Clase de compatibilidad — la usaba el controller antiguo
+    public record MareasDia(String pleamar1, String pleamar2,
+                             String bajamar1, String bajamar2) {}
 }

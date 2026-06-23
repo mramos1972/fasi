@@ -10,6 +10,7 @@ import java.time.LocalDate;
 import java.time.DayOfWeek;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -107,13 +108,9 @@ public class EventoService {
     }
 
     // ══════════════════════════════════════════════════════════
-    //  RECURRENCIA (CORREGIDO Y MEJORADO)
+    //  RECURRENCIA
     // ══════════════════════════════════════════════════════════
 
-    /**
-     * Genera vista previa de eventos recurrentes SIN guardarlos.
-     * Devuelve las primeras 10 fechas para mostrar al usuario.
-     */
     public List<LocalDate> generarVistaPrevia(Evento plantilla) {
         Map<String, Object> datosExtra = plantilla.getDatosExtra();
         if (datosExtra == null || !datosExtra.containsKey("patron")) {
@@ -122,18 +119,18 @@ public class EventoService {
 
         String patron = datosExtra.get("patron").toString().toUpperCase();
         LocalDate inicio = plantilla.getFechaInicio();
-        LocalDate fin = plantilla.getFechaFin() != null ? plantilla.getFechaFin() : inicio.plusMonths(3);
+        LocalDate fin = plantilla.getFechaFin() != null
+                ? plantilla.getFechaFin()
+                : inicio.plusMonths(3);
 
         List<LocalDate> fechas = new ArrayList<>();
-        
+
         switch (patron) {
             case "WEEKLY" -> {
                 List<DayOfWeek> dias = extraerDiasSemana(datosExtra);
-                LocalDate cursor = inicio.withDayOfMonth(1); // Empezar desde el día 1 del mes
+                LocalDate cursor = inicio.withDayOfMonth(1);
                 while (!cursor.isAfter(fin) && fechas.size() < 100) {
-                    if (dias.contains(cursor.getDayOfWeek())) {
-                        fechas.add(cursor);
-                    }
+                    if (dias.contains(cursor.getDayOfWeek())) fechas.add(cursor);
                     cursor = cursor.plusDays(1);
                 }
             }
@@ -160,9 +157,7 @@ public class EventoService {
                 LocalDate cursor = inicio;
                 while (!cursor.isAfter(fin) && fechas.size() < 100) {
                     LocalDate fecha = calcularDiaRelativo(cursor, dow, posicion);
-                    if (fecha != null && !fecha.isAfter(fin)) {
-                        fechas.add(fecha);
-                    }
+                    if (fecha != null && !fecha.isAfter(fin)) fechas.add(fecha);
                     cursor = cursor.plusMonths(1);
                 }
             }
@@ -179,25 +174,39 @@ public class EventoService {
             default -> fechas.add(inicio);
         }
 
-        log.info("📅 Vista previa: {} eventos generados para patrón {}", fechas.size(), patron);
+        log.info("📅 Vista previa: {} eventos para patrón {}", fechas.size(), patron);
         return fechas;
     }
 
     /**
-     * Guarda eventos recurrentes en la BD.
+     * Construye el datosExtra limpio para persistir en cada evento individual.
+     * Elimina claves de control del flujo conversacional que no deben guardarse en BD.
      */
+    private Map<String, Object> limpiarDatosExtraParaPersistir(Map<String, Object> datosExtra) {
+        if (datosExtra == null) return null;
+        Map<String, Object> limpio = new HashMap<>(datosExtra);
+        // Claves de control del flujo — no tienen sentido en BD
+        limpio.remove("necesitaLimite");
+        limpio.remove("esperandoLimite");
+        limpio.remove("textoRecurrencia");
+        return limpio.isEmpty() ? null : limpio;
+    }
+
     @Transactional
     public List<Evento> saveRecurrente(EventoConfirmarRequest dto) {
         Evento base = dto.toEvento();
         List<LocalDate> fechas = generarVistaPrevia(base);
-        
+
+        // datosExtra limpio — sin claves de control del flujo conversacional
+        Map<String, Object> extraLimpio = limpiarDatosExtraParaPersistir(base.getDatosExtra());
+
         List<Evento> generados = new ArrayList<>();
         for (LocalDate fecha : fechas) {
             Evento e = new Evento();
             e.setTipo(base.getTipo());
             e.setTitulo(base.getTitulo());
             e.setFechaInicio(fecha);
-            e.setFechaFin(null); // Cada evento individual es de 1 día
+            e.setFechaFin(null);          // cada ocurrencia es de 1 día
             e.setHoraInicio(base.getHoraInicio());
             e.setHoraFin(base.getHoraFin());
             e.setTodoDia(base.isTodoDia());
@@ -205,7 +214,7 @@ public class EventoService {
             e.setPersonasRelacionadas(base.getPersonasRelacionadas());
             e.setDescripcion(base.getDescripcion());
             e.setRecordatorioMinutos(base.getRecordatorioMinutos());
-            e.setDatosExtra(base.getDatosExtra());
+            e.setDatosExtra(extraLimpio);
             e.setEtiquetas(base.getEtiquetas());
             e.setTextoOriginalVoz(base.getTextoOriginalVoz());
             generados.add(repo.save(e));
@@ -221,8 +230,7 @@ public class EventoService {
 
     private List<DayOfWeek> extraerDiasSemana(Map<String, Object> datosExtra) {
         List<DayOfWeek> dias = new ArrayList<>();
-        
-        // Intentar leer "diasSemana" (plural, lista)
+
         if (datosExtra.containsKey("diasSemana")) {
             Object obj = datosExtra.get("diasSemana");
             if (obj instanceof List<?> lista) {
@@ -232,13 +240,12 @@ public class EventoService {
                 }
             }
         }
-        
-        // Fallback: leer "diaSemana" (singular, string)
+
         if (dias.isEmpty() && datosExtra.containsKey("diaSemana")) {
             DayOfWeek dow = parseDiaSemana(datosExtra.get("diaSemana").toString());
             if (dow != null) dias.add(dow);
         }
-        
+
         return dias;
     }
 
@@ -257,10 +264,8 @@ public class EventoService {
 
     private LocalDate calcularDiaRelativo(LocalDate mes, DayOfWeek dow, int posicion) {
         if (posicion == -1) {
-            // Último día de la semana del mes
             return mes.with(TemporalAdjusters.lastInMonth(dow));
         } else {
-            // Primer, segundo, tercer, cuarto día de la semana
             return mes.with(TemporalAdjusters.dayOfWeekInMonth(posicion, dow));
         }
     }
@@ -272,8 +277,10 @@ public class EventoService {
     @Transactional
     public void saveRecurrente(Evento plantilla, String patron) {
         LocalDate inicio = plantilla.getFechaInicio();
-        LocalDate fin = plantilla.getFechaFin() != null ? plantilla.getFechaFin() : inicio.plusMonths(3);
-        log.info("🔄 Generando eventos recurrentes: {} desde {} hasta {}", patron, inicio, fin);
+        LocalDate fin = plantilla.getFechaFin() != null
+                ? plantilla.getFechaFin()
+                : inicio.plusMonths(3);
+        log.info("🔄 Generando eventos recurrentes legacy: {} desde {} hasta {}", patron, inicio, fin);
         LocalDate actual = inicio;
         int count = 0;
         while (!actual.isAfter(fin) && count < 100) {
@@ -293,12 +300,12 @@ public class EventoService {
             repo.save(copia);
             count++;
             switch (patron.toUpperCase()) {
-                case "DAILY": actual = actual.plusDays(1); break;
-                case "WEEKLY": actual = actual.plusWeeks(1); break;
-                case "MONTHLY": actual = actual.plusMonths(1); break;
-                default: log.warn("Patrón desconocido: {}", patron); return;
+                case "DAILY"   -> actual = actual.plusDays(1);
+                case "WEEKLY"  -> actual = actual.plusWeeks(1);
+                case "MONTHLY" -> actual = actual.plusMonths(1);
+                default -> { log.warn("Patrón desconocido: {}", patron); return; }
             }
         }
-        log.info("✅ Creados {} eventos recurrentes", count);
+        log.info("✅ Creados {} eventos recurrentes (legacy)", count);
     }
 }
