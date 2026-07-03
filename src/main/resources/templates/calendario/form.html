@@ -4,8 +4,20 @@
 <head><title>Evento — FASI</title></head>
 <body>
 <section>
-  <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6"
-      th:text="${evento.id == null} ? '📅 Nuevo evento' : '✏️ Editar evento'"></h2>
+
+  <script th:inline="javascript">
+    /*<![CDATA[*/
+    (function inyectarHeaderForm() {
+      const slot = document.getElementById('header-title-slot');
+      if (!slot) return;
+      const esNuevo = /*[[${evento.id == null}]]*/ true;
+      slot.innerHTML =
+        '<span class="font-bold text-gray-800 dark:text-gray-100 text-sm sm:text-base truncate px-1">' +
+        (esNuevo ? '📅 Nuevo evento' : '✏️ Editar evento') +
+        '</span>';
+    })();
+    /*]]>*/
+  </script>
 
   <div class="bg-white dark:bg-gray-800 rounded-xl shadow p-8 max-w-2xl">
     <form th:action="${evento.id == null} ? @{/calendario} : @{/calendario/{id}(id=${evento.id})}"
@@ -34,7 +46,7 @@
                       focus:outline-none focus:ring-2 focus:ring-indigo-400"/>
       </div>
 
-      <!-- Fechas y horas -->
+      <!-- Fechas -->
       <div class="grid grid-cols-2 gap-4">
         <div>
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fecha inicio *</label>
@@ -53,6 +65,7 @@
         </div>
       </div>
 
+      <!-- Horas -->
       <div class="grid grid-cols-2 gap-4">
         <div>
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Hora inicio</label>
@@ -95,30 +108,25 @@
         </div>
       </div>
 
-      <!-- Etiquetas con chips + autocompletado -->
+      <!-- Etiquetas -->
       <div>
         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
           Etiquetas
         </label>
-
         <div id="chips-container"
              class="flex flex-wrap gap-1.5 mb-2 min-h-[32px] p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700">
         </div>
-
         <div class="relative">
           <input type="text"
                  id="etiqueta-input"
                  placeholder="Escribe y pulsa Enter o coma..."
                  autocomplete="off"
                  class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm"/>
-
           <div id="etiquetas-dropdown"
                class="hidden absolute z-10 w-full mt-1 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
           </div>
         </div>
-
         <input type="hidden" name="etiquetasRaw" id="etiquetas-hidden"/>
-
         <p class="text-xs text-gray-400 mt-1">
           💡 Escribe y pulsa Enter o coma para añadir
         </p>
@@ -265,7 +273,7 @@
         </select>
       </div>
 
-      <!-- Texto original voz (oculto, se preserva en edición) -->
+      <!-- Texto original voz -->
       <input type="hidden" th:field="*{textoOriginalVoz}"/>
 
       <!-- Botones -->

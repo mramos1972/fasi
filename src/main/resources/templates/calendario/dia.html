@@ -4,46 +4,10 @@
 <head><title>Día — FASI</title></head>
 <body>
 <section>
-  <div class="flex items-center justify-between mb-6">
-    <div class="flex items-center gap-2">
-      <a th:href="@{/calendario(year=${fecha.year},month=${fecha.monthValue})}"
-         class="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition text-sm">‹ Volver</a>
-
-      <a th:href="@{/calendario/dia/{f}(f=${fecha.minusDays(1)})}"
-         class="w-8 h-8 flex items-center justify-center rounded-full
-                hover:bg-gray-200 dark:hover:bg-gray-700 transition
-                text-gray-600 dark:text-gray-300 font-bold text-lg"
-         title="Día anterior">‹</a>
-
-      <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100"
-          th:text="${#temporals.format(fecha, 'EEEE, d MMMM yyyy')}"></h2>
-
-      <a th:href="@{/calendario/dia/{f}(f=${fecha.plusDays(1)})}"
-         class="w-8 h-8 flex items-center justify-center rounded-full
-                hover:bg-gray-200 dark:hover:bg-gray-700 transition
-                text-gray-600 dark:text-gray-300 font-bold text-lg"
-         title="Día siguiente">›</a>
-    </div>
-
-    <div class="flex items-center gap-2">
-      <button onclick="abrirModalVozDia()"
-              class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700
-                     transition text-sm font-semibold flex items-center gap-1"
-              title="Nuevo evento por voz">
-        🎙️ Voz
-      </button>
-      <a th:href="@{/calendario/nuevo(fecha=${fecha})}"
-         class="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200
-                px-4 py-2 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600
-                transition text-sm font-semibold">
-        ✏️ Manual
-      </a>
-    </div>
-  </div>
 
   <!-- BARRA CONTEXTUAL DEL DÍA -->
   <div id="contexto-dia"
-       class="mb-6 bg-gray-900 dark:bg-gray-800 text-white rounded-xl shadow
+       class="mb-4 bg-gray-900 dark:bg-gray-800 text-white rounded-xl shadow
               overflow-x-auto scrollbar-hide">
     <div class="flex items-stretch divide-x divide-gray-700 min-w-max">
 
@@ -90,40 +54,6 @@
 
     </div>
   </div>
-
-  <script th:inline="javascript">
-    /*<![CDATA[*/
-    (async function() {
-      const fechaStr = /*[[${#temporals.format(fecha, 'yyyy-MM-dd')}]]*/ '';
-      try {
-        const resp = await fetch('/contexto/api/datos?fecha=' + fechaStr);
-        const d    = await resp.json();
-        document.getElementById('dia-amanecer').textContent  = d.amanecer  || '--:--';
-        document.getElementById('dia-atardecer').textContent = d.atardecer || '--:--';
-        document.getElementById('dia-pleamar1').textContent  = d.pleamar1  || '--:--';
-        document.getElementById('dia-bajamar1').textContent  = d.bajamar1  || '--:--';
-        document.getElementById('dia-pleamar2').textContent  = d.pleamar2  || '--:--';
-        document.getElementById('dia-bajamar2').textContent  = d.bajamar2  || '--:--';
-        document.getElementById('dia-ciudad').textContent    = (d.ciudad || 'Sanlúcar').split(' ')[0];
-      } catch(e) {
-        console.warn('Contexto del día no disponible:', e.message);
-      }
-    })();
-
-    function abrirModalVozDia() {
-      const fechaStr = /*[[${#temporals.format(fecha, 'yyyy-MM-dd')}]]*/ '';
-      if (typeof abrirModalVozGlobal === 'function') {
-        abrirModalVozGlobal();
-        setTimeout(() => {
-          const ta = document.getElementById('gp-voz-texto');
-          if (ta && !ta.value) {
-            ta.placeholder = 'Ej: "Cita médica a las 10" (se usará el ' + fechaStr + ')';
-          }
-        }, 150);
-      }
-    }
-    /*]]>*/
-  </script>
 
   <!-- Lista de eventos del día -->
   <div class="space-y-3">
@@ -172,9 +102,89 @@
          class="bg-white dark:bg-gray-800 rounded-xl shadow p-12 text-center">
       <p class="text-5xl mb-3">📭</p>
       <p class="text-gray-400">No hay eventos para este día.</p>
-      <p class="text-xs text-gray-400 mt-2">Usa los botones de arriba para añadir uno.</p>
+      <p class="text-xs text-gray-400 mt-2">Usa el botón + para añadir uno.</p>
     </div>
   </div>
+
+  <script th:inline="javascript">
+    /*<![CDATA[*/
+    const FECHA_DIA = /*[[${#temporals.format(fecha, 'yyyy-MM-dd')}]]*/ '';
+
+    // ── Inyectar navegación de día en el header ──────────────
+    // Usamos aritmética pura sobre el string YYYY-MM-DD
+    // para evitar bugs de zona horaria con new Date()
+    (function inyectarHeaderDia() {
+      const slot = document.getElementById('header-title-slot');
+      if (!slot) return;
+
+      // Sumar o restar días a un string "YYYY-MM-DD" sin usar Date
+      function sumarDias(fechaStr, dias) {
+        const parts = fechaStr.split('-');
+        // Usamos UTC explícito para evitar DST
+        const ms = Date.UTC(
+          parseInt(parts[0], 10),
+          parseInt(parts[1], 10) - 1,
+          parseInt(parts[2], 10)
+        ) + dias * 86400000;
+        const d = new Date(ms);
+        const y = d.getUTCFullYear();
+        const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(d.getUTCDate()).padStart(2, '0');
+        return y + '-' + m + '-' + day;
+      }
+
+      const prevFecha = sumarDias(FECHA_DIA, -1);
+      const nextFecha = sumarDias(FECHA_DIA, +1);
+
+      // Nombre del día para mostrar — también con UTC
+      const parts = FECHA_DIA.split('-');
+      const fechaUTC = new Date(Date.UTC(
+        parseInt(parts[0], 10),
+        parseInt(parts[1], 10) - 1,
+        parseInt(parts[2], 10)
+      ));
+      const nombreDia = fechaUTC.toLocaleDateString('es-ES', {
+        weekday: 'short', day: 'numeric', month: 'short',
+        timeZone: 'UTC'
+      });
+      const nombreCapitalizado = nombreDia.charAt(0).toUpperCase() + nombreDia.slice(1);
+
+      slot.innerHTML =
+        '<a href="/calendario/dia/' + prevFecha + '"' +
+        '   class="w-8 h-8 flex items-center justify-center rounded-full flex-shrink-0' +
+        '          hover:bg-gray-200 dark:hover:bg-gray-700 transition' +
+        '          text-gray-600 dark:text-gray-300 font-bold text-lg">‹</a>' +
+        '<span class="font-bold text-gray-800 dark:text-gray-100 text-sm sm:text-base' +
+        '             truncate px-1 capitalize">' + nombreCapitalizado + '</span>' +
+        '<a href="/calendario/dia/' + nextFecha + '"' +
+        '   class="w-8 h-8 flex items-center justify-center rounded-full flex-shrink-0' +
+        '          hover:bg-gray-200 dark:hover:bg-gray-700 transition' +
+        '          text-gray-600 dark:text-gray-300 font-bold text-lg">›</a>' +
+        '<a href="/calendario/nuevo?fecha=' + FECHA_DIA + '"' +
+        '   class="ml-2 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200' +
+        '          px-3 py-1 rounded-full hover:bg-gray-300 dark:hover:bg-gray-600' +
+        '          transition font-semibold flex-shrink-0">✏️ Manual</a>';
+    })();
+
+    // ── Datos contextuales (mareas/sol) ──────────────────────
+    (async function() {
+      try {
+        const resp = await fetch('/contexto/api/datos?fecha=' + FECHA_DIA);
+        const d    = await resp.json();
+        document.getElementById('dia-amanecer').textContent  = d.amanecer  || '--:--';
+        document.getElementById('dia-atardecer').textContent = d.atardecer || '--:--';
+        document.getElementById('dia-pleamar1').textContent  = d.pleamar1  || '--:--';
+        document.getElementById('dia-bajamar1').textContent  = d.bajamar1  || '--:--';
+        document.getElementById('dia-pleamar2').textContent  = d.pleamar2  || '--:--';
+        document.getElementById('dia-bajamar2').textContent  = d.bajamar2  || '--:--';
+        document.getElementById('dia-ciudad').textContent    = (d.ciudad || 'Sanlúcar').split(' ')[0];
+      } catch(e) {
+        console.warn('Contexto del día no disponible:', e.message);
+      }
+    })();
+    /*]]>*/
+  </script>
+
 </section>
 </body>
 </html>
