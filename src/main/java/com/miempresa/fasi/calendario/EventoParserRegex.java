@@ -35,6 +35,11 @@ private static final Pattern CUMPLE = Pattern.compile(
     "(?i)cumple(?:años)?\\s+(?:de\\s+)?([\\wáéíóúñ]+)\\s+el\\s+(\\d{1,2})\\s+de\\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)(?:\\s+(cada\\s+año|todos\\s+los\\s+años|anual|anualmente))?"
 );
 
+// "vacaciones de Lucas el 15 de agosto"
+private static final Pattern VACACIONES_UNICO_DIA = Pattern.compile(
+    "(?i)vacaciones\\s+(?:de\\s+)?([\\wáéíóúñ]+)\\s+el\\s+(\\d{1,2})\\s+de\\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)"
+);
+
 // ══════════════════════════════════════════════════════════
 //  🆕 PATRONES NUEVOS — FECHAS RELATIVAS
 // ══════════════════════════════════════════════════════════
