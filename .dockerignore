@@ -1,0 +1,9 @@
+target/
+backups/
+*.csv
+*.py
+*.sh
+.git
+.gitignore
+HELP.md
+Jenkinsfile
