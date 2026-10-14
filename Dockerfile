@@ -1,30 +1,27 @@
 # --- ETAPA 1: Compilación ---
-FROM eclipse-temurin:17-jdk-alpine AS build
+FROM eclipse-temurin:17-jdk-jammy AS build
 WORKDIR /app
 
-# Copiar el wrapper y dependencias primero (aprovecha la caché de capas de Docker)
+# Copiar wrapper y dependencias primero para cachear capas
 COPY .mvn/ .mvn/
 COPY mvnw pom.xml ./
-RUN chmod +x ./mvnw && ./mvnw dependency:go-offline -B
+RUN chmod +x mvnw && ./mvnw dependency:go-offline -B
 
-# Copiar código fuente y compilar
+# Copiar el código fuente y compilar
 COPY src ./src
 RUN ./mvnw clean package -DskipTests
 
-# --- ETAPA 2: Runtime de Producción (Ligero y Seguro) ---
-FROM eclipse-temurin:17-jre-alpine
+# --- ETAPA 2: Runtime ligero ---
+FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
 
-# Buenas prácticas de seguridad: ejecutar como usuario sin privilegios
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-USER appuser
+# Crear usuario sin privilegios por seguridad
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 
-# Traer únicamente el ejecutable generado
 COPY --from=build /app/target/*.jar app.jar
 
-EXPOSE 8080
+USER appuser
 
-# Forzar perfil prod de Spring Boot
-ENV SPRING_PROFILES_ACTIVE=prod
+EXPOSE 8080
 
 ENTRYPOINT ["java", "-jar", "app.jar"]
