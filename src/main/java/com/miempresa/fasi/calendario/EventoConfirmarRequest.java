@@ -1,5 +1,6 @@
 package com.miempresa.fasi.calendario;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.Data;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -8,6 +9,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 @Data
 public class EventoConfirmarRequest {
     private Evento.TipoEvento tipo;

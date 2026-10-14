@@ -28,10 +28,6 @@ public class EventoIaService {
     private static final int CTX_INTERPRETAR   = 1024;
     private static final int MAX_OUTPUT_TOKENS = 600;
 
-    // ══════════════════════════════════════════════════════════
-    //  SISTEMA HÍBRIDO: REGEX → IA
-    // ══════════════════════════════════════════════════════════
-
     public EventoIaResponse interpretar(EventoIaRequest request) {
         long inicio = System.currentTimeMillis();
         LocalDate fechaContexto = request.getFechaContexto() != null && !request.getFechaContexto().isBlank()
@@ -39,7 +35,6 @@ public class EventoIaService {
             : LocalDate.now();
 
         try {
-            // ── PASO 1: Intentar REGEX (< 50ms) ──────────────────
             Optional<EventoParserRegex.EventoParseResult> res = parserRegex.parse(request.getTexto(), fechaContexto);
 
             if (res.isPresent()) {
@@ -49,7 +44,6 @@ public class EventoIaService {
 
                 log.info("⚡ REGEX exitoso en {}ms (recurrente: {})", elapsed, esRecurrente);
 
-                // ── VERIFICAR SI NECESITA LÍMITE ──────────────────
                 if (esRecurrente && evento.getDatosExtra() != null) {
                     Boolean necesitaLimite = (Boolean) evento.getDatosExtra().get("necesitaLimite");
                     if (Boolean.TRUE.equals(necesitaLimite)) {
@@ -61,8 +55,6 @@ public class EventoIaService {
             }
 
             log.info("⏩ REGEX no coincide → usando IA");
-
-            // ── PASO 2: Usar IA para casos complejos ─────────────
             return interpretarConIA(request, fechaContexto, inicio);
 
         } catch (Exception e) {
@@ -72,10 +64,6 @@ public class EventoIaService {
                     null, System.currentTimeMillis() - inicio);
         }
     }
-
-    // ══════════════════════════════════════════════════════════
-    //  RESPUESTA CONVERSACIONAL: PEDIR LÍMITE
-    // ══════════════════════════════════════════════════════════
 
     private EventoIaResponse crearRespuestaNecesitaLimite(Evento evento, long tiempoMs) {
         Map<String, Object> datosExtra = evento.getDatosExtra();
@@ -97,7 +85,7 @@ public class EventoIaService {
     private String construirMensajeLimite(String patron, Evento evento) {
         StringBuilder sb = new StringBuilder();
         sb.append("📅 Evento recurrente detectado: **").append(evento.getTitulo()).append("**\n\n");
-        
+
         switch (patron) {
             case "WEEKLY" -> {
                 @SuppressWarnings("unchecked")
@@ -127,18 +115,14 @@ public class EventoIaService {
         return sb.toString();
     }
 
-    // ══════════════════════════════════════════════════════════
-    //  PROCESAR RESPUESTA DE LÍMITE
-    // ══════════════════════════════════════════════════════════
-
     public EventoIaResponse procesarLimite(Evento eventoBase, String respuestaUsuario) {
         long inicio = System.currentTimeMillis();
-        
+
         try {
             LocalDate fechaLimite = parsearLimite(respuestaUsuario, LocalDate.now());
-            
+
             if (fechaLimite == null) {
-                return new EventoIaResponse(false, 
+                return new EventoIaResponse(false,
                     "❌ No entendí el límite. Por favor especifica: 'hasta agosto', 'hasta el 31/12', o 'indefinido'",
                     null, System.currentTimeMillis() - inicio);
             }
@@ -154,7 +138,7 @@ public class EventoIaService {
 
         } catch (Exception e) {
             log.error("❌ Error procesando límite: {}", e.getMessage());
-            return new EventoIaResponse(false, 
+            return new EventoIaResponse(false,
                 "❌ Error al procesar el límite: " + e.getMessage(),
                 null, System.currentTimeMillis() - inicio);
         }
@@ -220,10 +204,6 @@ public class EventoIaService {
         return null;
     }
 
-    // ══════════════════════════════════════════════════════════
-    //  INTERPRETACIÓN CON IA (CON VALIDACIONES MEJORADAS)
-    // ══════════════════════════════════════════════════════════
-
     private EventoIaResponse interpretarConIA(EventoIaRequest request, LocalDate fechaContexto, long inicio) throws Exception {
         String prompt = construirPrompt(request.getTexto(), fechaContexto);
         String json   = ollamaClient.generateJson(prompt, CTX_INTERPRETAR, MAX_OUTPUT_TOKENS);
@@ -263,25 +243,18 @@ public class EventoIaService {
             Evento evento = objectMapper.treeToValue(node, Evento.class);
             evento.setTextoOriginalVoz(request.getTexto());
 
-            // ══════════════════════════════════════════════════════════
-            //  🛡️ VALIDACIONES CRÍTICAS
-            // ══════════════════════════════════════════════════════════
-
-            // ── VALIDACIÓN 1: Título obligatorio ──────────────────
             if (evento.getTitulo() == null || evento.getTitulo().isBlank() || evento.getTitulo().equals("-")) {
                 log.error("❌ La IA no devolvió título válido. JSON: {}", node.toString());
                 throw new IllegalStateException("❌ No pude determinar el nombre del evento. Por favor, especifica qué tipo de evento quieres crear.");
             }
 
-            // ── VALIDACIÓN 2: Fecha obligatoria ───────────────────
             if (evento.getFechaInicio() == null) {
                 log.warn("⚠️ La IA no devolvió fechaInicio. Intentando recuperar...");
-                
-                // Intentar recuperar de campo incorrecto "fecha"
+
                 if (node.has("fecha") && !node.get("fecha").isNull()) {
                     String fechaTexto = node.get("fecha").asText();
                     log.warn("⚠️ Intentando parsear campo 'fecha': {}", fechaTexto);
-                    
+
                     try {
                         evento.setFechaInicio(parsearFechaTexto(fechaTexto, fechaContexto));
                         log.info("✅ Fecha recuperada: {}", evento.getFechaInicio());
@@ -294,11 +267,10 @@ public class EventoIaService {
                 }
             }
 
-            // ── VALIDACIÓN 3: Hora mal formateada ─────────────────
             if (evento.getHoraInicio() == null && node.has("hora") && !node.get("hora").isNull()) {
                 String horaTexto = node.get("hora").asText();
                 log.warn("⚠️ La IA usó campo 'hora' en lugar de 'horaInicio': {}", horaTexto);
-                
+
                 try {
                     if (horaTexto.matches("\\d{1,2}:\\d{2}")) {
                         horaTexto += ":00";
@@ -307,29 +279,22 @@ public class EventoIaService {
                     log.info("✅ Hora recuperada: {}", evento.getHoraInicio());
                 } catch (Exception e) {
                     log.error("❌ No se pudo parsear hora: {}", horaTexto);
-                    // No lanzamos error, la hora es opcional
                 }
             }
 
-            // ── VALIDACIÓN 4: Tipo obligatorio ────────────────────
             if (evento.getTipo() == null) {
                 log.warn("⚠️ La IA no devolvió tipo, usando OTRO por defecto");
                 evento.setTipo(Evento.TipoEvento.OTRO);
             }
 
-            // ── VALIDACIÓN 5: Hora extraña (14:00 sin contexto) ───
             if (evento.getHoraInicio() != null && evento.getHoraInicio().equals(LocalTime.of(14, 0))) {
-                if (!request.getTexto().toLowerCase().contains("14") && 
+                if (!request.getTexto().toLowerCase().contains("14") &&
                     !request.getTexto().toLowerCase().contains("dos") &&
                     !request.getTexto().toLowerCase().contains("2")) {
                     log.warn("⚠️ La IA inventó hora 14:00 sin que estuviera en el texto. Eliminando.");
                     evento.setHoraInicio(null);
                 }
             }
-
-            // ══════════════════════════════════════════════════════════
-            //  MANEJO DE RECURRENCIA
-            // ══════════════════════════════════════════════════════════
 
             if (esRecurrente && patron != null) {
                 Map<String, Object> extra = evento.getDatosExtra() != null
@@ -338,7 +303,7 @@ public class EventoIaService {
                 extra.put("recurrente", true);
                 extra.put("patron", patron);
                 extra.put("textoRecurrencia", request.getTexto());
-                
+
                 if (node.has("diaSemana") && !node.get("diaSemana").isNull()) {
                     extra.put("diaSemana", node.get("diaSemana").asText());
                 }
@@ -374,10 +339,6 @@ public class EventoIaService {
         }
     }
 
-    // ══════════════════════════════════════════════════════════
-    //  UTILIDADES DE NORMALIZACIÓN
-    // ══════════════════════════════════════════════════════════
-
     private void normalizarHora(ObjectNode node, String campo) {
         if (!node.has(campo) || node.get(campo).isNull()) return;
         String val = node.get(campo).asText("").trim()
@@ -411,21 +372,17 @@ public class EventoIaService {
         return ollamaClient.generate(prompt, 1536);
     }
 
-    // ══════════════════════════════════════════════════════════
-    //  PROMPT MEJORADO CON EJEMPLOS CONCRETOS
-    // ══════════════════════════════════════════════════════════
-
     private String construirPrompt(String texto, LocalDate fechaContexto) {
         LocalDate manana = fechaContexto.plusDays(1);
         LocalDate proximoLunes = fechaContexto.with(java.time.temporal.TemporalAdjusters.next(java.time.DayOfWeek.MONDAY));
-        
+
         return """
             Eres un extractor de eventos de calendario. Convierte texto en español a JSON válido.
-            
+
             ═══════════════════════════════════════════════════════════════════════════
             📋 FORMATO DE SALIDA (OBLIGATORIO)
             ═══════════════════════════════════════════════════════════════════════════
-            
+
             SIEMPRE devuelve este JSON EXACTO (sin markdown, sin explicaciones):
             {
               "eventos": [
@@ -446,74 +403,126 @@ public class EventoIaService {
                 }
               ]
             }
-            
+
             🚨 CAMPOS OBLIGATORIOS (USA ESTOS NOMBRES EXACTOS):
             - "fechaInicio" (NO "fecha")
             - "horaInicio" (NO "hora")
             - "personasRelacionadas" (NO "personas")
-            
+
             ═══════════════════════════════════════════════════════════════════════════
             🎯 TIPOS DE EVENTO
             ═══════════════════════════════════════════════════════════════════════════
-            
+
             PERSONAL    → Eventos privados
             SOCIAL      → Cumpleaños, fiestas, comidas
-            SALUD       → Médico, dentista, fisio
-            TRABAJO     → Oficina, reuniones, claustros
+            SALUD       → Médico, dentista, fisio, BAJAS MÉDICAS
+            TRABAJO     → Oficina, reuniones, claustros, PERMISOS LABORALES
             FAMILIA     → Tutorías, colegio, extraescolares
             VIAJE       → Desplazamientos con transporte (avión, tren, coche)
             VACACIONES  → Periodos de descanso (con o sin viaje)
             APRENDIZAJE → Cursos, clases
             OCIO        → Hobbies, deportes, cine
             GESTION     → Compras, trámites, banco
-            OTRO        → Cuando no encaje            
+            OTRO        → Cuando no encaje
+
+            ═══════════════════════════════════════════════════════════════════════════
+            📚 GLOSARIO DE TÉRMINOS LABORALES (ESPECÍFICO DEL USUARIO)
+            ═══════════════════════════════════════════════════════════════════════════
+
+            IMPORTANTE: Reconoce estos términos específicos del trabajo del usuario:
+
+            • "día moscoso" / "moscoso" → tipo: TRABAJO, titulo: "Día moscoso de [persona]", todoDia: true
+            • "día maloso" / "maloso" → tipo: SALUD, titulo: "Baja por enfermedad de [persona]", todoDia: true
+            • "baja" / "baja médica" → tipo: SALUD, titulo: "Baja médica de [persona]", todoDia: true
+            • "día sin sueldo" / "sin sueldo" → tipo: TRABAJO, titulo: "Permiso sin sueldo de [persona]", todoDia: true
+            • "asunto propio" / "asuntos propios" → tipo: TRABAJO, titulo: "Asunto propio de [persona]", todoDia: true
+            • "teletrabajo" / "trabajo remoto" → tipo: TRABAJO, titulo: "Teletrabajo de [persona]", todoDia: true
+            • "trabajo presencial" / "presencial" → tipo: TRABAJO, titulo: "Trabajo presencial de [persona]", todoDia: true
+            • "vacaciones" → tipo: VACACIONES, titulo: "Vacaciones de [persona]", todoDia: true
+
+            Cuando detectes estos términos:
+            1. Usa el tipo correcto (TRABAJO, SALUD o VACACIONES según la tabla)
+            2. Mantén el término original en el título
+            3. Marca todoDia: true (son eventos de día completo)
+            4. Si hay nombre de persona, ponlo en personasRelacionadas
+
+            EJEMPLOS DE TÉRMINOS LABORALES:
+
+            "día moscoso de Miguel el 20 de julio" →
+            {
+              "tipo": "TRABAJO",
+              "titulo": "Día moscoso de Miguel",
+              "fechaInicio": "2026-07-20",
+              "todoDia": true,
+              "personasRelacionadas": "Miguel"
+            }
+
+            "baja de Rocío del 5 al 10 de agosto" →
+            {
+              "tipo": "SALUD",
+              "titulo": "Baja médica de Rocío",
+              "fechaInicio": "2026-08-05",
+              "fechaFin": "2026-08-10",
+              "todoDia": true,
+              "personasRelacionadas": "Rocío"
+            }
+
+            "vacaciones de Miguel el día 20 de julio" →
+            {
+              "tipo": "VACACIONES",
+              "titulo": "Vacaciones de Miguel",
+              "fechaInicio": "2026-07-20",
+              "todoDia": true,
+              "personasRelacionadas": "Miguel"
+            }
+
             ═══════════════════════════════════════════════════════════════════════════
             📅 RESOLUCIÓN DE FECHAS (HOY: %s)
             ═══════════════════════════════════════════════════════════════════════════
-            
+
             EJEMPLOS CONCRETOS:
-            
+
             "el 5 de junio"    → "fechaInicio": "2026-06-05"
             "el 23 de marzo"   → "fechaInicio": "2026-03-23"
             "mañana"           → "fechaInicio": "%s"
             "el lunes"         → "fechaInicio": "%s"
-            
+
             REGLAS:
             • Formato SIEMPRE: "YYYY-MM-DD" (ej: "2026-06-05")
             • Si el mes ya pasó este año → usar año siguiente
             • "mañana" → HOY + 1 día
             • "el [día semana]" → próximo día de esa semana
-            
+
             ═══════════════════════════════════════════════════════════════════════════
             🕐 HORA (FORMATO: HH:MM:SS)
             ═══════════════════════════════════════════════════════════════════════════
-            
+
             EJEMPLOS:
             "a las 15:00"      → "horaInicio": "15:00:00"
             "a las 10"         → "horaInicio": "10:00:00"
             "a las 9:30"       → "horaInicio": "09:30:00"
             "de 10 a 12"       → "horaInicio": "10:00:00", "horaFin": "12:00:00"
             Sin hora           → "horaInicio": null
-            
-            🚨 IMPORTANTE: 
+
+            🚨 IMPORTANTE:
             - Siempre formato HH:MM:SS (ej: "15:00:00", NO "15:00")
             - Si NO hay hora en el texto → "horaInicio": null (NO inventes "14:00:00")
-            
+
             ═══════════════════════════════════════════════════════════════════════════
             📍 LUGAR Y PERSONAS
             ═══════════════════════════════════════════════════════════════════════════
-            
+
             EJEMPLOS:
             "de Rocío"                    → "personasRelacionadas": "Rocío"
             "para Alberto"                → "personasRelacionadas": "Alberto"
             "de Rocío y Alberto"          → "personasRelacionadas": "Rocío, Alberto"
             "en Jerez"                    → "lugar": "Jerez"
             "cita médica de rocío jerez"  → "personasRelacionadas": "Rocío", "lugar": "Jerez"
-            
+
             ═══════════════════════════════════════════════════════════════════════════
             ✅ EJEMPLOS COMPLETOS (COPIA ESTE FORMATO EXACTO)
             ═══════════════════════════════════════════════════════════════════════════
-            
+
             ENTRADA: "cita médica de rocío el 5 de junio a las 15:00"
             SALIDA:
             {
@@ -533,7 +542,7 @@ public class EventoIaService {
                 "patron": null
               }]
             }
-            
+
             ENTRADA: "tutoría el lunes a las 17"
             SALIDA:
             {
@@ -553,7 +562,7 @@ public class EventoIaService {
                 "patron": null
               }]
             }
-            
+
             ENTRADA: "cumpleaños de alberto el 5 de junio"
             SALIDA:
             {
@@ -573,7 +582,7 @@ public class EventoIaService {
                 "patron": null
               }]
             }
-            
+
             ENTRADA: "todos los lunes gimnasio"
             SALIDA:
             {
@@ -594,44 +603,46 @@ public class EventoIaService {
                 "diasSemana": ["MONDAY"]
               }]
             }
-            
+
             ═══════════════════════════════════════════════════════════════════════════
             🚨 REGLAS CRÍTICAS (LEE ESTO ANTES DE RESPONDER)
             ═══════════════════════════════════════════════════════════════════════════
-            
+
             1. USA ESTOS NOMBRES DE CAMPO EXACTOS:
                - "fechaInicio" (NO "fecha")
                - "horaInicio" (NO "hora")
                - "personasRelacionadas" (NO "personas")
-            
+
             2. FORMATO DE FECHA: "YYYY-MM-DD" (ej: "2026-06-05")
-            
+
             3. FORMATO DE HORA: "HH:MM:SS" (ej: "15:00:00", NO "15:00")
-            
+
             4. Si no hay hora → "horaInicio": null (NO inventes "14:00:00")
-            
+
             5. NUNCA inventes campos nuevos
-            
+
             6. Devuelve JSON válido SIN markdown (NO uses ```json)
-            
+
             7. Si no puedes determinar algo → usa null (NO "-" ni cadenas vacías)
-            
+
+            8. RECONOCE LOS TÉRMINOS LABORALES del glosario arriba
+
             ═══════════════════════════════════════════════════════════════════════════
             📝 TEXTO A INTERPRETAR
             ═══════════════════════════════════════════════════════════════════════════
-            
+
             "%s"
-            
+
             ═══════════════════════════════════════════════════════════════════════════
-            
+
             Responde SOLO con JSON. Sin explicaciones. Sin markdown. Usa los nombres de campo EXACTOS.
             """.formatted(
-                fechaContexto,      // HOY
-                manana,             // mañana
-                proximoLunes,       // el lunes
-                proximoLunes,       // ejemplo tutoría
-                proximoLunes,       // ejemplo gimnasio
-                texto               // TEXTO DEL USUARIO
+                fechaContexto,
+                manana,
+                proximoLunes,
+                proximoLunes,
+                proximoLunes,
+                texto
             );
     }
 
@@ -651,11 +662,11 @@ public class EventoIaService {
             "(?i)el\\s+(\\d{1,2})\\s+de\\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)"
         );
         java.util.regex.Matcher m = p.matcher(texto);
-        
+
         if (m.find()) {
             int dia = Integer.parseInt(m.group(1));
             String mes = m.group(2).toLowerCase();
-            
+
             java.util.Map<String, Integer> meses = java.util.Map.ofEntries(
                 java.util.Map.entry("enero", 1), java.util.Map.entry("febrero", 2),
                 java.util.Map.entry("marzo", 3), java.util.Map.entry("abril", 4),
@@ -664,18 +675,18 @@ public class EventoIaService {
                 java.util.Map.entry("septiembre", 9), java.util.Map.entry("octubre", 10),
                 java.util.Map.entry("noviembre", 11), java.util.Map.entry("diciembre", 12)
             );
-            
+
             int mesNum = meses.get(mes);
             int anio = hoy.getYear();
-            
+
             LocalDate fecha = LocalDate.of(anio, mesNum, dia);
             if (fecha.isBefore(hoy)) {
                 fecha = fecha.plusYears(1);
             }
-            
+
             return fecha;
         }
-        
+
         throw new IllegalArgumentException("No se pudo parsear: " + texto);
     }
 }

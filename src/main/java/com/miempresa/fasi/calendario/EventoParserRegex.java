@@ -592,6 +592,35 @@ private Optional<EventoParseResult> parseEventoUnicoDiaMes(String texto, LocalDa
     log.info("✅ REGEX: Evento ÚNICO → {} el {}", titulo, fecha);
     return Optional.of(new EventoParseResult(e, false));
 }
+private Optional<EventoParseResult> parseVacacionesUnicoDia(String texto, LocalDate hoy) {
+    Matcher m = VACACIONES_UNICO_DIA.matcher(texto);
+    if (!m.find()) return Optional.empty();
+
+    String persona = capitalize(m.group(1));
+    int dia = Integer.parseInt(m.group(2));
+    String mesNombre = m.group(3).toLowerCase();
+
+    Integer mes = MESES.get(mesNombre);
+    if (mes == null) return Optional.empty();
+
+    int anio = hoy.getYear();
+    LocalDate fecha = LocalDate.of(anio, mes, dia);
+    if (fecha.isBefore(hoy)) fecha = fecha.plusYears(1);
+
+    Evento e = new Evento();
+    e.setTipo(Evento.TipoEvento.VACACIONES);
+    e.setTitulo("Vacaciones de " + persona);
+    e.setFechaInicio(fecha);
+    e.setFechaFin(fecha);
+    e.setTodoDia(true);
+    e.setPersonasRelacionadas(persona);
+    e.setEtiquetas(Set.of("vacaciones"));
+    e.setTextoOriginalVoz(texto);
+
+    log.info("✅ REGEX: Vacaciones ÚNICAS → {} el {}", persona, fecha);
+    return Optional.of(new EventoParseResult(e, false));
+}
+
 
 private Optional<EventoParseResult> parseCumpleanos(String texto, LocalDate hoy) {
     Matcher m = CUMPLE.matcher(texto);
