@@ -10,7 +10,7 @@ public class MareaConstante {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private Integer id; // <-- Cambiado de Long a Integer
 
     @Column(nullable = false, unique = true, length = 10)
     private String nombre;
