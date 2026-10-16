@@ -26,7 +26,7 @@ public class LlmApiClient {
     @Value("${fasi.ai.provider.api-key:}")
     private String apiKey;
 
-    @Value("${fasi.ai.provider.model:gemini-2.5-flash}")
+    @Value("${fasi.ai.provider.model:gemini-3.8-flash}")
     private String model;
 
     private final ObjectMapper objectMapper;
