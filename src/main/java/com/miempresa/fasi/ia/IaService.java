@@ -12,7 +12,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class IaService {
 
-    private final OllamaClient       ollamaClient;
+    private final LlmApiClient       llmClient;
     private final IaContextBuilder   contextBuilder;
     private final IaMensajeRepository repo;
 
@@ -20,11 +20,10 @@ public class IaService {
     public IaChatResponse chat(IaChatRequest request) {
         long inicio = System.currentTimeMillis();
 
-        String prompt    = contextBuilder.buildPrompt(request.getMensaje(), request.getModulo());
-        String respuesta = ollamaClient.generate(prompt);
-        long   tiempoMs  = System.currentTimeMillis() - inicio;
+        String systemPrompt = contextBuilder.buildPrompt(request.getMensaje(), request.getModulo());
+        String respuesta = llmClient.chat(systemPrompt, request.getMensaje());
+        long tiempoMs = System.currentTimeMillis() - inicio;
 
-        // Persistir en historial
         repo.save(IaMensaje.builder()
                 .pregunta(request.getMensaje())
                 .respuesta(respuesta)
@@ -32,7 +31,7 @@ public class IaService {
                 .tiempoMs(tiempoMs)
                 .build());
 
-        log.info("IA respondió en {}ms para módulo '{}'", tiempoMs, request.getModulo());
+        log.info("Gemini Flash respondió en {}ms para módulo '{}'", tiempoMs, request.getModulo());
         return new IaChatResponse(respuesta, request.getModulo(), tiempoMs);
     }
 

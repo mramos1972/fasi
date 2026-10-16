@@ -24,6 +24,7 @@ public class MareaConstante {
     @Column(nullable = false)
     private double velocidad;  // ω en grados/hora
 
+    @Builder.Default
     @Column(nullable = false)
     private boolean activo = true;
 }

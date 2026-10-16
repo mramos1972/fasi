@@ -1,6 +1,7 @@
 package com.miempresa.fasi.calendario;
 
 import com.miempresa.fasi.common.BaseEntity;
+import com.miempresa.fasi.contexto.Usuario;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -18,6 +19,11 @@ import java.util.Set;
 @Table(name = "eventos")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class Evento extends BaseEntity {
+
+    @NotNull
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "usuario_id", nullable = false)
+    private Usuario usuario;
 
     @NotNull
     @Enumerated(EnumType.STRING)
@@ -50,6 +56,7 @@ public class Evento extends BaseEntity {
     @Column(name = "hora_fin")
     private LocalTime horaFin;
 
+    @Builder.Default
     @Column(name = "todo_el_dia", nullable = false)
     private boolean todoDia = false;
 
@@ -100,7 +107,7 @@ public class Evento extends BaseEntity {
                 case TRABAJO     -> "#8b5cf6";
                 case FAMILIA     -> "#10b981";
                 case VIAJE       -> "#f59e0b";
-                case VACACIONES  -> "#06b6d4"; // Cyan (color playa/descanso)
+                case VACACIONES  -> "#06b6d4";
                 case APRENDIZAJE -> "#6366f1";
                 case OCIO        -> "#14b8a6";
                 case GESTION     -> "#64748b";
@@ -154,5 +161,4 @@ public class Evento extends BaseEntity {
             return OTRO;
         }
     }
-
 }

@@ -1,19 +1,17 @@
 package com.miempresa.fasi.calendario;
 
+import com.miempresa.fasi.contexto.Usuario;
+import com.miempresa.fasi.contexto.UsuarioActualService;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.temporal.TemporalAdjusters;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 @Slf4j
 @Service
@@ -22,51 +20,55 @@ import java.util.UUID;
 public class EventoService {
 
     private final EventoRepository repo;
+    private final UsuarioActualService usuarioActualService;
 
     // ══════════════════════════════════════════════════════════
     //  LECTURA
     // ══════════════════════════════════════════════════════════
 
     public List<Evento> findByMes(int year, int month) {
+        UUID usuarioId = usuarioActualService.obtenerUsuarioActual().getId();
         LocalDate inicio = LocalDate.of(year, month, 1);
         LocalDate fin    = inicio.withDayOfMonth(inicio.lengthOfMonth());
-        return repo.findByMesConRango(inicio, fin);
-    }
-
-    public List<Evento> findBySemana(LocalDate lunesSemana) {
-        return repo.findByFechaInicioBetweenOrderByFechaInicioAscHoraInicioAsc(
-                lunesSemana, lunesSemana.plusDays(6));
+        return repo.findByMesConRango(usuarioId, inicio, fin);
     }
 
     public List<Evento> findByDia(LocalDate fecha) {
-        return repo.findByFechaInicioOrderByHoraInicioAsc(fecha);
+        UUID usuarioId = usuarioActualService.obtenerUsuarioActual().getId();
+        return repo.findByUsuarioIdAndFecha(usuarioId, fecha);
     }
 
     public List<Evento> buscar(String query) {
         if (query == null || query.isBlank()) return List.of();
-        return repo.buscarFullText(query.trim());
+        UUID usuarioId = usuarioActualService.obtenerUsuarioActual().getId();
+        return repo.buscarFullText(usuarioId, query.trim());
     }
 
     public List<Evento> findProximos(int limite) {
-        return repo.findProximosOptimizado(LocalDate.now())
+        UUID usuarioId = usuarioActualService.obtenerUsuarioActual().getId();
+        return repo.findProximosOptimizado(usuarioId, LocalDate.now())
                    .stream().limit(limite).toList();
     }
 
+    public List<Evento> getEventosPendientesDatos() {
+        UUID usuarioId = usuarioActualService.obtenerUsuarioActual().getId();
+        return repo.findEventosPendientesDatos(usuarioId);
+    }
+
+
     public Evento findById(UUID id) {
-        return repo.findById(id)
-            .orElseThrow(() -> new EntityNotFoundException("Evento no encontrado: " + id));
+        UUID usuarioId = usuarioActualService.obtenerUsuarioActual().getId();
+        return repo.findByIdAndUsuarioId(id, usuarioId)
+            .orElseThrow(() -> new EntityNotFoundException("Evento no encontrado o no pertenece al usuario: " + id));
     }
 
     public List<String> getAllEtiquetas() {
-        return repo.findAllOptimizado().stream()
+        UUID usuarioId = usuarioActualService.obtenerUsuarioActual().getId();
+        return repo.findAllOptimizado(usuarioId).stream()
                 .flatMap(e -> e.getEtiquetas().stream())
                 .distinct()
                 .sorted()
                 .toList();
-    }
-
-    public List<Evento> getEventosPendientesDatos() {
-        return repo.findEventosPendientesDatos();
     }
 
     // ══════════════════════════════════════════════════════════
@@ -75,6 +77,9 @@ public class EventoService {
 
     @Transactional
     public Evento save(Evento e) {
+        if (e.getUsuario() == null) {
+            e.setUsuario(usuarioActualService.obtenerUsuarioActual());
+        }
         return repo.save(e);
     }
 
@@ -99,12 +104,14 @@ public class EventoService {
 
     @Transactional
     public void delete(UUID id) {
-        repo.deleteById(id);
+        Evento e = findById(id);
+        repo.delete(e);
     }
 
     @Transactional
     public void deleteAll() {
-        repo.deleteAll();
+        UUID usuarioId = usuarioActualService.obtenerUsuarioActual().getId();
+        repo.deleteAllByUsuarioId(usuarioId);
     }
 
     // ══════════════════════════════════════════════════════════
@@ -174,39 +181,26 @@ public class EventoService {
             default -> fechas.add(inicio);
         }
 
-        log.info("📅 Vista previa: {} eventos para patrón {}", fechas.size(), patron);
         return fechas;
-    }
-
-    /**
-     * Construye el datosExtra limpio para persistir en cada evento individual.
-     * Elimina claves de control del flujo conversacional que no deben guardarse en BD.
-     */
-    private Map<String, Object> limpiarDatosExtraParaPersistir(Map<String, Object> datosExtra) {
-        if (datosExtra == null) return null;
-        Map<String, Object> limpio = new HashMap<>(datosExtra);
-        // Claves de control del flujo — no tienen sentido en BD
-        limpio.remove("necesitaLimite");
-        limpio.remove("esperandoLimite");
-        limpio.remove("textoRecurrencia");
-        return limpio.isEmpty() ? null : limpio;
     }
 
     @Transactional
     public List<Evento> saveRecurrente(EventoConfirmarRequest dto) {
+        Usuario usuario = usuarioActualService.obtenerUsuarioActual();
         Evento base = dto.toEvento();
-        List<LocalDate> fechas = generarVistaPrevia(base);
+        base.setUsuario(usuario);
 
-        // datosExtra limpio — sin claves de control del flujo conversacional
+        List<LocalDate> fechas = generarVistaPrevia(base);
         Map<String, Object> extraLimpio = limpiarDatosExtraParaPersistir(base.getDatosExtra());
 
         List<Evento> generados = new ArrayList<>();
         for (LocalDate fecha : fechas) {
             Evento e = new Evento();
+            e.setUsuario(usuario);
             e.setTipo(base.getTipo());
             e.setTitulo(base.getTitulo());
             e.setFechaInicio(fecha);
-            e.setFechaFin(null);          // cada ocurrencia es de 1 día
+            e.setFechaFin(null);
             e.setHoraInicio(base.getHoraInicio());
             e.setHoraFin(base.getHoraFin());
             e.setTodoDia(base.isTodoDia());
@@ -220,17 +214,20 @@ public class EventoService {
             generados.add(repo.save(e));
         }
 
-        log.info("✅ Guardados {} eventos recurrentes", generados.size());
         return generados;
     }
 
-    // ══════════════════════════════════════════════════════════
-    //  UTILIDADES PRIVADAS
-    // ══════════════════════════════════════════════════════════
+    private Map<String, Object> limpiarDatosExtraParaPersistir(Map<String, Object> datosExtra) {
+        if (datosExtra == null) return null;
+        Map<String, Object> limpio = new HashMap<>(datosExtra);
+        limpio.remove("necesitaLimite");
+        limpio.remove("esperandoLimite");
+        limpio.remove("textoRecurrencia");
+        return limpio.isEmpty() ? null : limpio;
+    }
 
     private List<DayOfWeek> extraerDiasSemana(Map<String, Object> datosExtra) {
         List<DayOfWeek> dias = new ArrayList<>();
-
         if (datosExtra.containsKey("diasSemana")) {
             Object obj = datosExtra.get("diasSemana");
             if (obj instanceof List<?> lista) {
@@ -240,12 +237,10 @@ public class EventoService {
                 }
             }
         }
-
         if (dias.isEmpty() && datosExtra.containsKey("diaSemana")) {
             DayOfWeek dow = parseDiaSemana(datosExtra.get("diaSemana").toString());
             if (dow != null) dias.add(dow);
         }
-
         return dias;
     }
 
@@ -268,44 +263,5 @@ public class EventoService {
         } else {
             return mes.with(TemporalAdjusters.dayOfWeekInMonth(posicion, dow));
         }
-    }
-
-    // ══════════════════════════════════════════════════════════
-    //  MÉTODO LEGACY (mantener por compatibilidad)
-    // ══════════════════════════════════════════════════════════
-
-    @Transactional
-    public void saveRecurrente(Evento plantilla, String patron) {
-        LocalDate inicio = plantilla.getFechaInicio();
-        LocalDate fin = plantilla.getFechaFin() != null
-                ? plantilla.getFechaFin()
-                : inicio.plusMonths(3);
-        log.info("🔄 Generando eventos recurrentes legacy: {} desde {} hasta {}", patron, inicio, fin);
-        LocalDate actual = inicio;
-        int count = 0;
-        while (!actual.isAfter(fin) && count < 100) {
-            Evento copia = new Evento();
-            copia.setTipo(plantilla.getTipo());
-            copia.setTitulo(plantilla.getTitulo());
-            copia.setFechaInicio(actual);
-            copia.setFechaFin(actual);
-            copia.setHoraInicio(plantilla.getHoraInicio());
-            copia.setHoraFin(plantilla.getHoraFin());
-            copia.setTodoDia(plantilla.isTodoDia());
-            copia.setLugar(plantilla.getLugar());
-            copia.setPersonasRelacionadas(plantilla.getPersonasRelacionadas());
-            copia.setDescripcion(plantilla.getDescripcion());
-            copia.setRecordatorioMinutos(plantilla.getRecordatorioMinutos());
-            copia.setEtiquetas(plantilla.getEtiquetas());
-            repo.save(copia);
-            count++;
-            switch (patron.toUpperCase()) {
-                case "DAILY"   -> actual = actual.plusDays(1);
-                case "WEEKLY"  -> actual = actual.plusWeeks(1);
-                case "MONTHLY" -> actual = actual.plusMonths(1);
-                default -> { log.warn("Patrón desconocido: {}", patron); return; }
-            }
-        }
-        log.info("✅ Creados {} eventos recurrentes (legacy)", count);
     }
 }

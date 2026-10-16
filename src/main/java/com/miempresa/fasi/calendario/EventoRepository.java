@@ -7,65 +7,76 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
 public interface EventoRepository extends JpaRepository<Evento, UUID> {
 
-    // ── Consultas por rango de fechas (para la vista mensual/semanal) ──
-    // Incluye eventos que EMPIEZAN en el mes O cuyo rango SOLAPA con el mes
     @Query("""
         SELECT e FROM Evento e
-        WHERE e.fechaInicio <= :hasta
+        WHERE e.usuario.id = :usuarioId
+          AND e.fechaInicio <= :hasta
           AND (e.fechaFin IS NULL OR e.fechaFin >= :desde)
         ORDER BY e.fechaInicio ASC, e.horaInicio ASC
         """)
-    List<Evento> findByMesConRango(@Param("desde") LocalDate desde,
-                                   @Param("hasta") LocalDate hasta);
+    List<Evento> findByMesConRango(
+            @Param("usuarioId") UUID usuarioId,
+            @Param("desde") LocalDate desde,
+            @Param("hasta") LocalDate hasta);
 
-    // Mantener el original para compatibilidad
-    List<Evento> findByFechaInicioBetweenOrderByFechaInicioAscHoraInicioAsc(
-            LocalDate desde, LocalDate hasta);
+    @Query("""
+        SELECT e FROM Evento e
+        WHERE e.usuario.id = :usuarioId
+          AND e.fechaInicio BETWEEN :desde AND :hasta
+        ORDER BY e.fechaInicio ASC, e.horaInicio ASC
+        """)
+    List<Evento> findByRango(
+            @Param("usuarioId") UUID usuarioId,
+            @Param("desde") LocalDate desde,
+            @Param("hasta") LocalDate hasta);
 
-    // ── Consultas por tipo ──────────────────────────────────
-    List<Evento> findByTipoOrderByFechaInicioAsc(Evento.TipoEvento tipo);
+    List<Evento> findByUsuarioIdAndTipoOrderByFechaInicioAsc(UUID usuarioId, Evento.TipoEvento tipo);
 
-    // ── Búsqueda full-text con PostgreSQL tsvector ──────────
     @Query(value = """
         SELECT * FROM eventos
-        WHERE texto_busqueda @@ plainto_tsquery('spanish', unaccent(:query))
+        WHERE usuario_id = :usuarioId
+          AND texto_busqueda @@ plainto_tsquery('spanish', unaccent(:query))
         ORDER BY fecha_inicio DESC
         LIMIT 50
         """, nativeQuery = true)
-    List<Evento> buscarFullText(@Param("query") String query);
+    List<Evento> buscarFullText(@Param("usuarioId") UUID usuarioId, @Param("query") String query);
 
-    // ── Próximos eventos (para widget de dashboard) ─────────
-    @Query("SELECT e FROM Evento e WHERE e.fechaInicio >= :hoy ORDER BY e.fechaInicio ASC, e.horaInicio ASC")
-    List<Evento> findProximos(@Param("hoy") LocalDate hoy);
+    @Query("""
+        SELECT e FROM Evento e
+        WHERE e.usuario.id = :usuarioId AND e.fechaInicio = :fecha
+        ORDER BY e.horaInicio ASC
+        """)
+    List<Evento> findByUsuarioIdAndFecha(@Param("usuarioId") UUID usuarioId, @Param("fecha") LocalDate fecha);
 
-    // ── Eventos de un día concreto ──────────────────────────
-    List<Evento> findByFechaInicioOrderByHoraInicioAsc(LocalDate fecha);
+    @Query(value = """
+        SELECT * FROM eventos 
+        WHERE usuario_id = :usuarioId 
+          AND (datos_extra @> '{"pendienteHora": true}'::jsonb OR datos_extra @> '{"pendienteLugar": true}'::jsonb) 
+        ORDER BY fecha_inicio ASC
+        """, nativeQuery = true)
+    List<Evento> findEventosPendientesDatos(@Param("usuarioId") UUID usuarioId);
 
-    // Eventos con datos pendientes (sin hora, sin lugar, etc.)
-    @Query(value = "SELECT * FROM eventos WHERE datos_extra @> '{\"pendienteHora\": true}'::jsonb ORDER BY fecha_inicio ASC", nativeQuery = true)
-    List<Evento> findEventosPendientesHora();
+    @Query("""
+        SELECT DISTINCT e FROM Evento e LEFT JOIN FETCH e.etiquetas
+        WHERE e.usuario.id = :usuarioId AND e.fechaInicio >= :desde
+        ORDER BY e.fechaInicio ASC, e.horaInicio ASC
+        """)
+    List<Evento> findProximosOptimizado(@Param("usuarioId") UUID usuarioId, @Param("desde") LocalDate desde);
 
-    @Query(value = "SELECT * FROM eventos WHERE datos_extra @> '{\"pendienteHora\": true}'::jsonb OR datos_extra @> '{\"pendienteLugar\": true}'::jsonb ORDER BY fecha_inicio ASC", nativeQuery = true)
-    List<Evento> findEventosPendientesDatos();
+    @Query("""
+        SELECT DISTINCT e FROM Evento e LEFT JOIN FETCH e.etiquetas
+        WHERE e.usuario.id = :usuarioId
+        ORDER BY e.fechaInicio, e.horaInicio
+        """)
+    List<Evento> findAllOptimizado(@Param("usuarioId") UUID usuarioId);
 
-    // ── Consultas optimizadas con JOIN FETCH para evitar N+1 ──
-    @Query("SELECT DISTINCT e FROM Evento e LEFT JOIN FETCH e.etiquetas " +
-           "WHERE e.fechaInicio <= :fin AND (e.fechaFin IS NULL OR e.fechaFin >= :inicio) " +
-           "ORDER BY e.fechaInicio, e.horaInicio")
-    List<Evento> findByRangoOptimizado(@Param("inicio") LocalDate inicio, 
-                                        @Param("fin") LocalDate fin);
+    Optional<Evento> findByIdAndUsuarioId(UUID id, UUID usuarioId);
 
-    @Query("SELECT DISTINCT e FROM Evento e LEFT JOIN FETCH e.etiquetas " +
-           "WHERE e.fechaInicio >= :desde " +
-           "ORDER BY e.fechaInicio, e.horaInicio")
-    List<Evento> findProximosOptimizado(@Param("desde") LocalDate desde);
-
-    @Query("SELECT DISTINCT e FROM Evento e LEFT JOIN FETCH e.etiquetas " +
-           "ORDER BY e.fechaInicio, e.horaInicio")
-    List<Evento> findAllOptimizado();
+    void deleteAllByUsuarioId(UUID usuarioId);
 }
