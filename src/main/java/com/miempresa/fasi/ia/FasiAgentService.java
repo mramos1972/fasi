@@ -28,29 +28,20 @@ public class FasiAgentService {
     public record AgentResponse(String mensaje, boolean huboMutacion) {}
 
     private static final String SYSTEM_PROMPT = """
-        Eres FASI, el cerebro operativo del calendario familiar y personal.
+        Eres FASI, el asistente operativo de calendario.
         Hoy es %s (%s). Año en curso: %d.
         
-        Tu misión es analizar la orden del usuario y clasificarla en una acción ejecutable en UN SOLO PASO.
+        Analiza la orden del usuario y clasifícala obligatoriamente en JSON puro (SIN bloques markdown ```json, solo las llaves {}):
         
-        POSIBLES ACCIONES:
-        1. "BORRAR": El usuario quiere eliminar, cancelar o borrar uno o más eventos.
-        2. "CREAR": El usuario quiere agendar uno o varios eventos.
-        3. "CONSULTA": El usuario solo pregunta qué tiene que hacer un día o si tiene eventos.
-        
-        FORMATO DE SALIDA ESTRICTO (solo JSON puro, sin explicaciones ni markdown):
-        
-        Si pide BORRAR:
+        CASO 1: Si pide BORRAR o CANCELAR un evento:
         {
           "accion": "BORRAR",
-          "criterio": {
-            "fecha": "YYYY-MM-DD",   // fecha mencionada o null si no especifica
-            "texto": "comida Madrid" // palabras clave para identificar el evento a borrar
-          },
-          "mensaje": "He eliminado la comida en Madrid de tu calendario."
+          "fecha": "YYYY-MM-DD",  // fecha indicada o null si no se menciona
+          "texto": "comida Madrid", // términos clave del evento a borrar
+          "mensaje": "He borrado la comida en Madrid de tu calendario."
         }
         
-        Si pide CREAR:
+        CASO 2: Si pide CREAR uno o más eventos:
         {
           "accion": "CREAR",
           "eventos": [
@@ -64,13 +55,13 @@ public class FasiAgentService {
               "todoDia": false
             }
           ],
-          "mensaje": "He añadido el evento a tu calendario."
+          "mensaje": "He añadido el cumpleaños de Martín el 7 de diciembre a las 19:00."
         }
         
-        Si es CONSULTA:
+        CASO 3: CONSULTA simple o saludo:
         {
           "accion": "CONSULTA",
-          "mensaje": "Responde de forma concisa a lo que pregunta el usuario."
+          "mensaje": "Respuesta clara al usuario."
         }
         """;
 
@@ -79,71 +70,104 @@ public class FasiAgentService {
         String prompt = SYSTEM_PROMPT.formatted(hoy, hoy.getDayOfWeek(), hoy.getYear());
 
         try {
-            log.info("🤖 Interpretando orden en una sola pasada: '{}'", texto);
-            String json = llmClient.chatJson(prompt, texto);
-            JsonNode root = objectMapper.readTree(json);
+            log.info("🤖 Interpretando orden: '{}'", texto);
+            String rawJson = llmClient.chatJson(prompt, texto);
+            log.info("📥 Respuesta cruda de la IA: {}", rawJson);
 
-            String accion = root.path("accion").asText("CONSULTA");
-            String mensaje = root.path("mensaje").asText("Operación completada.");
+            // Sanitizar posibles bloques de código markdown
+            String limpio = rawJson.trim();
+            if (limpio.startsWith("```")) {
+                int firstLine = limpio.indexOf('\n');
+                int lastBacktick = limpio.lastIndexOf("```");
+                if (firstLine != -1 && lastBacktick > firstLine) {
+                    limpio = limpio.substring(firstLine + 1, lastBacktick).trim();
+                }
+            }
+
+            JsonNode root = objectMapper.readTree(limpio);
+            String accion = root.path("accion").asText("CONSULTA").toUpperCase();
+            String mensaje = root.path("mensaje").asText("Operación procesada.");
 
             UUID usuarioId = usuarioActualService.obtenerUsuarioActual().getId();
 
-            switch (accion.toUpperCase()) {
+            switch (accion) {
                 case "BORRAR" -> {
-                    JsonNode criterio = root.path("criterio");
-                    String fechaStr = criterio.path("fecha").asText(null);
-                    String palabrasClave = criterio.path("texto").asText("");
+                    String fechaStr = root.hasNonNull("fecha") ? root.get("fecha").asText() : null;
+                    if (root.has("criterio") && root.get("criterio").hasNonNull("fecha")) {
+                        fechaStr = root.get("criterio").get("fecha").asText();
+                    }
+
+                    String palabrasClave = root.hasNonNull("texto") ? root.get("texto").asText() : "";
+                    if (palabrasClave.isBlank() && root.has("criterio") && root.get("criterio").hasNonNull("texto")) {
+                        palabrasClave = root.get("criterio").get("texto").asText();
+                    }
+
+                    log.info("🔍 Buscando para borrar -> Fecha: {}, Palabras: '{}'", fechaStr, palabrasClave);
 
                     List<Evento> candidatos = new ArrayList<>();
 
+                    // 1. Intentar por fecha si viene dada
                     if (fechaStr != null && !fechaStr.isBlank() && !fechaStr.equals("null")) {
                         try {
                             LocalDate f = LocalDate.parse(fechaStr);
-                            candidatos = eventoService.findByDia(f);
-                        } catch (Exception ignored) {}
+                            candidatos.addAll(eventoService.findByDia(f));
+                        } catch (Exception e) {
+                            log.warn("Formato de fecha inválido recibido de IA: {}", fechaStr);
+                        }
                     }
 
+                    // 2. Si no hay candidatos o no hubo fecha, buscar por texto en toda la BD del usuario
                     if (candidatos.isEmpty() && !palabrasClave.isBlank()) {
-                        candidatos = eventoRepo.buscarFullText(usuarioId, palabrasClave);
+                        candidatos.addAll(eventoRepo.buscarFullText(usuarioId, palabrasClave));
+                    }
+
+                    // 3. Fallback: buscar eventos próximos o de todo el mes si aún no hay coincidencia
+                    if (candidatos.isEmpty()) {
+                        candidatos.addAll(eventoRepo.findAllOptimizado(usuarioId));
                     }
 
                     if (candidatos.isEmpty()) {
-                        return new AgentResponse("No encontré ningún evento en tu calendario que coincida con esa descripción para borrar.", false);
+                        return new AgentResponse("No se encontró ningún evento en el calendario que coincida con esa búsqueda.", false);
                     }
 
-                    // Filtramos si hay palabras clave dentro de los candidatos del día
+                    // Filtrar por tokens de coincidencia
                     List<Evento> aBorrar = new ArrayList<>();
                     String[] tokens = palabrasClave.toLowerCase().split("\\s+");
 
                     for (Evento e : candidatos) {
-                        String matchStr = (e.getTitulo() + " " + (e.getLugar() != null ? e.getLugar() : "")).toLowerCase();
-                        boolean coincide = false;
+                        String textoEvento = (e.getTitulo() + " " + (e.getLugar() != null ? e.getLugar() : "")).toLowerCase();
+                        boolean match = false;
                         for (String token : tokens) {
-                            if (!token.isBlank() && matchStr.contains(token)) {
-                                coincide = true;
+                            if (!token.isBlank() && textoEvento.contains(token)) {
+                                match = true;
                                 break;
                             }
                         }
-                        if (coincide || tokens.length == 0 || palabrasClave.isBlank()) {
+                        if (match || tokens.length == 0 || palabrasClave.isBlank()) {
                             aBorrar.add(e);
                         }
                     }
 
                     if (aBorrar.isEmpty()) {
-                        aBorrar = candidatos;
+                        return new AgentResponse("Encontré eventos ese día, pero ninguno coincide con '" + palabrasClave + "'.", false);
                     }
 
                     for (Evento e : aBorrar) {
                         eventoService.delete(e.getId());
-                        log.info("🗑️ Evento borrado con éxito: '{}' ({})", e.getTitulo(), e.getId());
+                        log.info("🗑️ Evento borrado de la base de datos: '{}' (ID: {})", e.getTitulo(), e.getId());
                     }
 
-                    return new AgentResponse(mensaje, true);
+                    String confirmacion = aBorrar.size() == 1
+                            ? "He eliminado '" + aBorrar.get(0).getTitulo() + "' de tu calendario."
+                            : "He eliminado " + aBorrar.size() + " eventos de tu calendario.";
+
+                    return new AgentResponse(mensaje.isBlank() ? confirmacion : mensaje, true);
                 }
 
                 case "CREAR" -> {
                     JsonNode evArray = root.path("eventos");
-                    if (evArray.isArray()) {
+                    if (evArray.isArray() && !evArray.isEmpty()) {
+                        int count = 0;
                         for (JsonNode node : evArray) {
                             Evento e = new Evento();
                             e.setTitulo(node.path("titulo").asText("Nuevo evento"));
@@ -166,7 +190,8 @@ public class FasiAgentService {
 
                             e.setTodoDia(node.path("todoDia").asBoolean(e.getHoraInicio() == null));
                             eventoService.save(e);
-                            log.info("📅 Evento creado con éxito: '{}'", e.getTitulo());
+                            count++;
+                            log.info("📅 Evento creado: '{}' para {}", e.getTitulo(), e.getFechaInicio());
                         }
                         return new AgentResponse(mensaje, true);
                     }
@@ -181,7 +206,7 @@ public class FasiAgentService {
 
         } catch (Exception e) {
             log.error("Error al procesar orden agéntica", e);
-            return new AgentResponse("Ocurrió un error al procesar tu solicitud: " + e.getMessage(), false);
+            return new AgentResponse("Error procesando la orden: " + e.getMessage(), false);
         }
     }
 }
