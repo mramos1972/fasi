@@ -2,12 +2,9 @@ package com.miempresa.fasi.ia;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.miempresa.fasi.calendario.Evento;
 import com.miempresa.fasi.calendario.EventoRepository;
 import com.miempresa.fasi.calendario.EventoService;
-import com.miempresa.fasi.contexto.Usuario;
 import com.miempresa.fasi.contexto.UsuarioActualService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,8 +31,8 @@ public class FasiAgentService {
     @Value("${fasi.ai.provider.api-key:}")
     private String apiKey;
 
-    @Value("${fasi.ai.provider.model:gemini-3.8-flash}")
-    private String model;
+    @Value("${fasi.ai.provider.model:gemini-2.5-flash}")
+    private String defaultModel;
 
     private final ObjectMapper objectMapper;
     private final EventoService eventoService;
@@ -43,7 +40,7 @@ public class FasiAgentService {
     private final UsuarioActualService usuarioActualService;
 
     private final HttpClient httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(10))
+            .connectTimeout(Duration.ofSeconds(15))
             .build();
 
     public record AgentResponse(String mensaje, boolean huboMutacion) {}
@@ -54,40 +51,43 @@ public class FasiAgentService {
 
         String systemPrompt = """
             Eres FASI, el asistente operativo inteligente del calendario.
-            Hoy es %s (%s). Año: %d.
+            Hoy es %s (%s). Año en curso: %d.
             
             Tienes herramientas disponibles para interactuar con la base de datos:
-            - 'buscar_eventos': Búscate la vida consultando eventos antes de borrar o si te preguntan por fechas.
-            - 'eliminar_evento': Borra un evento por su UUID exacto (consigue primero el UUID con buscar_eventos si no lo tienes).
+            - 'buscar_eventos': Consulta eventos antes de borrar o cuando pregunten por fechas.
+            - 'eliminar_evento': Borra un evento por su UUID exacto (obtenlo primero con buscar_eventos si no lo tienes).
             - 'crear_evento': Añade un evento a la base de datos.
             
-            Comportamiento obligatorio:
-            - Si el usuario te pide borrar, cancelar o mover una cita, PRIMERO busca en la base de datos para verificar que existe y obtener su UUID.
-            - Una vez localizado el UUID, llama a 'eliminar_evento'.
-            - Si te pide crear una o varias citas, usa 'crear_evento'.
-            - Cuando termines las acciones, responde con un mensaje cordial, claro y conciso confirmando lo que has hecho.
+            Reglas de actuación:
+            1. Si el usuario pide borrar o cancelar un evento, PRIMERO llama a 'buscar_eventos' para localizar su UUID exacto.
+            2. Con el UUID obtenido, llama a 'eliminar_evento'.
+            3. Si pide crear uno o varios eventos, llama a 'crear_evento' para cada uno.
+            4. Al terminar todas las acciones, responde con un mensaje claro y conciso confirmando lo realizado.
             """.formatted(hoy, hoy.getDayOfWeek(), hoy.getYear());
 
         messages.add(Map.of("role", "system", "content", systemPrompt));
         messages.add(Map.of("role", "user", "content", promptUsuario));
 
         boolean huboMutacion = false;
-        int maxIteraciones = 6; // Límite de seguridad para evitar bucles infinitos
+        int maxIteraciones = 6;
 
         for (int i = 0; i < maxIteraciones; i++) {
             log.info("🤖 Agente FASI: Iteración {} ejecutando...", i + 1);
-            JsonNode respuestaLlm = llamarApiConHerramientas(messages);
+            JsonNode respuestaLlm = llamarApiConReintento(messages);
 
             if (respuestaLlm == null) {
-                return new AgentResponse("Hubo un error de comunicación con el asistente.", huboMutacion);
+                return new AgentResponse("Los servidores de IA están saturados temporalmente (503). Por favor, repite la orden en unos segundos.", huboMutacion);
             }
 
-            JsonNode choice = respuestaLlm.path("choices").get(0);
-            JsonNode messageNode = choice.path("message");
+            JsonNode choices = respuestaLlm.path("choices");
+            if (!choices.isArray() || choices.isEmpty()) {
+                return new AgentResponse("No se obtuvo respuesta válida del modelo.", huboMutacion);
+            }
 
-            // Si el modelo decide llamar a herramientas (tool_calls)
+            JsonNode messageNode = choices.get(0).path("message");
+
+            // Si el modelo solicita ejecutar herramientas
             if (messageNode.has("tool_calls") && !messageNode.path("tool_calls").isEmpty()) {
-                // Añadir el mensaje del asistente con las tool_calls al historial
                 messages.add(objectMapper.convertValue(messageNode, Map.class));
 
                 for (JsonNode toolCall : messageNode.path("tool_calls")) {
@@ -95,14 +95,13 @@ public class FasiAgentService {
                     String funcName = toolCall.path("function").path("name").asText();
                     String argsStr = toolCall.path("function").path("arguments").asText();
 
-                    log.info("🛠️ Agente ejecutando herramienta: '{}' con argumentos: {}", funcName, argsStr);
+                    log.info("🛠️ Ejecutando herramienta: '{}' con argumentos: {}", funcName, argsStr);
                     String resultadoTool = ejecutarHerramienta(funcName, argsStr);
 
-                    if (funcName.equals("eliminar_evento") || funcName.equals("crear_evento")) {
+                    if ("eliminar_evento".equals(funcName) || "crear_evento".equals(funcName)) {
                         huboMutacion = true;
                     }
 
-                    // Inyectar el resultado de la herramienta para que el modelo lo procese
                     Map<String, Object> toolMessage = new HashMap<>();
                     toolMessage.put("role", "tool");
                     toolMessage.put("tool_call_id", toolCallId);
@@ -111,14 +110,14 @@ public class FasiAgentService {
                     messages.add(toolMessage);
                 }
             } else {
-                // El modelo ha terminado de actuar y devuelve la respuesta textual final
+                // Respuesta final completada
                 String respuestaFinal = messageNode.path("content").asText();
                 log.info("✅ Agente completó su tarea: {}", respuestaFinal);
                 return new AgentResponse(respuestaFinal, huboMutacion);
             }
         }
 
-        return new AgentResponse("Operación completada tras varias acciones.", huboMutacion);
+        return new AgentResponse("Operación completada con éxito.", huboMutacion);
     }
 
     private String ejecutarHerramienta(String nombre, String argumentosJson) {
@@ -207,96 +206,108 @@ public class FasiAgentService {
         }
     }
 
-    private JsonNode llamarApiConHerramientas(List<Map<String, Object>> messages) {
-        try {
-            Map<String, Object> body = new HashMap<>();
-            body.put("model", model);
-            body.put("messages", messages);
-            body.put("temperature", 0.1);
-            body.put("tools", obtenerDefinicionHerramientas());
+    private JsonNode llamarApiConReintento(List<Map<String, Object>> messages) {
+        // Modelos a probar en cascada si hay 503 por sobrecarga
+        List<String> modelosFallback = List.of(defaultModel, "gemini-2.5-flash", "gemini-1.5-flash");
 
-            String payload = objectMapper.writeValueAsString(body);
+        for (String modelo : modelosFallback) {
+            for (int intento = 1; intento <= 2; intento++) {
+                try {
+                    Map<String, Object> body = new HashMap<>();
+                    body.put("model", modelo);
+                    body.put("messages", messages);
+                    body.put("temperature", 0.1);
+                    body.put("tools", obtenerDefinicionHerramientas());
 
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(apiUrl + "/chat/completions"))
-                    .header("Content-Type", "application/json")
-                    .header("Authorization", "Bearer " + apiKey)
-                    .POST(HttpRequest.BodyPublishers.ofString(payload))
-                    .timeout(Duration.ofSeconds(45))
-                    .build();
+                    String payload = objectMapper.writeValueAsString(body);
 
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() != 200) {
-                log.error("Error API Gemini: {} -> {}", response.statusCode(), response.body());
-                return null;
+                    HttpRequest request = HttpRequest.newBuilder()
+                            .uri(URI.create(apiUrl + "/chat/completions"))
+                            .header("Content-Type", "application/json")
+                            .header("Authorization", "Bearer " + apiKey)
+                            .POST(HttpRequest.BodyPublishers.ofString(payload))
+                            .timeout(Duration.ofSeconds(30))
+                            .build();
+
+                    HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+                    if (response.statusCode() == 200) {
+                        return objectMapper.readTree(response.body());
+                    }
+
+                    if (response.statusCode() == 503 || response.statusCode() == 429) {
+                        log.warn("⚠️ Modelo {} sobrecargado (HTTP {}). Intento {}/2. Esperando 1.5s...", modelo, response.statusCode(), intento);
+                        Thread.sleep(1500);
+                        continue;
+                    }
+
+                    log.error("Error API Gemini ({}): {}", response.statusCode(), response.body());
+                    break; // Error no recuperable con reintento inmediato
+
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    return null;
+                } catch (Exception e) {
+                    log.error("Fallo de red comunicando con modelo {}", modelo, e);
+                }
             }
-
-            return objectMapper.readTree(response.body());
-        } catch (Exception e) {
-            log.error("Fallo comunicando con Gemini en modo agente", e);
-            return null;
         }
+
+        return null;
     }
 
     private List<Map<String, Object>> obtenerDefinicionHerramientas() {
-        List<Map<String, Object>> tools = new ArrayList<>();
-
-        // 1. buscar_eventos
-        tools.add(Map.of(
-                "type", "function",
-                "function", Map.of(
-                        "name", "buscar_eventos",
-                        "description", "Busca eventos existentes en el calendario por palabras clave o por rango de fechas (YYYY-MM-DD)",
-                        "parameters", Map.of(
-                                "type", "object",
-                                "properties", Map.of(
-                                        "texto", Map.of("type", "string", "description", "Texto a buscar en el título o lugar"),
-                                        "fechaDesde", Map.of("type", "string", "description", "Fecha inicial en formato YYYY-MM-DD"),
-                                        "fechaHasta", Map.of("type", "string", "description", "Fecha final en formato YYYY-MM-DD")
+        return List.of(
+                Map.of(
+                        "type", "function",
+                        "function", Map.of(
+                                "name", "buscar_eventos",
+                                "description", "Busca eventos existentes en el calendario por palabras clave o rango de fechas (YYYY-MM-DD)",
+                                "parameters", Map.of(
+                                        "type", "object",
+                                        "properties", Map.of(
+                                                "texto", Map.of("type", "string", "description", "Texto a buscar en el título o lugar"),
+                                                "fechaDesde", Map.of("type", "string", "description", "Fecha inicial YYYY-MM-DD"),
+                                                "fechaHasta", Map.of("type", "string", "description", "Fecha final YYYY-MM-DD")
+                                        )
+                                )
+                        )
+                ),
+                Map.of(
+                        "type", "function",
+                        "function", Map.of(
+                                "name", "eliminar_evento",
+                                "description", "Elimina de forma permanente un evento de la base de datos usando su ID UUID",
+                                "parameters", Map.of(
+                                        "type", "object",
+                                        "properties", Map.of(
+                                                "id", Map.of("type", "string", "description", "UUID exacto del evento a eliminar")
+                                        ),
+                                        "required", List.of("id")
+                                )
+                        )
+                ),
+                Map.of(
+                        "type", "function",
+                        "function", Map.of(
+                                "name", "crear_evento",
+                                "description", "Crea un nuevo evento en el calendario",
+                                "parameters", Map.of(
+                                        "type", "object",
+                                        "properties", Map.of(
+                                                "titulo", Map.of("type", "string", "description", "Título del evento"),
+                                                "fechaInicio", Map.of("type", "string", "description", "Fecha YYYY-MM-DD"),
+                                                "horaInicio", Map.of("type", "string", "description", "Hora HH:MM o vacío"),
+                                                "fechaFin", Map.of("type", "string", "description", "Fecha fin YYYY-MM-DD si es de varios días"),
+                                                "tipo", Map.of("type", "string", "description", "PERSONAL, SOCIAL, SALUD, TRABAJO, FAMILIA, VIAJE, VACACIONES, APRENDIZAJE, OCIO, GESTION, OTRO"),
+                                                "lugar", Map.of("type", "string", "description", "Ubicación si aplica"),
+                                                "personasRelacionadas", Map.of("type", "string", "description", "Personas implicadas"),
+                                                "todoDia", Map.of("type", "boolean", "description", "true si no tiene hora fija")
+                                        ),
+                                        "required", List.of("titulo", "fechaInicio")
                                 )
                         )
                 )
-        ));
-
-        // 2. eliminar_evento
-        tools.add(Map.of(
-                "type", "function",
-                "function", Map.of(
-                        "name", "eliminar_evento",
-                        "description", "Elimina de forma permanente un evento de la base de datos usando su ID UUID",
-                        "parameters", Map.of(
-                                "type", "object",
-                                "properties", Map.of(
-                                        "id", Map.of("type", "string", "description", "UUID exacto del evento a eliminar")
-                                ),
-                                "required", List.of("id")
-                        )
-                )
-        ));
-
-        // 3. crear_evento
-        tools.add(Map.of(
-                "type", "function",
-                "function", Map.of(
-                        "name", "crear_evento",
-                        "description", "Crea un nuevo evento en el calendario",
-                        "parameters", Map.of(
-                                "type", "object",
-                                "properties", Map.of(
-                                        "titulo", Map.of("type", "string", "description", "Título del evento"),
-                                        "fechaInicio", Map.of("type", "string", "description", "Fecha en formato YYYY-MM-DD"),
-                                        "horaInicio", Map.of("type", "string", "description", "Hora en formato HH:MM (ej 16:00) o vacío"),
-                                        "fechaFin", Map.of("type", "string", "description", "Fecha fin en formato YYYY-MM-DD si es de varios días"),
-                                        "tipo", Map.of("type", "string", "description", "PERSONAL, SOCIAL, SALUD, TRABAJO, FAMILIA, VIAJE, VACACIONES, APRENDIZAJE, OCIO, GESTION, OTRO"),
-                                        "lugar", Map.of("type", "string", "description", "Ubicación si aplica"),
-                                        "personasRelacionadas", Map.of("type", "string", "description", "Personas implicadas"),
-                                        "todoDia", Map.of("type", "boolean", "description", "true si dura todo el día sin hora fija")
-                                ),
-                                "required", List.of("titulo", "fechaInicio")
-                        )
-                )
-        ));
-
-        return tools;
+        );
     }
 }
