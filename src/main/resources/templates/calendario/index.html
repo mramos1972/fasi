@@ -17,7 +17,7 @@
        class="grid grid-cols-7 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden flex-1"
        style="grid-auto-rows: 1fr;"></div>
 
-  <!-- MODAL ASISTENTE IA (MOBILE FRIENDLY) -->
+  <!-- MODAL ASISTENTE AGÉNTICO FASI -->
   <div id="modal-voz" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4">
     <div class="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl
                 w-full sm:max-w-lg mx-0 sm:mx-4 relative
@@ -27,9 +27,9 @@
       <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
         <div>
           <h3 class="text-base font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-            <span>✨</span> Asistente Inteligente FASI
+            <span>🧠</span> Agente Inteligente FASI
           </h3>
-          <p class="text-xs text-gray-400">Pide uno o varios eventos en una sola frase</p>
+          <p class="text-xs text-gray-400">Consulta, crea y elimina de forma autónoma</p>
         </div>
         <button onclick="cerrarModalVoz()" class="text-gray-400 hover:text-gray-200 text-2xl font-bold p-1">✕</button>
       </div>
@@ -39,7 +39,7 @@
         
         <div id="ia-input-container">
           <textarea id="voz-texto" rows="3"
-                    placeholder="Ej: Quiero meter dos eventos uno el 7 de Diciembre cumple de Martín a las 7 y otro el 12 de Diciembre comida en Madrid a las 4..."
+                    placeholder="Ej: 'Bórrame la comida en Madrid del 12' o 'Crea dos eventos: cumple de Martín el 7 a las 7 y cena el 10'..."
                     class="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3
                            bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100
                            focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm resize-none"></textarea>
@@ -49,37 +49,34 @@
                     class="flex-1 flex items-center justify-center gap-2 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-xl font-semibold transition text-sm">
               🎤 <span id="micro-label">Grabar</span>
             </button>
-            <button onclick="interpretarTexto()"
+            <button onclick="ejecutarOrdenAgente()"
                     class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-xl font-semibold transition text-sm">
-              ⚡ Interpretar con IA
+              ⚡ Ejecutar Orden
             </button>
           </div>
         </div>
 
-        <!-- SPINNER -->
-        <div id="ia-spinner" style="display:none" class="flex items-center justify-center gap-2 py-4 text-sm text-indigo-500">
-          <div class="w-2 h-2 bg-indigo-500 rounded-full animate-bounce"></div>
-          <div class="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style="animation-delay:150ms"></div>
-          <div class="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style="animation-delay:300ms"></div>
-          <span>Gemini Flash está razonando tus eventos...</span>
+        <!-- SPINNER RAZONAMIENTO AGÉNTICO -->
+        <div id="ia-spinner" style="display:none" class="flex flex-col items-center justify-center py-6 text-sm text-indigo-500 space-y-2">
+          <div class="flex gap-1.5">
+            <div class="w-2.5 h-2.5 bg-indigo-500 rounded-full animate-bounce"></div>
+            <div class="w-2.5 h-2.5 bg-indigo-500 rounded-full animate-bounce" style="animation-delay:150ms"></div>
+            <div class="w-2.5 h-2.5 bg-indigo-500 rounded-full animate-bounce" style="animation-delay:300ms"></div>
+          </div>
+          <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">El agente está consultando y operando en tu base de datos...</span>
         </div>
 
-        <!-- RESULTADOS MULTI-EVENTO -->
-        <div id="ia-resultados" style="display:none" class="space-y-3">
-          <div id="ia-mensaje-resumen" class="p-3 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-800 dark:text-indigo-200 rounded-xl text-xs font-medium"></div>
-          
-          <div id="lista-eventos-cards" class="space-y-2 max-h-60 overflow-y-auto"></div>
-
-          <div class="flex gap-2 pt-2">
-            <button id="btn-confirmar-todos" onclick="confirmarTodosEventos()"
-                    class="flex-1 bg-green-600 hover:bg-green-700 text-white py-2.5 rounded-xl font-semibold transition text-sm shadow">
-              ✅ Guardar en Calendario
-            </button>
-            <button onclick="cerrarModalVoz()"
-                    class="px-4 py-2.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-xl text-sm">
-              Cancelar
-            </button>
+        <!-- RESULTADO CONVERSACIONAL -->
+        <div id="ia-resultado" style="display:none" class="space-y-4">
+          <div class="p-4 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 rounded-xl">
+            <p class="text-xs uppercase font-bold text-indigo-500 mb-1">Respuesta de FASI:</p>
+            <p id="ia-mensaje-texto" class="text-sm text-gray-800 dark:text-gray-100 leading-relaxed whitespace-pre-wrap"></p>
           </div>
+
+          <button onclick="finalizarAccion()"
+                  class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-xl font-semibold transition text-sm">
+            Entendido 👍
+          </button>
         </div>
 
       </div>
@@ -96,7 +93,6 @@
     const currentYear  = parseInt(parts[0], 10);
     const currentMonth = parseInt(parts[1], 10);
 
-    // ── GESTIÓN DE NAVEGACIÓN Y SWIPE TÁCTIL ──
     function irMes(delta) {
       const d = new Date(currentYear, currentMonth - 1 + delta, 1);
       window.location = '/calendario?year=' + d.getFullYear() + '&month=' + (d.getMonth() + 1);
@@ -114,31 +110,16 @@
       `;
     })();
 
-    // Gesto de deslizamiento (Swipe)
-    let touchStartX = 0;
-    let touchEndX = 0;
+    // Swipe táctil
+    let touchStartX = 0, touchEndX = 0;
     const swipeArea = document.getElementById('swipe-area');
-
-    swipeArea.addEventListener('touchstart', e => {
-      touchStartX = e.changedTouches[0].screenX;
-    }, {passive: true});
-
+    swipeArea.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; }, {passive: true});
     swipeArea.addEventListener('touchend', e => {
       touchEndX = e.changedTouches[0].screenX;
-      handleSwipe();
+      if (touchEndX < touchStartX - 60) irMes(1);
+      if (touchEndX > touchStartX + 60) irMes(-1);
     }, {passive: true});
 
-    function handleSwipe() {
-      const threshold = 60; // distancia mínima en px
-      if (touchEndX < touchStartX - threshold) {
-        irMes(1);  // Swipe a la izquierda → siguiente mes
-      }
-      if (touchEndX > touchStartX + threshold) {
-        irMes(-1); // Swipe a la derecha → mes anterior
-      }
-    }
-
-    // ── RENDER CALENDARIO ──
     function renderCalendario() {
       const primer = new Date(currentYear, currentMonth - 1, 1);
       const ultimo = new Date(currentYear, currentMonth, 0).getDate();
@@ -197,93 +178,55 @@
       }
     }
 
-    // ── MODAL IA CON RECONOCIMIENTO Y MULTI-EVENTO ──
-    let eventosPendientes = [];
+    let recargarAlTerminar = false;
 
     window.abrirModalVoz = function() {
       document.getElementById('modal-voz').classList.remove('hidden');
-      document.getElementById('ia-resultados').style.display = 'none';
+      document.getElementById('ia-resultado').style.display = 'none';
       document.getElementById('ia-input-container').style.display = 'block';
+      recargarAlTerminar = false;
     };
 
     function cerrarModalVoz() {
       document.getElementById('modal-voz').classList.add('hidden');
+      if (recargarAlTerminar) window.location.reload();
     }
 
-    async function interpretarTexto() {
+    function finalizarAccion() {
+      cerrarModalVoz();
+      if (recargarAlTerminar) window.location.reload();
+    }
+
+    async function ejecutarOrdenAgente() {
       const texto = document.getElementById('voz-texto').value.trim();
-      if (!texto) return alert('Escribe o dicta algo primero.');
+      if (!texto) return alert('Por favor, indica una orden.');
 
       document.getElementById('ia-spinner').style.display = 'flex';
-      document.getElementById('ia-resultados').style.display = 'none';
+      document.getElementById('ia-input-container').style.display = 'none';
+      document.getElementById('ia-resultado').style.display = 'none';
 
       try {
-        const resp = await fetch('/calendario/api/interpretar-accion', {
+        const resp = await fetch('/calendario/api/agente', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({ texto })
         });
         const data = await resp.json();
 
-        if (!data.exito || !data.crear || data.crear.length === 0) {
-          alert(data.mensajeUsuario || 'No se pudieron extraer eventos.');
-          return;
-        }
-
-        eventosPendientes = data.crear;
-        document.getElementById('ia-mensaje-resumen').textContent = data.mensajeUsuario;
-
-        const cards = document.getElementById('lista-eventos-cards');
-        cards.innerHTML = data.crear.map(e => `
-          <div class="p-3 bg-gray-50 dark:bg-gray-700/60 rounded-xl border border-gray-200 dark:border-gray-600 text-xs">
-            <div class="flex justify-between items-center mb-1">
-              <span class="font-bold text-gray-900 dark:text-gray-100 text-sm">${escapeHtml(e.titulo)}</span>
-              <span class="px-2 py-0.5 rounded-full text-white font-semibold text-[10px]" style="background-color: ${e.tipo?.color || '#4f46e5'}">
-                ${e.tipo?.label || 'Evento'}
-              </span>
-            </div>
-            <div class="text-gray-600 dark:text-gray-300 space-y-0.5">
-              <p>📅 Fecha: <strong>${e.fechaInicio}</strong></p>
-              <p>⏰ Hora: <strong>${e.horaInicio || 'Pendiente de definir'}</strong></p>
-              ${e.lugar ? `<p>📍 Lugar: <strong>${escapeHtml(e.lugar)}</strong></p>` : ''}
-              ${e.personasRelacionadas ? `<p>👥 Con: <strong>${escapeHtml(e.personasRelacionadas)}</strong></p>` : ''}
-            </div>
-          </div>
-        `).join('');
-
-        document.getElementById('btn-confirmar-todos').textContent = `✅ Guardar ${data.crear.length} evento${data.crear.length > 1 ? 's' : ''}`;
-        document.getElementById('ia-input-container').style.display = 'none';
-        document.getElementById('ia-resultados').style.display = 'block';
+        recargarAlTerminar = data.huboMutacion;
+        document.getElementById('ia-mensaje-texto').textContent = data.mensaje;
+        document.getElementById('ia-resultado').style.display = 'block';
 
       } catch (err) {
-        alert('Error conectando con la IA: ' + err.message);
+        alert('Error ejecutando orden: ' + err.message);
+        document.getElementById('ia-input-container').style.display = 'block';
       } finally {
         document.getElementById('ia-spinner').style.display = 'none';
       }
     }
 
-    async function confirmarTodosEventos() {
-      if (!eventosPendientes.length) return;
-      try {
-        const resp = await fetch('/calendario/api/confirmar-lote', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify(eventosPendientes)
-        });
-        if (resp.ok) {
-          cerrarModalVoz();
-          window.location.reload();
-        } else {
-          alert('Error al guardar eventos.');
-        }
-      } catch (e) {
-        alert('Error: ' + e.message);
-      }
-    }
-
     // Micrófono
-    let recognition = null;
-    let grabando = false;
+    let recognition = null, grabando = false;
     function toggleMicrofono() {
       if (grabando) {
         if (recognition) recognition.stop();
@@ -293,7 +236,7 @@
         return;
       }
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SR) return alert('Reconocimiento no disponible en este navegador.');
+      if (!SR) return alert('Reconocimiento no disponible.');
       recognition = new SR();
       recognition.lang = 'es-ES';
       recognition.continuous = true;
@@ -306,12 +249,6 @@
       grabando = true;
       document.getElementById('micro-label').textContent = 'Parar';
       document.getElementById('btn-micro').classList.add('bg-red-700');
-    }
-
-    function escapeHtml(str) {
-      const d = document.createElement('div');
-      d.textContent = str || '';
-      return d.innerHTML;
     }
 
     renderCalendario();

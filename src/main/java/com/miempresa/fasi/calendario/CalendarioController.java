@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.miempresa.fasi.calendario.dto.IaAccionResultado;
+import com.miempresa.fasi.ia.FasiAgentService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -19,13 +20,17 @@ import java.util.*;
 @RequestMapping("/calendario")
 public class CalendarioController {
 
-    private final EventoService   eventoService;
-    private final EventoIaService eventoIaService;
-    private final ObjectMapper    objectMapper;
+    private final EventoService    eventoService;
+    private final EventoIaService  eventoIaService;
+    private final FasiAgentService agentService;
+    private final ObjectMapper     objectMapper;
 
-    public CalendarioController(EventoService eventoService, EventoIaService eventoIaService) {
+    public CalendarioController(EventoService eventoService,
+                                EventoIaService eventoIaService,
+                                FasiAgentService agentService) {
         this.eventoService   = eventoService;
         this.eventoIaService = eventoIaService;
+        this.agentService    = agentService;
         this.objectMapper    = new ObjectMapper();
         this.objectMapper.registerModule(new JavaTimeModule());
         this.objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
@@ -102,15 +107,22 @@ public class CalendarioController {
     }
 
     // ══════════════════════════════════════════════════════════
-    //  API IA INTELIGENTE (MULTI-EVENTO Y ACCIONES)
+    //  API AGENTE AUTÓNOMO CON FUNCTION CALLING
     // ══════════════════════════════════════════════════════════
+
+    @PostMapping("/api/agente")
+    @ResponseBody
+    public ResponseEntity<FasiAgentService.AgentResponse> ejecutarAgente(@RequestBody Map<String, String> body) {
+        String orden = body.getOrDefault("texto", "");
+        FasiAgentService.AgentResponse respuesta = agentService.ejecutarOrden(orden);
+        return ResponseEntity.ok(respuesta);
+    }
 
     @PostMapping("/api/interpretar-accion")
     @ResponseBody
     public ResponseEntity<IaAccionResultado> interpretarAccion(@RequestBody Map<String, String> body) {
         String texto = body.getOrDefault("texto", "");
-        IaAccionResultado resultado = eventoIaService.interpretarAccion(texto);
-        return ResponseEntity.ok(resultado);
+        return ResponseEntity.ok(eventoIaService.interpretarAccion(texto));
     }
 
     @PostMapping("/api/confirmar-lote")
