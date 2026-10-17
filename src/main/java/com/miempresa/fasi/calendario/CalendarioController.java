@@ -3,10 +3,8 @@ package com.miempresa.fasi.calendario;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.miempresa.fasi.calendario.service.EventoParserService;
-import com.miempresa.fasi.calendario.dto.EventoMinimo;
-import org.springframework.web.bind.annotation.RequestParam;
-import jakarta.validation.Valid;
+import com.miempresa.fasi.calendario.dto.IaAccionResultado;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
@@ -14,79 +12,60 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
-import java.util.List;
-import java.util.UUID;
-import java.util.Map;
-import java.util.HashMap;
+import java.util.*;
 
+@Slf4j
 @Controller
 @RequestMapping("/calendario")
 public class CalendarioController {
-    private static final org.slf4j.Logger log =
-            org.slf4j.LoggerFactory.getLogger(CalendarioController.class);
 
-    private final EventoService           eventoService;
-    private final EventoIaService         eventoIaService;
-    private final EventoParserRegex       regexParser;
-    private final EventoParserService     parserService;
-    private final ObjectMapper            objectMapper;
+    private final EventoService   eventoService;
+    private final EventoIaService eventoIaService;
+    private final ObjectMapper    objectMapper;
 
-    public CalendarioController(EventoService eventoService,
-                                EventoIaService eventoIaService,
-                                EventoParserRegex regexParser,
-                                EventoParserService parserService) {
-        this.eventoService  = eventoService;
+    public CalendarioController(EventoService eventoService, EventoIaService eventoIaService) {
+        this.eventoService   = eventoService;
         this.eventoIaService = eventoIaService;
-        this.regexParser    = regexParser;
-        this.parserService  = parserService;
-
-        // ObjectMapper con soporte completo de fechas Java 8
-        this.objectMapper = new ObjectMapper();
+        this.objectMapper    = new ObjectMapper();
         this.objectMapper.registerModule(new JavaTimeModule());
         this.objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     }
 
-    // ── Vista principal ──────────────────────────────────────
     @GetMapping
     public String vistaCalendario(
             @RequestParam(required = false) Integer year,
             @RequestParam(required = false) Integer month,
-            @RequestParam(required = false) String vista,
             Model model) {
 
         LocalDate hoy = LocalDate.now();
-        int anio = year  != null ? year  : hoy.getYear();
-        int mes  = month != null ? month : hoy.getMonthValue();
+        int anio = (year != null) ? year : hoy.getYear();
+        int mes  = (month != null) ? month : hoy.getMonthValue();
 
         java.time.YearMonth ym = java.time.YearMonth.of(anio, mes);
 
-        model.addAttribute("eventos",      eventoService.findByMes(anio, mes));
-        model.addAttribute("proximos",     eventoService.findProximos(5));
-        model.addAttribute("tipos",        Evento.TipoEvento.values());
-        model.addAttribute("yearMonth",    ym);
-        model.addAttribute("hoy",          hoy);
-        model.addAttribute("vista",        vista != null ? vista : "mes");
-        model.addAttribute("nuevoEvento",  new Evento());
+        model.addAttribute("eventos",   eventoService.findByMes(anio, mes));
+        model.addAttribute("proximos",  eventoService.findProximos(5));
+        model.addAttribute("tipos",     Evento.TipoEvento.values());
+        model.addAttribute("yearMonth", ym);
+        model.addAttribute("hoy",       hoy);
+        model.addAttribute("nuevoEvento", new Evento());
 
         return "calendario/index";
     }
 
-    // ── Vista día ────────────────────────────────────────────
     @GetMapping("/dia/{fecha}")
     public String viaDia(
             @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
             Model model) {
-        model.addAttribute("fecha",  fecha);
+        model.addAttribute("fecha",   fecha);
         model.addAttribute("eventos", eventoService.findByDia(fecha));
-        model.addAttribute("tipos",  Evento.TipoEvento.values());
+        model.addAttribute("tipos",   Evento.TipoEvento.values());
         return "calendario/dia";
     }
 
-    // ── Formulario nuevo ─────────────────────────────────────
     @GetMapping("/nuevo")
     public String nuevoForm(
-            @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
             Model model) {
         Evento e = new Evento();
         e.setFechaInicio(fecha != null ? fecha : LocalDate.now());
@@ -95,7 +74,6 @@ public class CalendarioController {
         return "calendario/form";
     }
 
-    // ── Formulario editar ────────────────────────────────────
     @GetMapping("/{id}/editar")
     public String editarForm(@PathVariable UUID id, Model model) {
         model.addAttribute("evento", eventoService.findById(id));
@@ -103,28 +81,20 @@ public class CalendarioController {
         return "calendario/form";
     }
 
-    // ── Guardar nuevo ────────────────────────────────────────
     @PostMapping
-    public String guardar(@Valid @ModelAttribute Evento evento,
-            @RequestParam(value = "etiquetasRaw", required = false) String etiquetasRaw) {
-        evento.setEtiquetas(parseEtiquetas(etiquetasRaw));
+    public String guardar(@ModelAttribute Evento evento) {
         eventoService.save(evento);
-        return "redirect:/calendario?year="  + evento.getFechaInicio().getYear()
+        return "redirect:/calendario?year=" + evento.getFechaInicio().getYear()
                 + "&month=" + evento.getFechaInicio().getMonthValue();
     }
 
-    // ── Actualizar ───────────────────────────────────────────
     @PostMapping("/{id}")
-    public String actualizar(@PathVariable UUID id,
-            @Valid @ModelAttribute Evento evento,
-            @RequestParam(value = "etiquetasRaw", required = false) String etiquetasRaw) {
-        evento.setEtiquetas(parseEtiquetas(etiquetasRaw));
+    public String actualizar(@PathVariable UUID id, @ModelAttribute Evento evento) {
         eventoService.update(id, evento);
-        return "redirect:/calendario?year="  + evento.getFechaInicio().getYear()
+        return "redirect:/calendario?year=" + evento.getFechaInicio().getYear()
                 + "&month=" + evento.getFechaInicio().getMonthValue();
     }
 
-    // ── Eliminar ─────────────────────────────────────────────
     @PostMapping("/{id}/eliminar")
     public String eliminar(@PathVariable UUID id) {
         eventoService.delete(id);
@@ -132,32 +102,31 @@ public class CalendarioController {
     }
 
     // ══════════════════════════════════════════════════════════
-    //  API ENDPOINTS
+    //  API IA INTELIGENTE (MULTI-EVENTO Y ACCIONES)
     // ══════════════════════════════════════════════════════════
 
-    @GetMapping("/api/buscar")
+    @PostMapping("/api/interpretar-accion")
     @ResponseBody
-    public ResponseEntity<List<Evento>> buscar(@RequestParam String q) {
-        return ResponseEntity.ok(eventoService.buscar(q));
+    public ResponseEntity<IaAccionResultado> interpretarAccion(@RequestBody Map<String, String> body) {
+        String texto = body.getOrDefault("texto", "");
+        IaAccionResultado resultado = eventoIaService.interpretarAccion(texto);
+        return ResponseEntity.ok(resultado);
     }
 
-    @GetMapping("/api/mes")
+    @PostMapping("/api/confirmar-lote")
     @ResponseBody
-    public ResponseEntity<List<Evento>> eventosMes(
-            @RequestParam int year, @RequestParam int month) {
-        return ResponseEntity.ok(eventoService.findByMes(year, month));
+    public ResponseEntity<Map<String, Object>> confirmarLote(@RequestBody List<EventoConfirmarRequest> peticiones) {
+        List<Evento> guardados = new ArrayList<>();
+        for (EventoConfirmarRequest req : peticiones) {
+            guardados.add(eventoService.save(req.toEvento()));
+        }
+        return ResponseEntity.ok(Map.of("guardados", guardados.size()));
     }
 
-    @GetMapping("/api/etiquetas")
+    @PostMapping("/api/consulta")
     @ResponseBody
-    public ResponseEntity<List<String>> getEtiquetas() {
-        return ResponseEntity.ok(eventoService.getAllEtiquetas());
-    }
-
-    @GetMapping("/api/pendientes-datos")
-    @ResponseBody
-    public List<Evento> getPendientesDatos() {
-        return eventoService.getEventosPendientesDatos();
+    public ResponseEntity<String> consultaIa(@RequestBody String pregunta) {
+        return ResponseEntity.ok(eventoIaService.consultar(pregunta));
     }
 
     @DeleteMapping("/api/eliminar/{id}")
@@ -172,185 +141,5 @@ public class CalendarioController {
     public ResponseEntity<Void> vaciarEventos() {
         eventoService.deleteAll();
         return ResponseEntity.ok().build();
-    }
-
-    @PostMapping("/api/consulta")
-    @ResponseBody
-    public ResponseEntity<String> consultaIa(@RequestBody String pregunta) {
-        return ResponseEntity.ok(eventoIaService.consultar(pregunta));
-    }
-
-    // ══════════════════════════════════════════════════════════
-    //  INTERPRETAR PREVIEW
-    // ══════════════════════════════════════════════════════════
-
-    @PostMapping("/api/interpretar-preview")
-    @ResponseBody
-    public Map<String, Object> interpretarPreview(@RequestBody Map<String, String> body) {
-        Map<String, Object> result = new HashMap<>();
-        try {
-            String texto = body.get("texto");
-            LocalDate hoy = LocalDate.now();
-
-            EventoParserService.EventoParseResponse resp = parserService.interpretar(texto, hoy);
-
-            if ("necesita_limite".equals(resp.getPaso())) {
-                result.put("necesitaLimite", true);
-                result.put("eventoBase",     resp.getEvento());
-                result.put("mensajeLimite",  resp.getMensaje());
-                return result;
-            }
-            if ("error".equals(resp.getPaso())) {
-                result.put("error", resp.getMensaje());
-                return result;
-            }
-
-            Evento evento = resp.getEvento().toEvento();
-            boolean esRecurrente = resp.getEsRecurrente() != null && resp.getEsRecurrente();
-
-            result.put("evento",       evento);
-            result.put("esRecurrente", esRecurrente);
-
-            if (esRecurrente) {
-                List<LocalDate> fechas = eventoService.generarVistaPrevia(evento);
-                result.put("totalEventos",        fechas.size());
-                result.put("descripcionPreview",  generarDescripcionPreview(fechas));
-            }
-
-            return result;
-
-        } catch (Exception e) {
-            log.error("❌ Error en interpretar-preview", e);
-            result.put("error", "Error: " + e.getMessage());
-            return result;
-        }
-    }
-
-    // ══════════════════════════════════════════════════════════
-    //  PROCESAR LÍMITE
-    // ══════════════════════════════════════════════════════════
-
-    @PostMapping("/api/procesar-limite")
-    @ResponseBody
-    public Map<String, Object> procesarLimite(@RequestBody Map<String, Object> body) {
-        Map<String, Object> result = new HashMap<>();
-        try {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> eventoBaseMap = (Map<String, Object>) body.get("eventoBase");
-            String respuestaLimite = (String) body.get("respuestaLimite");
-
-            EventoMinimo eventoMinimo = objectMapper.convertValue(eventoBaseMap, EventoMinimo.class);
-
-            EventoParserService.EventoParseResponse resp =
-                    parserService.procesarLimite(eventoMinimo, respuestaLimite);
-
-            if ("error".equals(resp.getPaso())) {
-                result.put("error", resp.getMensaje());
-                return result;
-            }
-
-            Evento evento = resp.getEvento().toEvento();
-            List<LocalDate> fechas = eventoService.generarVistaPrevia(evento);
-
-            result.put("evento",              evento);
-            result.put("esRecurrente",        true);
-            result.put("totalEventos",        fechas.size());
-            result.put("descripcionPreview",  generarDescripcionPreview(fechas));
-
-            return result;
-
-        } catch (Exception e) {
-            log.error("❌ Error procesando límite", e);
-            result.put("error", "Error al procesar el límite: " + e.getMessage());
-            return result;
-        }
-    }
-
-    // ══════════════════════════════════════════════════════════
-    //  CONFIRMAR EVENTOS
-    //  Acepta tanto EventoConfirmarRequest como el objeto Evento
-    //  serializado directamente desde el JS (con tipo como Map).
-    // ══════════════════════════════════════════════════════════
-
-    @PostMapping("/api/confirmar")
-    @ResponseBody
-    public ResponseEntity<Evento> confirmarEvento(
-            @RequestBody Map<String, Object> body) {
-        try {
-            EventoConfirmarRequest dto =
-                    objectMapper.convertValue(body, EventoConfirmarRequest.class);
-            Evento evento = dto.toEvento();
-            return ResponseEntity.ok(eventoService.save(evento));
-        } catch (Exception e) {
-            log.error("❌ Error confirmando evento", e);
-            return ResponseEntity.badRequest().build();
-        }
-    }
-
-    @PostMapping("/api/confirmar-recurrente")
-    @ResponseBody
-    public ResponseEntity<List<Evento>> confirmarRecurrente(
-            @RequestBody Map<String, Object> body) {
-        try {
-            EventoConfirmarRequest dto =
-                    objectMapper.convertValue(body, EventoConfirmarRequest.class);
-            return ResponseEntity.ok(eventoService.saveRecurrente(dto));
-        } catch (Exception e) {
-            log.error("❌ Error confirmando recurrente", e);
-            return ResponseEntity.badRequest().build();
-        }
-    }
-
-    // ══════════════════════════════════════════════════════════
-    //  MÉTODOS AUXILIARES
-    // ══════════════════════════════════════════════════════════
-
-    private java.util.Set<String> parseEtiquetas(String raw) {
-        if (raw == null || raw.isBlank()) return new java.util.HashSet<>();
-        return java.util.Arrays.stream(raw.split(","))
-                .map(String::trim)
-                .map(String::toLowerCase)
-                .filter(s -> !s.isEmpty())
-                .map(s -> s.replaceAll("[áàä]", "a")
-                           .replaceAll("[éèë]", "e")
-                           .replaceAll("[íìï]", "i")
-                           .replaceAll("[óòö]", "o")
-                           .replaceAll("[úùü]", "u")
-                           .replaceAll("[ñ]",   "n"))
-                .collect(java.util.stream.Collectors.toCollection(java.util.HashSet::new));
-    }
-
-    private String generarDescripcionPreview(List<LocalDate> fechas) {
-        if (fechas.isEmpty()) return "No se generarán eventos";
-
-        StringBuilder sb = new StringBuilder();
-        sb.append("Se crearán ").append(fechas.size()).append(" evento");
-        if (fechas.size() > 1) sb.append("s");
-        sb.append(":\n\n");
-
-        int limite = Math.min(10, fechas.size());
-        for (int i = 0; i < limite; i++) {
-            LocalDate fecha = fechas.get(i);
-            String diaSemana = switch (fecha.getDayOfWeek()) {
-                case MONDAY    -> "Lun";
-                case TUESDAY   -> "Mar";
-                case WEDNESDAY -> "Mié";
-                case THURSDAY  -> "Jue";
-                case FRIDAY    -> "Vie";
-                case SATURDAY  -> "Sáb";
-                case SUNDAY    -> "Dom";
-            };
-            sb.append(String.format("%-3s %02d/%02d/%d\n",
-                    diaSemana,
-                    fecha.getDayOfMonth(),
-                    fecha.getMonthValue(),
-                    fecha.getYear()));
-        }
-
-        if (fechas.size() > 10) {
-            sb.append("\n... y ").append(fechas.size() - 10).append(" más");
-        }
-
-        return sb.toString();
     }
 }

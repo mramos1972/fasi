@@ -3,9 +3,9 @@
       th:replace="~{layout/base :: layout(~{::title}, ~{::section})}">
 <head><title>Calendario — FASI</title></head>
 <body>
-<section class="pb-2 flex flex-col flex-1">
+<section class="pb-2 flex flex-col flex-1 h-[calc(100dvh-4rem)] select-none" id="swipe-area">
 
-  <!-- CABECERA DÍAS DE LA SEMANA -->
+  <!-- CABECERA DÍAS -->
   <div class="grid grid-cols-7 mb-1 pt-1">
     <div th:each="dia : ${ {'L','M','X','J','V','S','D'} }"
          class="text-center text-xs font-semibold text-gray-400 dark:text-gray-500 py-1"
@@ -17,107 +17,67 @@
        class="grid grid-cols-7 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden flex-1"
        style="grid-auto-rows: 1fr;"></div>
 
-  <!-- MODAL VOZ CON CONVERSACIÓN -->
+  <!-- MODAL ASISTENTE IA (MOBILE FRIENDLY) -->
   <div id="modal-voz" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4">
     <div class="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl
                 w-full sm:max-w-lg mx-0 sm:mx-4 relative
-                max-h-[90vh] sm:max-h-[85vh] flex flex-col">
+                max-h-[90dvh] flex flex-col">
 
-      <!-- HEADER FIJO -->
-      <div class="flex-shrink-0 p-6 pb-3 border-b border-gray-200 dark:border-gray-700">
-        <button onclick="cerrarModalVoz()"
-                class="absolute top-4 right-4 w-8 h-8 flex items-center justify-center
-                       bg-gray-200 dark:bg-gray-600 hover:bg-red-100 dark:hover:bg-red-900
-                       text-gray-600 dark:text-gray-200 rounded-full text-lg font-bold transition z-10">
-          &#x2715;
-        </button>
-        <h3 class="text-lg font-bold text-gray-800 dark:text-gray-100 mb-1">
-          &#127908; Nuevo evento
-        </h3>
-        <p class="text-xs text-gray-400">
-          Habla o escribe: <em>"Cita médica el jueves para Rocío a las 10"</em>
-        </p>
+      <!-- HEADER -->
+      <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+        <div>
+          <h3 class="text-base font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+            <span>✨</span> Asistente Inteligente FASI
+          </h3>
+          <p class="text-xs text-gray-400">Pide uno o varios eventos en una sola frase</p>
+        </div>
+        <button onclick="cerrarModalVoz()" class="text-gray-400 hover:text-gray-200 text-2xl font-bold p-1">✕</button>
       </div>
 
-      <!-- CONTENIDO CON SCROLL -->
-      <div class="flex-1 overflow-y-auto px-6 py-4 space-y-3">
-
-        <!-- PASO 1: Input inicial -->
-        <div id="paso-inicial">
+      <!-- CONTENIDO -->
+      <div class="p-4 overflow-y-auto space-y-3 flex-1">
+        
+        <div id="ia-input-container">
           <textarea id="voz-texto" rows="3"
-                    placeholder="Pulsa el micrófono o escribe aquí..."
+                    placeholder="Ej: Quiero meter dos eventos uno el 7 de Diciembre cumple de Martín a las 7 y otro el 12 de Diciembre comida en Madrid a las 4..."
                     class="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3
-                           bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
-                           focus:outline-none focus:ring-2 focus:ring-red-400 text-sm
-                           resize-none"></textarea>
+                           bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100
+                           focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm resize-none"></textarea>
 
-          <div class="flex gap-2 mt-3">
+          <div class="flex gap-2 mt-2">
             <button id="btn-micro" onclick="toggleMicrofono()"
-                    class="flex-1 flex items-center justify-center gap-2 bg-red-500
-                           hover:bg-red-600 text-white py-2.5 rounded-xl font-semibold transition text-sm">
-              &#127908; <span id="micro-label">Grabar</span>
+                    class="flex-1 flex items-center justify-center gap-2 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-xl font-semibold transition text-sm">
+              🎤 <span id="micro-label">Grabar</span>
             </button>
             <button onclick="interpretarTexto()"
-                    class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5
-                           rounded-xl font-semibold transition text-sm">
-              &#10024; Interpretar
+                    class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-xl font-semibold transition text-sm">
+              ⚡ Interpretar con IA
             </button>
           </div>
         </div>
 
-        <!-- PASO 2: Pregunta por límite -->
-        <div id="paso-limite" style="display:none">
-          <div class="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700
-                      rounded-xl p-4">
-            <p class="text-sm text-yellow-800 dark:text-yellow-200 whitespace-pre-wrap"
-               id="mensaje-limite"></p>
-          </div>
-          <textarea id="limite-texto" rows="2"
-                    placeholder="Escribe: 'hasta agosto', 'hasta el 31/12', o 'indefinido'..."
-                    class="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3
-                           bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
-                           focus:outline-none focus:ring-2 focus:ring-yellow-400 text-sm
-                           resize-none mt-3"></textarea>
-          <div class="flex gap-2 mt-3">
-            <button onclick="procesarLimite()"
-                    class="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white py-2.5
-                           rounded-xl font-semibold transition text-sm">
-              ✅ Establecer límite
-            </button>
-            <button onclick="volverAlInicio()"
-                    class="px-4 py-2.5 border border-gray-300 dark:border-gray-600
-                           text-gray-700 dark:text-gray-200 rounded-xl text-sm
-                           hover:bg-gray-50 dark:hover:bg-gray-700 transition">
-              ← Volver
-            </button>
-          </div>
+        <!-- SPINNER -->
+        <div id="ia-spinner" style="display:none" class="flex items-center justify-center gap-2 py-4 text-sm text-indigo-500">
+          <div class="w-2 h-2 bg-indigo-500 rounded-full animate-bounce"></div>
+          <div class="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style="animation-delay:150ms"></div>
+          <div class="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style="animation-delay:300ms"></div>
+          <span>Gemini Flash está razonando tus eventos...</span>
         </div>
 
-        <!-- SPINNER IA -->
-        <div id="ia-spinner" style="display:none"
-             class="flex items-center gap-2 text-xs text-gray-400">
-          <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce"></div>
-          <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:150ms"></div>
-          <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:300ms"></div>
-          <span>La IA está interpretando...</span>
-        </div>
+        <!-- RESULTADOS MULTI-EVENTO -->
+        <div id="ia-resultados" style="display:none" class="space-y-3">
+          <div id="ia-mensaje-resumen" class="p-3 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-800 dark:text-indigo-200 rounded-xl text-xs font-medium"></div>
+          
+          <div id="lista-eventos-cards" class="space-y-2 max-h-60 overflow-y-auto"></div>
 
-        <!-- PREVIEW EVENTO -->
-        <div id="preview-evento" style="display:none"
-             class="bg-gray-50 dark:bg-gray-700 rounded-xl p-4">
-          <h4 class="font-semibold text-sm text-gray-700 dark:text-gray-200 mb-2">Vista previa:</h4>
-          <div id="preview-contenido" class="text-sm space-y-1 text-gray-700 dark:text-gray-200"></div>
-          <div class="flex gap-2 mt-3">
-            <button id="btn-confirmar" onclick="confirmarEvento()"
-                    class="flex-1 bg-green-600 hover:bg-green-700 text-white py-2
-                           rounded-lg font-semibold transition text-sm">
-              &#9989; Confirmar
+          <div class="flex gap-2 pt-2">
+            <button id="btn-confirmar-todos" onclick="confirmarTodosEventos()"
+                    class="flex-1 bg-green-600 hover:bg-green-700 text-white py-2.5 rounded-xl font-semibold transition text-sm shadow">
+              ✅ Guardar en Calendario
             </button>
-            <button onclick="editarManual()"
-                    class="flex-1 border border-gray-300 dark:border-gray-500
-                           text-gray-700 dark:text-gray-200 py-2 rounded-lg text-sm
-                           hover:bg-gray-50 dark:hover:bg-gray-600 transition">
-              &#9999;&#65039; Editar
+            <button onclick="cerrarModalVoz()"
+                    class="px-4 py-2.5 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-xl text-sm">
+              Cancelar
             </button>
           </div>
         </div>
@@ -132,484 +92,226 @@
     const YEAR_MONTH  = /*[[${yearMonth.toString()}]]*/ '';
     const HOY         = /*[[${hoy.toString()}]]*/ '';
 
-    // ── Inyectar navegación de mes en el header ──────────────
+    const parts = YEAR_MONTH.split('-');
+    const currentYear  = parseInt(parts[0], 10);
+    const currentMonth = parseInt(parts[1], 10);
+
+    // ── GESTIÓN DE NAVEGACIÓN Y SWIPE TÁCTIL ──
+    function irMes(delta) {
+      const d = new Date(currentYear, currentMonth - 1 + delta, 1);
+      window.location = '/calendario?year=' + d.getFullYear() + '&month=' + (d.getMonth() + 1);
+    }
+
     (function inyectarHeaderMes() {
       const slot = document.getElementById('header-title-slot');
       if (!slot) return;
-
-      const parts = YEAR_MONTH.split('-');
-      const year  = parseInt(parts[0], 10);
-      const month = parseInt(parts[1], 10);
-
-      const prevDate = new Date(year, month - 2, 1);
-      const nextDate = new Date(year, month, 1);
-      const prevY = prevDate.getFullYear(), prevM = prevDate.getMonth() + 1;
-      const nextY = nextDate.getFullYear(), nextM = nextDate.getMonth() + 1;
-
-      const nombreMes = new Date(year, month - 1, 1)
-        .toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
-      const nombreCapitalizado = nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1);
-
-      slot.innerHTML =
-        '<a href="/calendario?year=' + prevY + '&month=' + prevM + '"' +
-        '   class="w-8 h-8 flex items-center justify-center rounded-full flex-shrink-0' +
-        '          hover:bg-gray-200 dark:hover:bg-gray-700 transition' +
-        '          text-gray-600 dark:text-gray-300 font-bold text-lg">‹</a>' +
-        '<span class="font-bold text-gray-800 dark:text-gray-100 text-sm sm:text-base' +
-        '             truncate px-1 capitalize">' + nombreCapitalizado + '</span>' +
-        '<a href="/calendario?year=' + nextY + '&month=' + nextM + '"' +
-        '   class="w-8 h-8 flex items-center justify-center rounded-full flex-shrink-0' +
-        '          hover:bg-gray-200 dark:hover:bg-gray-700 transition' +
-        '          text-gray-600 dark:text-gray-300 font-bold text-lg">›</a>';
+      const nombreMes = new Date(currentYear, currentMonth - 1, 1).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+      const cap = nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1);
+      slot.innerHTML = `
+        <button onclick="irMes(-1)" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-lg font-bold">‹</button>
+        <span class="font-bold text-gray-800 dark:text-gray-100 text-sm sm:text-base px-1">${cap}</span>
+        <button onclick="irMes(1)" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-lg font-bold">›</button>
+      `;
     })();
 
-    // ══════════════════════════════════════════════════════════
-    //  HELPERS — Normalización de fechas y horas
-    // ══════════════════════════════════════════════════════════
+    // Gesto de deslizamiento (Swipe)
+    let touchStartX = 0;
+    let touchEndX = 0;
+    const swipeArea = document.getElementById('swipe-area');
 
-    function normalizarFecha(val) {
-      if (!val) return null;
-      if (Array.isArray(val) && val.length >= 3) {
-        const y = val[0];
-        const m = String(val[1]).padStart(2, '0');
-        const d = String(val[2]).padStart(2, '0');
-        return y + '-' + m + '-' + d;
+    swipeArea.addEventListener('touchstart', e => {
+      touchStartX = e.changedTouches[0].screenX;
+    }, {passive: true});
+
+    swipeArea.addEventListener('touchend', e => {
+      touchEndX = e.changedTouches[0].screenX;
+      handleSwipe();
+    }, {passive: true});
+
+    function handleSwipe() {
+      const threshold = 60; // distancia mínima en px
+      if (touchEndX < touchStartX - threshold) {
+        irMes(1);  // Swipe a la izquierda → siguiente mes
       }
-      if (typeof val === 'string') return val;
-      return null;
-    }
-
-    function normalizarHora(val) {
-      if (!val) return null;
-      if (Array.isArray(val) && val.length >= 2) {
-        return String(val[0]).padStart(2, '0') + ':' + String(val[1]).padStart(2, '0');
+      if (touchEndX > touchStartX + threshold) {
+        irMes(-1); // Swipe a la derecha → mes anterior
       }
-      if (typeof val === 'string') return val.substring(0, 5);
-      return null;
     }
 
-    function normalizarEvento(e) {
-      if (!e) return e;
-      e.fechaInicio = normalizarFecha(e.fechaInicio);
-      e.fechaFin    = normalizarFecha(e.fechaFin);
-      e.horaInicio  = normalizarHora(e.horaInicio);
-      e.horaFin     = normalizarHora(e.horaFin);
-      return e;
-    }
-
-    // ══════════════════════════════════════════════════════════
-    //  RENDER CALENDARIO
-    // ══════════════════════════════════════════════════════════
-
+    // ── RENDER CALENDARIO ──
     function renderCalendario() {
-      const parts  = YEAR_MONTH.split('-');
-      const year   = parseInt(parts[0], 10);
-      const month  = parseInt(parts[1], 10);
-      const primer = new Date(year, month - 1, 1);
-      const ultimo = new Date(year, month, 0).getDate();
-
+      const primer = new Date(currentYear, currentMonth - 1, 1);
+      const ultimo = new Date(currentYear, currentMonth, 0).getDate();
       let col0 = primer.getDay() - 1;
       if (col0 < 0) col0 = 6;
 
       const grid = document.getElementById('grid-calendario');
       grid.innerHTML = '';
 
-      const eventosMesNorm = EVENTOS_MES.map(normalizarEvento);
-
       for (let i = 0; i < col0; i++) {
         const vacia = document.createElement('div');
-        vacia.className = 'border-b border-r border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/20';
+        vacia.className = 'border-b border-r border-gray-100 dark:border-gray-800 bg-gray-50/40 dark:bg-gray-900/20';
         grid.appendChild(vacia);
       }
 
       for (let dia = 1; dia <= ultimo; dia++) {
-        const mm       = String(month).padStart(2, '0');
-        const dd       = String(dia).padStart(2, '0');
-        const fechaStr = year + '-' + mm + '-' + dd;
-        const esHoy    = (fechaStr === HOY);
-        const colIdx   = (col0 + dia - 1) % 7;
-        const esFinde  = (colIdx >= 5);
-
-        const eventosDia = eventosMesNorm.filter(function(e) {
-          if (e.fechaInicio === fechaStr) return true;
-          if (e.fechaFin && e.fechaFin !== e.fechaInicio) {
-            var d1 = new Date(e.fechaInicio + 'T00:00:00');
-            var d2 = new Date(e.fechaFin    + 'T00:00:00');
-            var dc = new Date(fechaStr      + 'T00:00:00');
-            return dc > d1 && dc <= d2;
-          }
-          return false;
-        });
+        const mm = String(currentMonth).padStart(2, '0');
+        const dd = String(dia).padStart(2, '0');
+        const fechaStr = `${currentYear}-${mm}-${dd}`;
+        const esHoy = (fechaStr === HOY);
 
         const celda = document.createElement('div');
-        celda.className = 'border-b border-r border-gray-100 dark:border-gray-700 p-1 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition'
-          + (esFinde ? ' bg-gray-50/80 dark:bg-gray-800/50' : '');
-        celda.addEventListener('click', function() {
-          window.location = '/calendario/dia/' + fechaStr;
-        });
+        celda.className = 'border-b border-r border-gray-100 dark:border-gray-800 p-1 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition flex flex-col justify-between';
+        celda.onclick = () => window.location = '/calendario/dia/' + fechaStr;
 
         const fila = document.createElement('div');
-        fila.className = 'flex justify-between items-start';
-
-        const numSpan = document.createElement('span');
-        if (esHoy) {
-          numSpan.className = 'bg-indigo-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold';
-        } else {
-          numSpan.className = 'text-xs font-semibold ' + (esFinde ? 'text-indigo-400 dark:text-indigo-400' : 'text-gray-600 dark:text-gray-300');
-        }
-        numSpan.textContent = dia;
-
-        const btnNuevo = document.createElement('a');
-        btnNuevo.href = '/calendario/nuevo?fecha=' + fechaStr;
-        btnNuevo.className = 'text-gray-300 hover:text-indigo-500 text-base leading-none w-5 h-5 flex items-center justify-center';
-        btnNuevo.textContent = '+';
-        btnNuevo.addEventListener('click', function(ev) { ev.stopPropagation(); });
-
-        fila.appendChild(numSpan);
-        fila.appendChild(btnNuevo);
+        fila.className = 'flex justify-between items-center';
+        const num = document.createElement('span');
+        num.className = esHoy ? 'bg-indigo-600 text-white w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold' : 'text-xs text-gray-700 dark:text-gray-300 font-medium';
+        num.textContent = dia;
+        fila.appendChild(num);
         celda.appendChild(fila);
 
-        eventosDia.slice(0, 2).forEach(function(e) {
-          var emoji = (e.tipo && e.tipo.emoji) ? e.tipo.emoji : '';
-          var color = (e.tipo && e.tipo.color) ? e.tipo.color : '#6366f1';
-          var titulo = e.titulo || '';
-
-          var pill = document.createElement('div');
-          pill.className = 'text-xs px-1 py-0.5 rounded mb-0.5 text-white font-medium flex items-center gap-0.5 group truncate';
-          pill.style.backgroundColor = color;
-
-          var span = document.createElement('span');
-          span.className = 'flex-1 truncate';
-          span.title = titulo;
-          span.textContent = emoji + ' ';
-          var tituloSpan = document.createElement('span');
-          tituloSpan.className = 'hidden sm:inline';
-          tituloSpan.textContent = titulo;
-          span.appendChild(tituloSpan);
-          span.addEventListener('click', function(ev) {
-            ev.stopPropagation();
-            window.location = '/calendario/' + e.id + '/editar';
-          });
-
-          var btnDel = document.createElement('button');
-          btnDel.className = 'opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/20 rounded flex-shrink-0 px-0.5';
-          btnDel.title = 'Eliminar';
-          btnDel.textContent = '\u2715';
-          btnDel.addEventListener('click', function(ev) {
-            ev.stopPropagation();
-            eliminarEvento(e.id, titulo);
-          });
-
-          pill.appendChild(span);
-          pill.appendChild(btnDel);
-          celda.appendChild(pill);
+        const eventosDia = EVENTOS_MES.filter(e => {
+          const f = Array.isArray(e.fechaInicio) ? `${e.fechaInicio[0]}-${String(e.fechaInicio[1]).padStart(2,'0')}-${String(e.fechaInicio[2]).padStart(2,'0')}` : e.fechaInicio;
+          return f === fechaStr;
         });
 
+        const contEv = document.createElement('div');
+        contEv.className = 'flex-1 overflow-hidden space-y-0.5 mt-0.5';
+        eventosDia.slice(0, 2).forEach(e => {
+          const pill = document.createElement('div');
+          pill.className = 'text-[10px] px-1 py-0.5 rounded text-white truncate font-medium';
+          pill.style.backgroundColor = (e.tipo && e.tipo.color) ? e.tipo.color : '#6366f1';
+          pill.textContent = (e.tipo && e.tipo.emoji ? e.tipo.emoji + ' ' : '') + e.titulo;
+          contEv.appendChild(pill);
+        });
         if (eventosDia.length > 2) {
-          var mas = document.createElement('div');
-          mas.className = 'text-xs text-gray-400 dark:text-gray-500 pl-1';
-          mas.textContent = '+' + (eventosDia.length - 2);
-          celda.appendChild(mas);
+          const mas = document.createElement('div');
+          mas.className = 'text-[9px] text-gray-400 pl-0.5';
+          mas.textContent = `+${eventosDia.length - 2}`;
+          contEv.appendChild(mas);
         }
-
+        celda.appendChild(contEv);
         grid.appendChild(celda);
       }
     }
 
-    // ══════════════════════════════════════════════════════════
-    //  VARIABLES GLOBALES PARA CONVERSACIÓN
-    // ══════════════════════════════════════════════════════════
-    var recognition  = null;
-    var grabando     = false;
-    var eventoActual = null;
-    var eventoBase   = null;
+    // ── MODAL IA CON RECONOCIMIENTO Y MULTI-EVENTO ──
+    let eventosPendientes = [];
 
     window.abrirModalVoz = function() {
       document.getElementById('modal-voz').classList.remove('hidden');
-      resetearModal();
+      document.getElementById('ia-resultados').style.display = 'none';
+      document.getElementById('ia-input-container').style.display = 'block';
     };
 
     function cerrarModalVoz() {
       document.getElementById('modal-voz').classList.add('hidden');
-      if (grabando) pararMicrofono();
-      resetearModal();
     }
 
-    function resetearModal() {
-      document.getElementById('paso-inicial').style.display = 'block';
-      document.getElementById('paso-limite').style.display = 'none';
-      document.getElementById('preview-evento').style.display = 'none';
-      document.getElementById('ia-spinner').style.display = 'none';
-      document.getElementById('voz-texto').value = '';
-      document.getElementById('limite-texto').value = '';
-      eventoActual = null;
-      eventoBase = null;
-    }
-
-    function volverAlInicio() {
-      document.getElementById('paso-limite').style.display = 'none';
-      document.getElementById('paso-inicial').style.display = 'block';
-      eventoBase = null;
-    }
-
-    // ══════════════════════════════════════════════════════════
-    //  MICRÓFONO
-    // ══════════════════════════════════════════════════════════
-    function toggleMicrofono() { grabando ? pararMicrofono() : iniciarMicrofono(); }
-
-    function iniciarMicrofono() {
-      if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-        alert('Tu navegador no soporta reconocimiento de voz.'); return;
-      }
-      navigator.mediaDevices.getUserMedia({ audio: true })
-        .then(function(stream) {
-          stream.getTracks().forEach(function(t){ t.stop(); });
-          _iniciarReconocimiento();
-        })
-        .catch(function(err) {
-          alert('Permiso de micrófono denegado: ' + err.message);
-        });
-    }
-
-    function _iniciarReconocimiento() {
-      var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-      recognition = new SR();
-      recognition.lang = 'es-ES';
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      var textoAcumulado = '';
-      recognition.onresult = function(event) {
-        var interino = '';
-        for (var i = event.resultIndex; i < event.results.length; i++) {
-          if (event.results[i].isFinal) {
-            textoAcumulado += event.results[i][0].transcript + ' ';
-          } else {
-            interino += event.results[i][0].transcript;
-          }
-        }
-        document.getElementById('voz-texto').value = textoAcumulado + interino;
-      };
-      recognition.onend = function() {
-        if (grabando) setTimeout(function() { try { recognition.start(); } catch(e){} }, 300);
-      };
-      recognition.onerror = function(e) {
-        if (e.error === 'no-speech') { grabando = false; actualizarBotonMicro(false); return; }
-        if (e.error === 'not-allowed') alert('Permiso de micrófono denegado.');
-        grabando = false; actualizarBotonMicro(false);
-      };
-      recognition.start();
-      grabando = true;
-      actualizarBotonMicro(true);
-    }
-
-    function pararMicrofono() {
-      grabando = false;
-      if (recognition) recognition.stop();
-      actualizarBotonMicro(false);
-    }
-
-    function actualizarBotonMicro(activo) {
-      var label = document.getElementById('micro-label');
-      var btn   = document.getElementById('btn-micro');
-      label.textContent = activo ? 'Parar' : 'Grabar';
-      if (activo) btn.classList.add('bg-red-700');
-      else btn.classList.remove('bg-red-700');
-    }
-
-    // ══════════════════════════════════════════════════════════
-    //  INTERPRETAR TEXTO (PASO 1)
-    // ══════════════════════════════════════════════════════════
     async function interpretarTexto() {
-      var texto = document.getElementById('voz-texto').value.trim();
-      if (!texto) { alert('Escribe o dicta algo primero.'); return; }
+      const texto = document.getElementById('voz-texto').value.trim();
+      if (!texto) return alert('Escribe o dicta algo primero.');
 
       document.getElementById('ia-spinner').style.display = 'flex';
-      document.getElementById('preview-evento').style.display = 'none';
+      document.getElementById('ia-resultados').style.display = 'none';
 
       try {
-        var resp = await fetch('/calendario/api/interpretar-preview', {
+        const resp = await fetch('/calendario/api/interpretar-accion', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ texto: texto })
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ texto })
         });
-        var data = await resp.json();
+        const data = await resp.json();
 
-        if (data.necesitaLimite) {
-          eventoBase = data.eventoBase;
-          document.getElementById('mensaje-limite').textContent = data.mensajeLimite;
-          document.getElementById('paso-inicial').style.display = 'none';
-          document.getElementById('paso-limite').style.display = 'block';
+        if (!data.exito || !data.crear || data.crear.length === 0) {
+          alert(data.mensajeUsuario || 'No se pudieron extraer eventos.');
           return;
         }
 
-        if (data.error) {
-          alert('Error: ' + data.error);
-          return;
-        }
+        eventosPendientes = data.crear;
+        document.getElementById('ia-mensaje-resumen').textContent = data.mensajeUsuario;
 
-        if (data.evento) {
-          eventoActual = normalizarEvento(data.evento);
-          eventoActual.esRecurrente = data.esRecurrente;
-          eventoActual.descripcionPreview = data.descripcionPreview;
-          mostrarPreview(eventoActual, data);
-        } else {
-          alert('La IA no pudo interpretar el texto.');
-        }
+        const cards = document.getElementById('lista-eventos-cards');
+        cards.innerHTML = data.crear.map(e => `
+          <div class="p-3 bg-gray-50 dark:bg-gray-700/60 rounded-xl border border-gray-200 dark:border-gray-600 text-xs">
+            <div class="flex justify-between items-center mb-1">
+              <span class="font-bold text-gray-900 dark:text-gray-100 text-sm">${escapeHtml(e.titulo)}</span>
+              <span class="px-2 py-0.5 rounded-full text-white font-semibold text-[10px]" style="background-color: ${e.tipo?.color || '#4f46e5'}">
+                ${e.tipo?.label || 'Evento'}
+              </span>
+            </div>
+            <div class="text-gray-600 dark:text-gray-300 space-y-0.5">
+              <p>📅 Fecha: <strong>${e.fechaInicio}</strong></p>
+              <p>⏰ Hora: <strong>${e.horaInicio || 'Pendiente de definir'}</strong></p>
+              ${e.lugar ? `<p>📍 Lugar: <strong>${escapeHtml(e.lugar)}</strong></p>` : ''}
+              ${e.personasRelacionadas ? `<p>👥 Con: <strong>${escapeHtml(e.personasRelacionadas)}</strong></p>` : ''}
+            </div>
+          </div>
+        `).join('');
+
+        document.getElementById('btn-confirmar-todos').textContent = `✅ Guardar ${data.crear.length} evento${data.crear.length > 1 ? 's' : ''}`;
+        document.getElementById('ia-input-container').style.display = 'none';
+        document.getElementById('ia-resultados').style.display = 'block';
+
       } catch (err) {
-        alert('Error: ' + err.message);
+        alert('Error conectando con la IA: ' + err.message);
       } finally {
         document.getElementById('ia-spinner').style.display = 'none';
       }
     }
 
-    // ══════════════════════════════════════════════════════════
-    //  PROCESAR LÍMITE (PASO 2)
-    // ══════════════════════════════════════════════════════════
-    async function procesarLimite() {
-      var respuestaLimite = document.getElementById('limite-texto').value.trim();
-      if (!respuestaLimite) {
-        alert('Por favor escribe un límite (ej: "hasta agosto", "indefinido")');
-        return;
-      }
-
-      document.getElementById('ia-spinner').style.display = 'flex';
-
+    async function confirmarTodosEventos() {
+      if (!eventosPendientes.length) return;
       try {
-        var resp = await fetch('/calendario/api/procesar-limite', {
+        const resp = await fetch('/calendario/api/confirmar-lote', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            eventoBase: eventoBase,
-            respuestaLimite: respuestaLimite
-          })
-        });
-        var data = await resp.json();
-
-        if (data.error) {
-          alert('Error: ' + data.error);
-          return;
-        }
-
-        eventoActual = normalizarEvento(data.evento);
-        eventoActual.esRecurrente = data.esRecurrente;
-        eventoActual.descripcionPreview = data.descripcionPreview;
-
-        document.getElementById('paso-limite').style.display = 'none';
-        document.getElementById('paso-inicial').style.display = 'block';
-        mostrarPreview(eventoActual, data);
-
-      } catch (err) {
-        alert('Error: ' + err.message);
-      } finally {
-        document.getElementById('ia-spinner').style.display = 'none';
-      }
-    }
-
-    // ══════════════════════════════════════════════════════════
-    //  MOSTRAR PREVIEW
-    // ══════════════════════════════════════════════════════════
-    function mostrarPreview(evento, dataExtra) {
-      var c = document.getElementById('preview-contenido');
-      var tipoLabel = (evento.tipo && evento.tipo.label) ? evento.tipo.label : (evento.tipo || '');
-      var tipoEmoji = (evento.tipo && evento.tipo.emoji) ? evento.tipo.emoji : '';
-      var esRec = evento.datosExtra && evento.datosExtra.recurrente === true;
-
-      var html = '<div class="space-y-2">';
-      html += '<p><strong>Tipo:</strong> ' + tipoEmoji + ' ' + tipoLabel + '</p>';
-      html += '<p><strong>Título:</strong> ' + (evento.titulo || '-') + '</p>';
-
-      if (evento.horaInicio) {
-        html += '<p><strong>Hora:</strong> ' + evento.horaInicio;
-        if (evento.horaFin) html += ' - ' + evento.horaFin;
-        html += '</p>';
-      }
-
-      if (evento.lugar) html += '<p><strong>Lugar:</strong> ' + escapeHtml(evento.lugar) + '</p>';
-      if (evento.personasRelacionadas) html += '<p><strong>Personas:</strong> ' + escapeHtml(evento.personasRelacionadas) + '</p>';
-      if (evento.descripcion) html += '<p><strong>Notas:</strong> ' + escapeHtml(evento.descripcion) + '</p>';
-
-      if (esRec && dataExtra.descripcionPreview) {
-        html += '<div class="mt-3 p-3 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg border border-indigo-200 dark:border-indigo-700">';
-        html += '<p class="text-xs font-semibold text-indigo-700 dark:text-indigo-300 mb-2">🔄 Eventos recurrentes:</p>';
-        html += '<pre class="text-xs text-gray-700 dark:text-gray-200 whitespace-pre-wrap font-mono leading-relaxed">' + escapeHtml(dataExtra.descripcionPreview) + '</pre>';
-        html += '</div>';
-      } else {
-        var fechaStr = evento.fechaInicio || '-';
-        if (evento.fechaFin && evento.fechaFin !== evento.fechaInicio) {
-          var d1 = new Date(evento.fechaInicio + 'T00:00:00');
-          var d2 = new Date(evento.fechaFin + 'T00:00:00');
-          var dias = Math.round((d2 - d1) / 86400000) + 1;
-          fechaStr += ' al ' + evento.fechaFin + ' (' + dias + ' día' + (dias > 1 ? 's' : '') + ')';
-        }
-        html += '<p><strong>Fecha:</strong> ' + fechaStr + '</p>';
-      }
-
-      if (!evento.horaInicio && !evento.todoDia) {
-        html += '<div class="mt-2 p-2 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 rounded text-xs text-yellow-700 dark:text-yellow-300">';
-        html += '⚠️ No se especificó hora — se guardará como <strong>pendiente de hora</strong>';
-        html += '</div>';
-      }
-
-      html += '</div>';
-      c.innerHTML = html;
-
-      var btnConf = document.getElementById('btn-confirmar');
-      if (btnConf) {
-        if (esRec && dataExtra.totalEventos) {
-          btnConf.textContent = '✅ Confirmar ' + dataExtra.totalEventos + ' evento' + (dataExtra.totalEventos > 1 ? 's' : '');
-          btnConf.className = 'flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg font-semibold transition text-sm';
-        } else {
-          btnConf.textContent = '✅ Confirmar';
-          btnConf.className = 'flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-semibold transition text-sm';
-        }
-      }
-
-      document.getElementById('preview-evento').style.display = 'block';
-    }
-
-    // ══════════════════════════════════════════════════════════
-    //  CONFIRMAR EVENTO
-    // ══════════════════════════════════════════════════════════
-    async function confirmarEvento() {
-      if (!eventoActual) return;
-      var esRec = eventoActual.datosExtra && eventoActual.datosExtra.recurrente === true;
-      var endpoint = esRec ? '/calendario/api/confirmar-recurrente' : '/calendario/api/confirmar';
-      try {
-        var resp = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(eventoActual)
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(eventosPendientes)
         });
         if (resp.ok) {
-          var data = await resp.json();
-          if (esRec && Array.isArray(data)) alert(data.length + ' eventos creados.');
           cerrarModalVoz();
           window.location.reload();
         } else {
-          var errText = await resp.text();
-          alert('Error al guardar: ' + errText);
+          alert('Error al guardar eventos.');
         }
-      } catch (err) {
-        alert('Error: ' + err.message);
+      } catch (e) {
+        alert('Error: ' + e.message);
       }
     }
 
-    function editarManual() {
-      if (!eventoActual) return;
-      window.location = '/calendario/nuevo?fecha=' + (eventoActual.fechaInicio || HOY);
+    // Micrófono
+    let recognition = null;
+    let grabando = false;
+    function toggleMicrofono() {
+      if (grabando) {
+        if (recognition) recognition.stop();
+        grabando = false;
+        document.getElementById('micro-label').textContent = 'Grabar';
+        document.getElementById('btn-micro').classList.remove('bg-red-700');
+        return;
+      }
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) return alert('Reconocimiento no disponible en este navegador.');
+      recognition = new SR();
+      recognition.lang = 'es-ES';
+      recognition.continuous = true;
+      recognition.onresult = e => {
+        let t = '';
+        for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript + ' ';
+        document.getElementById('voz-texto').value = t;
+      };
+      recognition.start();
+      grabando = true;
+      document.getElementById('micro-label').textContent = 'Parar';
+      document.getElementById('btn-micro').classList.add('bg-red-700');
     }
 
-    async function eliminarEvento(id, titulo) {
-      if (!confirm('¿Eliminar "' + titulo + '"?')) return;
-      var resp = await fetch('/calendario/api/eliminar/' + id, { method: 'DELETE' });
-      if (resp.ok) window.location.reload();
-      else alert('Error al eliminar.');
-    }
-
-    function escapeHtml(text) {
-      var div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
+    function escapeHtml(str) {
+      const d = document.createElement('div');
+      d.textContent = str || '';
+      return d.innerHTML;
     }
 
     renderCalendario();
