@@ -2,6 +2,7 @@ package com.miempresa.fasi.calendario;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.miempresa.fasi.calendario.dto.IaAccionResultado;
 import com.miempresa.fasi.ia.IaContextBuilder;
 import com.miempresa.fasi.ia.LlmApiClient;
 import lombok.RequiredArgsConstructor;
@@ -10,10 +11,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 @Slf4j
 @Service
@@ -24,99 +22,108 @@ public class EventoIaService {
     private final ObjectMapper objectMapper;
     private final IaContextBuilder contextBuilder;
 
-    private static final String SYSTEM_PROMPT_EVENTO = """
-        Eres un asistente experto en interpretar lenguaje natural para calendarios familiares en español.
+    private static final String SYSTEM_PROMPT = """
+        Eres FASI, el asistente inteligente de calendario.
         Hoy es %s (%s). Año en curso: %d.
-
+        
         INSTRUCCIONES CLAVE:
-        1. Analiza el texto y detecta CUÁNTOS eventos distintos solicita el usuario (puede ser uno, dos o muchos).
-        2. Para cada evento, extrae:
-           - titulo: Nombre descriptivo, conciso y limpio del evento (ej: "Cumpleaños de Martín"). NO pongas la orden entera.
-           - tipo: Clasifica estrictamente en uno de estos valores: PERSONAL, SOCIAL, SALUD, TRABAJO, FAMILIA, VIAJE, VACACIONES, APRENDIZAJE, OCIO, GESTION, OTRO.
-           - fechaInicio: En formato YYYY-MM-DD. Si no menciona el año, asume el año en curso (%d).
-           - horaInicio: Formato HH:MM en 24h (ej: 19:00 si dice '7 de la tarde'). Si no hay hora, pon null.
-           - horaFin: Formato HH:MM o null.
-           - fechaFin: Formato YYYY-MM-DD o null.
-           - todoDia: true si no hay hora especificada, false si tiene hora.
-           - lugar: Ubicación si se menciona explícitamente, o null.
-           - personasRelacionadas: Personas involucradas (ej: "Martín", "Sara") o null.
-           - etiquetas: Array de strings con etiquetas clave o vacío [].
-
-        Debes responder ÚNICAMENTE con un JSON con la propiedad "eventos":
+        1. Comprende cualquier instrucción del usuario, ya sea para uno o múltiples eventos.
+        2. Puedes interpretar solicitudes de CREAR eventos o BORRAR eventos.
+        3. Para cada evento a crear, extrae:
+           - titulo: Nombre descriptivo, conciso y limpio (ej: "Cumpleaños de Martín", "Comida en Madrid").
+           - tipo: PERSONAL, SOCIAL, SALUD, TRABAJO, FAMILIA, VIAJE, VACACIONES, APRENDIZAJE, OCIO, GESTION, OTRO.
+           - fechaInicio: YYYY-MM-DD.
+           - horaInicio: HH:MM en 24h (ej: 16:00, 19:00). Si no hay hora explícita, pon null.
+           - horaFin: HH:MM o null.
+           - todoDia: true si no se indicó hora, false si tiene hora específica.
+           - lugar: Ciudad o local si se menciona (ej: "Madrid", "Restaurante Pepe"), o null.
+           - personasRelacionadas: Personas nombradas (ej: "Martín", "Noe"), o null.
+           - etiquetas: Array de strings o vacío [].
+        4. Redacta en 'mensajeUsuario' una respuesta natural, cordial y breve resumiendo lo que has interpretado y avisando de cualquier dato pendiente (por ejemplo, si falta la hora en alguno).
+        
+        Debes responder ÚNICAMENTE con esta estructura JSON:
         {
-          "eventos": [
+          "mensajeUsuario": "He preparado 2 eventos: el cumpleaños de Martín a las 19:00 y la comida en Madrid a las 16:00.",
+          "crear": [
             {
               "titulo": "Cumpleaños de Martín",
               "tipo": "SOCIAL",
-              "fechaInicio": "2026-11-20",
-              "fechaFin": null,
+              "fechaInicio": "2026-12-07",
               "horaInicio": "19:00",
-              "horaFin": null,
               "todoDia": false,
-              "lugar": null,
               "personasRelacionadas": "Martín",
+              "lugar": null,
               "etiquetas": ["cumpleaños"]
             }
-          ]
+          ],
+          "eliminarIds": []
         }
-        No agregues explicaciones ni markdown ```json. Solo el JSON puro.
+        No agregues markdown ```json ni explicaciones adicionales. Solo el JSON puro.
         """;
 
-    // ── Interpretar múltiples eventos o individual ──
-    public List<Evento> interpretarLista(String texto) {
+    public IaAccionResultado interpretarAccion(String texto) {
+        long inicio = System.currentTimeMillis();
         LocalDate hoy = LocalDate.now();
-        String prompt = SYSTEM_PROMPT_EVENTO.formatted(hoy, hoy.getDayOfWeek(), hoy.getYear(), hoy.getYear());
-        String jsonRespuesta = llmClient.chatJson(prompt, texto);
-        log.info("Respuesta JSON multi-evento de Gemini: {}", jsonRespuesta);
+        String prompt = SYSTEM_PROMPT.formatted(hoy, hoy.getDayOfWeek(), hoy.getYear());
 
-        List<Evento> lista = new ArrayList<>();
+        log.info("🤖 Interpretando con Gemini Flash: '{}'", texto);
+        String jsonRespuesta = llmClient.chatJson(prompt, texto);
+        log.info("Respuesta cruda de Gemini: {}", jsonRespuesta);
+
+        List<Evento> eventosCrear = new ArrayList<>();
+        List<UUID> idsBorrar = new ArrayList<>();
+        String mensajeUsuario = "He procesado tu solicitud.";
+
         try {
             JsonNode root = objectMapper.readTree(jsonRespuesta);
-            JsonNode eventosNode = root.path("eventos");
 
-            if (eventosNode.isArray()) {
-                for (JsonNode item : eventosNode) {
-                    lista.add(mapearNodoAEvento(item, texto, hoy));
-                }
-            } else if (root.has("titulo")) {
-                // Compatibilidad por si el modelo devuelve un solo objeto suelto
-                lista.add(mapearNodoAEvento(root, texto, hoy));
+            if (root.hasNonNull("mensajeUsuario")) {
+                mensajeUsuario = root.get("mensajeUsuario").asText();
             }
+
+            JsonNode crearNode = root.path("crear");
+            if (crearNode.isArray()) {
+                for (JsonNode item : crearNode) {
+                    eventosCrear.add(mapearNodoAEvento(item, texto, hoy));
+                }
+            } else if (root.path("eventos").isArray()) { // Retrocompatibilidad
+                for (JsonNode item : root.path("eventos")) {
+                    eventosCrear.add(mapearNodoAEvento(item, texto, hoy));
+                }
+            }
+
+            JsonNode borrarNode = root.path("eliminarIds");
+            if (borrarNode.isArray()) {
+                for (JsonNode item : borrarNode) {
+                    try {
+                        idsBorrar.add(UUID.fromString(item.asText()));
+                    } catch (Exception ignored) {}
+                }
+            }
+
+            long elapsed = System.currentTimeMillis() - inicio;
+            return IaAccionResultado.builder()
+                    .exito(!eventosCrear.isEmpty() || !idsBorrar.isEmpty())
+                    .mensajeUsuario(mensajeUsuario)
+                    .crear(eventosCrear)
+                    .eliminarIds(idsBorrar)
+                    .tiempoMs(elapsed)
+                    .build();
+
         } catch (Exception e) {
-            log.error("Fallo al parsear JSON multi-evento: '{}'", jsonRespuesta, e);
+            long elapsed = System.currentTimeMillis() - inicio;
+            log.error("Fallo al procesar respuesta de Gemini", e);
+            return IaAccionResultado.builder()
+                    .exito(false)
+                    .mensajeUsuario("No pude interpretar los datos correctamente.")
+                    .tiempoMs(elapsed)
+                    .build();
         }
-        return lista;
-    }
-
-    // ── Método principal llamado por el flujo de confirmación ──
-    public EventoIaResponse interpretar(EventoIaRequest request) {
-        long inicioMs = System.currentTimeMillis();
-        String texto = request.getTexto();
-        LocalDate hoy = LocalDate.now();
-
-        List<Evento> eventos = interpretarLista(texto);
-
-        if (!eventos.isEmpty()) {
-            Evento principal = eventos.get(0);
-            long tiempoMs = System.currentTimeMillis() - inicioMs;
-            return new EventoIaResponse(true, null, principal, tiempoMs);
-        }
-
-        // Fallback básico si Gemini no pudo extraer nada
-        Evento fallback = new Evento();
-        fallback.setTitulo(texto);
-        fallback.setFechaInicio(hoy);
-        fallback.setTodoDia(true);
-        fallback.setTipo(Evento.TipoEvento.OTRO);
-        fallback.setTextoOriginalVoz(texto);
-
-        long tiempoMs = System.currentTimeMillis() - inicioMs;
-        return new EventoIaResponse(false, "No se pudo interpretar el evento.", fallback, tiempoMs);
     }
 
     private Evento mapearNodoAEvento(JsonNode node, String textoOriginal, LocalDate hoy) {
         Evento evento = new Evento();
-        evento.setTitulo(node.path("titulo").asText("Evento"));
+        evento.setTitulo(node.path("titulo").asText("Nuevo Evento"));
 
         String tipoStr = node.path("tipo").asText("OTRO");
         try {
@@ -126,21 +133,25 @@ public class EventoIaService {
         }
 
         if (node.hasNonNull("fechaInicio")) {
-            evento.setFechaInicio(LocalDate.parse(node.get("fechaInicio").asText()));
+            try {
+                evento.setFechaInicio(LocalDate.parse(node.get("fechaInicio").asText()));
+            } catch (Exception e) {
+                evento.setFechaInicio(hoy);
+            }
         } else {
             evento.setFechaInicio(hoy);
         }
 
         if (node.hasNonNull("fechaFin")) {
-            evento.setFechaFin(LocalDate.parse(node.get("fechaFin").asText()));
+            try { evento.setFechaFin(LocalDate.parse(node.get("fechaFin").asText())); } catch (Exception ignored) {}
         }
 
         if (node.hasNonNull("horaInicio")) {
-            evento.setHoraInicio(LocalTime.parse(node.get("horaInicio").asText()));
+            try { evento.setHoraInicio(LocalTime.parse(node.get("horaInicio").asText())); } catch (Exception ignored) {}
         }
 
         if (node.hasNonNull("horaFin")) {
-            evento.setHoraFin(LocalTime.parse(node.get("horaFin").asText()));
+            try { evento.setHoraFin(LocalTime.parse(node.get("horaFin").asText())); } catch (Exception ignored) {}
         }
 
         evento.setTodoDia(node.path("todoDia").asBoolean(evento.getHoraInicio() == null));
@@ -157,35 +168,16 @@ public class EventoIaService {
         return evento;
     }
 
-    // ── Método puente que devuelve EventoConfirmarRequest ──
-    public EventoConfirmarRequest parsearTexto(String texto) {
-        EventoIaRequest req = new EventoIaRequest();
-        req.setTexto(texto);
-        EventoIaResponse resp = interpretar(req);
-        Evento e = resp.getEventoPreview();
-
-        EventoConfirmarRequest confirmarReq = new EventoConfirmarRequest();
-        confirmarReq.setTextoOriginalVoz(texto);
-        confirmarReq.setTitulo(e.getTitulo());
-        confirmarReq.setTipo(e.getTipo());
-        confirmarReq.setFechaInicio(e.getFechaInicio());
-        confirmarReq.setFechaFin(e.getFechaFin());
-        confirmarReq.setHoraInicio(e.getHoraInicio());
-        confirmarReq.setHoraFin(e.getHoraFin());
-        confirmarReq.setTodoDia(e.isTodoDia());
-        confirmarReq.setLugar(e.getLugar());
-        confirmarReq.setPersonasRelacionadas(e.getPersonasRelacionadas());
-        confirmarReq.setEtiquetas(e.getEtiquetas());
-        return confirmarReq;
+    // Retrocompatibilidad con EventoParserService
+    public EventoIaResponse interpretar(EventoIaRequest request) {
+        IaAccionResultado res = interpretarAccion(request.getTexto());
+        if (res.isExito() && !res.getCrear().isEmpty()) {
+            return new EventoIaResponse(true, null, res.getCrear().get(0), res.getCrear(), res.getTiempoMs());
+        }
+        return new EventoIaResponse(false, res.getMensajeUsuario(), null, res.getTiempoMs());
     }
 
-    // ── Consultas en lenguaje natural desde el Calendario ──
-    public String consultar(String pregunta) {
-        String systemPrompt = contextBuilder.buildPrompt(pregunta, "calendario");
-        return llmClient.chat(systemPrompt, pregunta);
-    }
-
-    // ── Procesar límite de recurrencia devolviendo EventoIaResponse ──
+    // Retrocompatibilidad para límites de recurrencia en EventoParserService
     public EventoIaResponse procesarLimite(Evento eventoExistente, String textoLimite) {
         long inicioMs = System.currentTimeMillis();
         LocalDate hoy = LocalDate.now();
@@ -213,5 +205,10 @@ public class EventoIaService {
 
         long tiempoMs = System.currentTimeMillis() - inicioMs;
         return new EventoIaResponse(true, null, eventoExistente, tiempoMs);
+    }
+
+    public String consultar(String pregunta) {
+        String systemPrompt = contextBuilder.buildPrompt(pregunta, "calendario");
+        return llmClient.chat(systemPrompt, pregunta);
     }
 }
