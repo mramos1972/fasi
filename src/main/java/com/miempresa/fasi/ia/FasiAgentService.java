@@ -31,8 +31,8 @@ public class FasiAgentService {
     @Value("${fasi.ai.provider.api-key:}")
     private String apiKey;
 
-    @Value("${fasi.ai.provider.model:gemini-2.5-flash}")
-    private String defaultModel;
+    @Value("${fasi.ai.provider.model:gemini-3.8-flash}")
+    private String model;
 
     private final ObjectMapper objectMapper;
     private final EventoService eventoService;
@@ -40,7 +40,7 @@ public class FasiAgentService {
     private final UsuarioActualService usuarioActualService;
 
     private final HttpClient httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(15))
+            .connectTimeout(Duration.ofSeconds(20))
             .build();
 
     public record AgentResponse(String mensaje, boolean huboMutacion) {}
@@ -76,17 +76,17 @@ public class FasiAgentService {
             JsonNode respuestaLlm = llamarApiConReintento(messages);
 
             if (respuestaLlm == null) {
-                return new AgentResponse("Los servidores de IA están saturados temporalmente (503). Por favor, repite la orden en unos segundos.", huboMutacion);
+                return new AgentResponse("Google Gemini tiene una sobrecarga temporal de servidores (503). Por favor intenta de nuevo en unos segundos.", huboMutacion);
             }
 
             JsonNode choices = respuestaLlm.path("choices");
             if (!choices.isArray() || choices.isEmpty()) {
-                return new AgentResponse("No se obtuvo respuesta válida del modelo.", huboMutacion);
+                return new AgentResponse("No se obtuvo respuesta del asistente.", huboMutacion);
             }
 
             JsonNode messageNode = choices.get(0).path("message");
 
-            // Si el modelo solicita ejecutar herramientas
+            // Si el modelo solicita ejecutar herramientas (tool_calls)
             if (messageNode.has("tool_calls") && !messageNode.path("tool_calls").isEmpty()) {
                 messages.add(objectMapper.convertValue(messageNode, Map.class));
 
@@ -207,49 +207,49 @@ public class FasiAgentService {
     }
 
     private JsonNode llamarApiConReintento(List<Map<String, Object>> messages) {
-        // Modelos a probar en cascada si hay 503 por sobrecarga
-        List<String> modelosFallback = List.of(defaultModel, "gemini-2.5-flash", "gemini-1.5-flash");
+        String modeloUsar = "gemini-3.8-flash";
+        int maxReintentos = 3;
+        long esperaMs = 1500;
 
-        for (String modelo : modelosFallback) {
-            for (int intento = 1; intento <= 2; intento++) {
-                try {
-                    Map<String, Object> body = new HashMap<>();
-                    body.put("model", modelo);
-                    body.put("messages", messages);
-                    body.put("temperature", 0.1);
-                    body.put("tools", obtenerDefinicionHerramientas());
+        for (int intento = 1; intento <= maxReintentos; intento++) {
+            try {
+                Map<String, Object> body = new HashMap<>();
+                body.put("model", modeloUsar);
+                body.put("messages", messages);
+                body.put("temperature", 0.1);
+                body.put("tools", obtenerDefinicionHerramientas());
 
-                    String payload = objectMapper.writeValueAsString(body);
+                String payload = objectMapper.writeValueAsString(body);
 
-                    HttpRequest request = HttpRequest.newBuilder()
-                            .uri(URI.create(apiUrl + "/chat/completions"))
-                            .header("Content-Type", "application/json")
-                            .header("Authorization", "Bearer " + apiKey)
-                            .POST(HttpRequest.BodyPublishers.ofString(payload))
-                            .timeout(Duration.ofSeconds(30))
-                            .build();
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(apiUrl + "/chat/completions"))
+                        .header("Content-Type", "application/json")
+                        .header("Authorization", "Bearer " + apiKey)
+                        .POST(HttpRequest.BodyPublishers.ofString(payload))
+                        .timeout(Duration.ofSeconds(30))
+                        .build();
 
-                    HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
-                    if (response.statusCode() == 200) {
-                        return objectMapper.readTree(response.body());
-                    }
-
-                    if (response.statusCode() == 503 || response.statusCode() == 429) {
-                        log.warn("⚠️ Modelo {} sobrecargado (HTTP {}). Intento {}/2. Esperando 1.5s...", modelo, response.statusCode(), intento);
-                        Thread.sleep(1500);
-                        continue;
-                    }
-
-                    log.error("Error API Gemini ({}): {}", response.statusCode(), response.body());
-                    break; // Error no recuperable con reintento inmediato
-
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                    return null;
-                } catch (Exception e) {
-                    log.error("Fallo de red comunicando con modelo {}", modelo, e);
+                if (response.statusCode() == 200) {
+                    return objectMapper.readTree(response.body());
                 }
+
+                if (response.statusCode() == 503 || response.statusCode() == 429) {
+                    log.warn("⚠️ Google Gemini saturado (HTTP {}). Intento {}/{}. Esperando {} ms...", response.statusCode(), intento, maxReintentos, esperaMs);
+                    Thread.sleep(esperaMs);
+                    esperaMs *= 2; // Espera exponencial: 1.5s -> 3s -> 6s
+                    continue;
+                }
+
+                log.error("Error API Gemini ({}): {}", response.statusCode(), response.body());
+                return null;
+
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                return null;
+            } catch (Exception e) {
+                log.error("Fallo de red al conectar con Gemini: {}", e.getMessage());
             }
         }
 
