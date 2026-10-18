@@ -132,7 +132,7 @@ public class FasiAgentService {
                 while (mem.contents.size() > 0 && !"model".equals(mem.contents.get(mem.contents.size() - 1).path("role").asText())) {
                     mem.contents.remove(mem.contents.size() - 1);
                 }
-                return new AgentResponse("No he podido contactar con la IA (" + e.getMessage() + "). Inténtalo de nuevo en unos segundos.",
+                return new AgentResponse("⚠️ " + e.userMessage(),
                         mutacion, System.currentTimeMillis() - t0, pasos);
             } catch (Exception e) {
                 log.error("❌ Agente: error inesperado", e);
