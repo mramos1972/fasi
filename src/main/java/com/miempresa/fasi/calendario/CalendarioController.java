@@ -5,6 +5,7 @@ import com.miempresa.fasi.contexto.PermisosCalendarioService;
 import com.miempresa.fasi.contexto.Usuario;
 import com.miempresa.fasi.contexto.UsuarioActualService;
 import com.miempresa.fasi.ia.FasiAgentService;
+import com.miempresa.fasi.notificaciones.EmailService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -13,6 +14,7 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.*;
 
 @Slf4j
@@ -25,17 +27,20 @@ public class CalendarioController {
     private final FasiAgentService         agentService;
     private final PermisosCalendarioService permisosService;
     private final UsuarioActualService     usuarioActualService;
+    private final EmailService             emailService;
 
     public CalendarioController(EventoService eventoService,
                                 EventoIaService eventoIaService,
                                 FasiAgentService agentService,
                                 PermisosCalendarioService permisosService,
-                                UsuarioActualService usuarioActualService) {
+                                UsuarioActualService usuarioActualService,
+                                EmailService emailService) {
         this.eventoService        = eventoService;
         this.eventoIaService      = eventoIaService;
         this.agentService         = agentService;
         this.permisosService      = permisosService;
         this.usuarioActualService = usuarioActualService;
+        this.emailService         = emailService;
     }
 
     @GetMapping
@@ -158,6 +163,19 @@ public class CalendarioController {
     @ResponseBody
     public ResponseEntity<String> consultaIa(@RequestBody String pregunta) {
         return ResponseEntity.ok(eventoIaService.consultar(pregunta));
+    }
+
+    @GetMapping("/api/test-email")
+    @ResponseBody
+    public ResponseEntity<String> testEmail() {
+        Evento test = new Evento();
+        test.setTitulo("Prueba de Recordatorio FASI");
+        test.setFechaInicio(LocalDate.now());
+        test.setHoraInicio(LocalTime.now());
+        test.setLugar("Sanlúcar / Remoto");
+        test.setTipo(Evento.TipoEvento.PERSONAL);
+        boolean ok = emailService.enviarRecordatorioEvento(test);
+        return ResponseEntity.ok(ok ? "✅ Email enviado con éxito a tu Gmail" : "❌ Error al enviar el email, revisa logs");
     }
 
     @DeleteMapping("/api/eliminar/{id}")

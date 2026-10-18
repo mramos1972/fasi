@@ -121,5 +121,16 @@ public interface EventoRepository extends JpaRepository<Evento, UUID> {
         """, nativeQuery = true)
     List<Evento> buscarFullText(@Param("usuarioId") UUID usuarioId, @Param("query") String query);
 
+    @Query("""
+        SELECT e FROM Evento e 
+        JOIN FETCH e.usuario u 
+        WHERE e.recordatorioEnviado = false 
+          AND e.recordatorioMinutos IS NOT NULL 
+          AND e.recordatorioMinutos > 0 
+          AND e.fechaInicio >= :hoy 
+          AND e.fechaInicio <= :manana
+    """)
+    List<Evento> findCandidatosRecordatorio(@Param("hoy") LocalDate hoy, @Param("manana") LocalDate manana);
+
     void deleteAllByUsuarioId(UUID usuarioId);
 }
