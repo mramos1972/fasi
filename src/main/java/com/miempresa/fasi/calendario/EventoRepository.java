@@ -14,7 +14,7 @@ import java.util.UUID;
 public interface EventoRepository extends JpaRepository<Evento, UUID> {
 
     @Query("""
-        SELECT e FROM Evento e
+        SELECT DISTINCT e FROM Evento e LEFT JOIN FETCH e.etiquetas
         WHERE e.usuario.id = :usuarioId
           AND e.fechaInicio <= :hasta
           AND (e.fechaFin IS NULL OR e.fechaFin >= :desde)
@@ -26,7 +26,7 @@ public interface EventoRepository extends JpaRepository<Evento, UUID> {
             @Param("hasta") LocalDate hasta);
 
     @Query("""
-        SELECT e FROM Evento e
+        SELECT DISTINCT e FROM Evento e LEFT JOIN FETCH e.etiquetas
         WHERE e.usuario.id = :usuarioId
           AND e.fechaInicio BETWEEN :desde AND :hasta
         ORDER BY e.fechaInicio ASC, e.horaInicio ASC
@@ -36,7 +36,14 @@ public interface EventoRepository extends JpaRepository<Evento, UUID> {
             @Param("desde") LocalDate desde,
             @Param("hasta") LocalDate hasta);
 
-    List<Evento> findByUsuarioIdAndTipoOrderByFechaInicioAsc(UUID usuarioId, Evento.TipoEvento tipo);
+    @Query("""
+        SELECT DISTINCT e FROM Evento e LEFT JOIN FETCH e.etiquetas
+        WHERE e.usuario.id = :usuarioId AND e.tipo = :tipo
+        ORDER BY e.fechaInicio ASC
+        """)
+    List<Evento> findByUsuarioIdAndTipoOrderByFechaInicioAsc(
+            @Param("usuarioId") UUID usuarioId,
+            @Param("tipo") Evento.TipoEvento tipo);
 
     @Query(value = """
         SELECT * FROM eventos
@@ -48,16 +55,16 @@ public interface EventoRepository extends JpaRepository<Evento, UUID> {
     List<Evento> buscarFullText(@Param("usuarioId") UUID usuarioId, @Param("query") String query);
 
     @Query("""
-        SELECT e FROM Evento e
+        SELECT DISTINCT e FROM Evento e LEFT JOIN FETCH e.etiquetas
         WHERE e.usuario.id = :usuarioId AND e.fechaInicio = :fecha
         ORDER BY e.horaInicio ASC
         """)
     List<Evento> findByUsuarioIdAndFecha(@Param("usuarioId") UUID usuarioId, @Param("fecha") LocalDate fecha);
 
     @Query(value = """
-        SELECT * FROM eventos 
-        WHERE usuario_id = :usuarioId 
-          AND (datos_extra @> '{"pendienteHora": true}'::jsonb OR datos_extra @> '{"pendienteLugar": true}'::jsonb) 
+        SELECT * FROM eventos
+        WHERE usuario_id = :usuarioId
+          AND (datos_extra @> '{"pendienteHora": true}'::jsonb OR datos_extra @> '{"pendienteLugar": true}'::jsonb)
         ORDER BY fecha_inicio ASC
         """, nativeQuery = true)
     List<Evento> findEventosPendientesDatos(@Param("usuarioId") UUID usuarioId);
