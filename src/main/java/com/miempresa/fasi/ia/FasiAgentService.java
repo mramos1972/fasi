@@ -2,363 +2,651 @@ package com.miempresa.fasi.ia;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.miempresa.fasi.calendario.Evento;
 import com.miempresa.fasi.calendario.EventoRepository;
 import com.miempresa.fasi.calendario.EventoService;
+import com.miempresa.fasi.contexto.Usuario;
 import com.miempresa.fasi.contexto.UsuarioActualService;
+import com.miempresa.fasi.ia.LlmApiClient.FunctionCall;
+import com.miempresa.fasi.ia.LlmApiClient.LlmTurn;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.text.Normalizer;
+import java.time.DayOfWeek;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
+import java.time.format.TextStyle;
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Agente de calendario basado en function calling.
+ *
+ * El modelo NO adivina qué evento tocar: primero llama a buscar_eventos, recibe los
+ * IDs reales y después actúa sobre ellos. Borrar/modificar/anotar sin ID es imposible.
+ *
+ * Mantiene una memoria de conversación por usuario (últimos turnos, 30 min) para
+ * permitir seguimientos del tipo "¿y a qué hora?" -> "ponlo a las 7".
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class FasiAgentService {
 
-    private final LlmApiClient llmClient;
-    private final ObjectMapper objectMapper;
+    private final LlmApiClient llm;
+    private final ObjectMapper mapper;
     private final EventoService eventoService;
     private final EventoRepository eventoRepo;
     private final UsuarioActualService usuarioActualService;
 
+    private static final int      MAX_ITERACIONES = 8;
+    private static final int      MAX_HISTORIAL   = 24;   // entradas de "contents" que se conservan
+    private static final Duration TTL_MEMORIA     = Duration.ofMinutes(30);
+    private static final int      MAX_RESULTADOS  = 40;
+
     public record AgentResponse(String mensaje, boolean huboMutacion) {}
 
-    private static final String SYSTEM_PROMPT = """
-        Eres FASI, asistente operativo de calendario.
-        Hoy es %s (%s). Año: %d.
-        
-        Devuelve EXCLUSIVAMENTE un objeto JSON válido con la estructura correspondiente:
+    private record ToolResult(ObjectNode json, boolean mutacion) {}
 
-        1. Para AÑADIR NOTAS U OBSERVACIONES (no toques el título jamás):
-        {"accion":"OBSERVACION","buscarTexto":"piscina miguel","todos":true,"nota":"llevar toalla y gorro","mensaje":"He añadido la observación a las sesiones de piscina."}
+    private static final class Memoria {
+        final ArrayNode contents;
+        Instant ultimoUso = Instant.now();
+        Memoria(ArrayNode contents) { this.contents = contents; }
+    }
 
-        2. Para COPIAR O REPLICAR EVENTOS DE UN MES A OTRO:
-        {"accion":"COPIAR_SERIE","buscarTexto":"piscina miguel","mesOrigen":11,"añoOrigen":2026,"mesDestino":2,"añoDestino":2027,"mensaje":"He copiado las clases de piscina a febrero."}
+    private final Map<UUID, Memoria> memorias = new ConcurrentHashMap<>();
 
-        3. Para COPIAR UN EVENTO SUELTO A OTRO DÍA:
-        {"accion":"COPIAR","buscarTexto":"médico","nuevaFecha":"2026-11-15","nuevaHora":null,"mensaje":"He copiado el evento."}
+    private static final Set<String> STOPWORDS = Set.of(
+        "de", "del", "la", "el", "los", "las", "en", "a", "al", "y", "o", "con", "para", "por",
+        "que", "un", "una", "unos", "unas", "mi", "mis", "su", "sus", "evento", "eventos", "cita");
 
-        4. Para MODIFICAR (mover de día u hora):
-        {"accion":"MODIFICAR","buscarTexto":"cumpleaños","nuevaFecha":"2026-11-20","nuevaHora":"18:00","mensaje":"He movido el cumpleaños."}
+    private static final Map<String, DayOfWeek> DIAS = Map.ofEntries(
+        Map.entry("LUNES", DayOfWeek.MONDAY), Map.entry("MARTES", DayOfWeek.TUESDAY),
+        Map.entry("MIERCOLES", DayOfWeek.WEDNESDAY), Map.entry("JUEVES", DayOfWeek.THURSDAY),
+        Map.entry("VIERNES", DayOfWeek.FRIDAY), Map.entry("SABADO", DayOfWeek.SATURDAY),
+        Map.entry("DOMINGO", DayOfWeek.SUNDAY));
 
-        5. Para CREAR EVENTOS RECURRENTES:
-        {"accion":"RECURRENTE","titulo":"Piscina Miguel","fechaInicio":"2026-11-03","horaInicio":"17:00","frecuencia":"SEMANAL","repeticiones":4,"mensaje":"He agendado las clases."}
-
-        6. Para BORRAR EVENTOS:
-        {"accion":"BORRAR","buscarTexto":"piscina","fecha":null,"borrarTodos":false,"mensaje":"He eliminado el evento."}
-
-        7. Para CREAR UN EVENTO NORMAL:
-        {"accion":"CREAR","titulo":"Cena","fechaInicio":"2026-11-05","horaInicio":"21:00","tipo":"SOCIAL","mensaje":"He añadido la cena."}
-
-        8. CONSULTA:
-        {"accion":"CONSULTA","mensaje":"Respuesta al usuario."}
-        """;
+    // ══════════════════════════════════════════════════════════
+    //  API PÚBLICA
+    // ══════════════════════════════════════════════════════════
 
     public AgentResponse ejecutarOrden(String texto) {
-        LocalDate hoy = LocalDate.now();
-        String prompt = SYSTEM_PROMPT.formatted(hoy, hoy.getDayOfWeek(), hoy.getYear());
-
-        try {
-            log.info("🤖 Interpretando orden: '{}'", texto);
-            String rawJson = llmClient.chatJson(prompt, texto);
-            log.info("📥 Respuesta cruda de la IA: {}", rawJson);
-
-            JsonNode root = extraerJsonValido(rawJson);
-
-            // Si la IA devolvió {} o no incluyó "accion", hacemos reintento en modo texto libre y extraemos el JSON
-            if (root == null || !root.hasNonNull("accion") || root.path("accion").asText().isBlank()) {
-                log.warn("⚠️ La IA devolvió JSON vacío {}. Reintentando con prompt directo...", rawJson);
-                String fallbackRaw = llmClient.chat(prompt + "\n\nResponde ÚNICAMENTE con el objeto JSON entre llaves {}.", texto);
-                root = extraerJsonValido(fallbackRaw);
-            }
-
-            if (root == null || !root.hasNonNull("accion")) {
-                return new AgentResponse("No logré interpretar la orden. Por favor intenta especificarlo de otra forma.", false);
-            }
-
-            String accion = root.path("accion").asText("CONSULTA").toUpperCase();
-            String mensaje = root.path("mensaje").asText("Operación completada.");
-            UUID usuarioId = usuarioActualService.obtenerUsuarioActual().getId();
-
-            switch (accion) {
-                case "OBSERVACION", "NOTA" -> {
-                    String textoBuscar = root.path("buscarTexto").asText("");
-                    boolean todos = root.path("todos").asBoolean(true);
-                    String nota = root.path("nota").asText("");
-
-                    List<Evento> candidatos = buscarEventosPorTexto(usuarioId, textoBuscar);
-                    if (candidatos.isEmpty()) {
-                        return new AgentResponse("No encontré eventos de '" + textoBuscar + "' para añadir la observación.", false);
-                    }
-
-                    List<Evento> destino = todos ? candidatos : List.of(candidatos.get(0));
-                    String timestamp = LocalDate.now().format(DateTimeFormatter.ofPattern("dd/MM"));
-                    String apunte = "[" + timestamp + "] " + nota;
-
-                    for (Evento ev : destino) {
-                        String previa = ev.getDescripcion() != null ? ev.getDescripcion().trim() : "";
-                        ev.setDescripcion(previa.isBlank() ? apunte : previa + "\n" + apunte);
-                        eventoService.update(ev.getId(), ev);
-                        log.info("📝 Observación guardada en '{}' ({})", ev.getTitulo(), ev.getFechaInicio());
-                    }
-
-                    String confirmacion = destino.size() > 1
-                            ? "He añadido la observación en los " + destino.size() + " eventos de '" + textoBuscar + "'."
-                            : "He añadido la observación al evento '" + destino.get(0).getTitulo() + "'.";
-                    return new AgentResponse(mensaje.isBlank() ? confirmacion : mensaje, true);
-                }
-
-                case "COPIAR_SERIE" -> {
-                    String textoBuscar = root.path("buscarTexto").asText("");
-                    int mesOrigen = root.path("mesOrigen").asInt(hoy.getMonthValue());
-                    int anioOrigen = root.path("añoOrigen").asInt(hoy.getYear());
-                    int mesDestino = root.path("mesDestino").asInt(mesOrigen);
-                    int anioDestino = root.path("añoDestino").asInt(anioOrigen);
-
-                    YearMonth ymOrigen = YearMonth.of(anioOrigen, mesOrigen);
-                    List<Evento> eventosMes = eventoRepo.findByRango(usuarioId, ymOrigen.atDay(1), ymOrigen.atEndOfMonth());
-
-                    List<Evento> aCopiar = new ArrayList<>();
-                    for (Evento e : eventosMes) {
-                        if (e.getTitulo().toLowerCase().contains(textoBuscar.toLowerCase())) {
-                            aCopiar.add(e);
-                        }
-                    }
-
-                    if (aCopiar.isEmpty()) {
-                        return new AgentResponse("No encontré eventos de '" + textoBuscar + "' en el mes indicado.", false);
-                    }
-
-                    YearMonth ymDestino = YearMonth.of(anioDestino, mesDestino);
-                    int creados = 0;
-
-                    for (Evento orig : aCopiar) {
-                        int diaSemanaObjetivo = orig.getFechaInicio().getDayOfWeek().getValue();
-                        int ocurrenciaOrigen = (orig.getFechaInicio().getDayOfMonth() - 1) / 7;
-
-                        LocalDate fechaDestino = null;
-                        for (int dia = 1; dia <= ymDestino.lengthOfMonth(); dia++) {
-                            LocalDate candidata = ymDestino.atDay(dia);
-                            if (candidata.getDayOfWeek().getValue() == diaSemanaObjetivo) {
-                                int ocurrenciaCandidata = (dia - 1) / 7;
-                                if (ocurrenciaOrigen == ocurrenciaCandidata) {
-                                    fechaDestino = candidata;
-                                    break;
-                                }
-                            }
-                        }
-
-                        if (fechaDestino == null) {
-                            for (int dia = ymDestino.lengthOfMonth(); dia >= 1; dia--) {
-                                LocalDate candidata = ymDestino.atDay(dia);
-                                if (candidata.getDayOfWeek().getValue() == diaSemanaObjetivo) {
-                                    fechaDestino = candidata;
-                                    break;
-                                }
-                            }
-                        }
-
-                        if (fechaDestino != null) {
-                            Evento clon = new Evento();
-                            clon.setTitulo(orig.getTitulo());
-                            clon.setFechaInicio(fechaDestino);
-                            clon.setHoraInicio(orig.getHoraInicio());
-                            clon.setTodoDia(orig.isTodoDia());
-                            clon.setTipo(orig.getTipo());
-                            clon.setLugar(orig.getLugar());
-                            clon.setPersonasRelacionadas(orig.getPersonasRelacionadas());
-                            clon.setDescripcion(orig.getDescripcion());
-                            eventoService.save(clon);
-                            creados++;
-                        }
-                    }
-
-                    log.info("📋 Copiados {} eventos de '{}' al mes {}/{}", creados, textoBuscar, mesDestino, anioDestino);
-                    return new AgentResponse("He copiado " + creados + " eventos de " + textoBuscar + " a febrero.", true);
-                }
-
-                case "COPIAR" -> {
-                    String textoBuscar = root.path("buscarTexto").asText("");
-                    List<Evento> candidatos = buscarEventosPorTexto(usuarioId, textoBuscar);
-                    if (candidatos.isEmpty()) {
-                        return new AgentResponse("No encontré el evento original para copiar.", false);
-                    }
-
-                    Evento orig = candidatos.get(0);
-                    Evento clon = new Evento();
-                    clon.setTitulo(orig.getTitulo());
-                    clon.setTipo(orig.getTipo());
-                    clon.setLugar(orig.getLugar());
-                    clon.setPersonasRelacionadas(orig.getPersonasRelacionadas());
-                    clon.setDescripcion(orig.getDescripcion());
-                    clon.setTodoDia(orig.isTodoDia());
-
-                    String nuevaF = root.path("nuevaFecha").asText(null);
-                    clon.setFechaInicio(nuevaF != null && !nuevaF.isBlank() ? LocalDate.parse(nuevaF) : orig.getFechaInicio());
-
-                    String nuevaH = root.path("nuevaHora").asText(null);
-                    if (nuevaH != null && !nuevaH.isBlank()) {
-                        clon.setHoraInicio(LocalTime.parse(nuevaH));
-                        clon.setTodoDia(false);
-                    } else {
-                        clon.setHoraInicio(orig.getHoraInicio());
-                    }
-
-                    eventoService.save(clon);
-                    return new AgentResponse(mensaje, true);
-                }
-
-                case "MODIFICAR" -> {
-                    String textoBuscar = root.path("buscarTexto").asText("");
-                    List<Evento> candidatos = buscarEventosPorTexto(usuarioId, textoBuscar);
-                    if (candidatos.isEmpty()) {
-                        return new AgentResponse("No encontré ningún evento que coincida para modificar.", false);
-                    }
-
-                    Evento ev = candidatos.get(0);
-                    String nuevaF = root.path("nuevaFecha").asText(null);
-                    if (nuevaF != null && !nuevaF.isBlank()) {
-                        ev.setFechaInicio(LocalDate.parse(nuevaF));
-                    }
-                    String nuevaH = root.path("nuevaHora").asText(null);
-                    if (nuevaH != null && !nuevaH.isBlank()) {
-                        ev.setHoraInicio(LocalTime.parse(nuevaH));
-                        ev.setTodoDia(false);
-                    }
-
-                    eventoService.update(ev.getId(), ev);
-                    return new AgentResponse(mensaje, true);
-                }
-
-                case "RECURRENTE" -> {
-                    String titulo = root.path("titulo").asText("Evento recurrente");
-                    LocalDate fechaBase = LocalDate.parse(root.path("fechaInicio").asText(hoy.toString()));
-                    LocalTime hora = root.hasNonNull("horaInicio") && !root.path("horaInicio").asText().isBlank()
-                            ? LocalTime.parse(root.path("horaInicio").asText()) : null;
-
-                    String frec = root.path("frecuencia").asText("SEMANAL").toUpperCase();
-                    int reps = root.path("repeticiones").asInt(4);
-
-                    for (int i = 0; i < reps; i++) {
-                        LocalDate f = switch (frec) {
-                            case "DIARIA" -> fechaBase.plusDays(i);
-                            case "MENSUAL" -> fechaBase.plusMonths(i);
-                            default -> fechaBase.plusWeeks(i);
-                        };
-
-                        Evento e = new Evento();
-                        e.setTitulo(titulo);
-                        e.setFechaInicio(f);
-                        e.setHoraInicio(hora);
-                        e.setTodoDia(hora == null);
-                        e.setTipo(Evento.TipoEvento.OCIO);
-                        eventoService.save(e);
-                    }
-
-                    return new AgentResponse(mensaje, true);
-                }
-
-                case "BORRAR" -> {
-                    String palabrasClave = root.path("buscarTexto").asText("");
-                    boolean borrarTodos = root.path("borrarTodos").asBoolean(false);
-
-                    List<Evento> candidatos = buscarEventosPorTexto(usuarioId, palabrasClave);
-                    if (candidatos.isEmpty()) {
-                        return new AgentResponse("No encontré eventos que coincidan para borrar.", false);
-                    }
-
-                    List<Evento> aBorrar = borrarTodos ? candidatos : List.of(candidatos.get(0));
-                    for (Evento e : aBorrar) {
-                        eventoService.delete(e.getId());
-                    }
-
-                    return new AgentResponse(mensaje, true);
-                }
-
-                case "CREAR" -> {
-                    Evento e = new Evento();
-                    e.setTitulo(root.path("titulo").asText("Nuevo evento"));
-                    e.setFechaInicio(LocalDate.parse(root.path("fechaInicio").asText(hoy.toString())));
-                    if (root.hasNonNull("horaInicio") && !root.path("horaInicio").asText().isBlank()) {
-                        try { e.setHoraInicio(LocalTime.parse(root.path("horaInicio").asText())); } catch (Exception ignored) {}
-                    }
-                    e.setTodoDia(e.getHoraInicio() == null);
-                    eventoService.save(e);
-                    return new AgentResponse(mensaje, true);
-                }
-
-                case "CONSULTA" -> {
-                    return new AgentResponse(mensaje, false);
-                }
-            }
-
-            return new AgentResponse(mensaje, false);
-
-        } catch (Exception e) {
-            log.error("Error al procesar orden agéntica", e);
-            return new AgentResponse("Error procesando la orden: " + e.getMessage(), false);
-        }
-    }
-
-    private List<Evento> buscarEventosPorTexto(UUID usuarioId, String texto) {
         if (texto == null || texto.isBlank()) {
-            return eventoRepo.findAllOptimizado(usuarioId);
+            return new AgentResponse("Dime qué quieres hacer con el calendario.", false);
         }
 
-        List<Evento> res = eventoRepo.buscarFullText(usuarioId, texto);
-        if (!res.isEmpty()) return res;
+        Usuario usuario = usuarioActualService.obtenerUsuarioActual();
+        Memoria mem = memoria(usuario.getId());
 
-        List<Evento> todos = eventoRepo.findAllOptimizado(usuarioId);
-        List<Evento> filtrados = new ArrayList<>();
-        String[] tokens = texto.toLowerCase().split("\\s+");
+        synchronized (mem) {
+            mem.ultimoUso = Instant.now();
+            mem.contents.add(llm.userText(texto.trim()));
 
-        for (Evento e : todos) {
-            String cad = (e.getTitulo() + " " + (e.getLugar() != null ? e.getLugar() : "")).toLowerCase();
-            for (String t : tokens) {
-                if (!t.isBlank() && cad.contains(t)) {
-                    filtrados.add(e);
-                    break;
+            String sistema = construirSystemPrompt(usuario);
+            ArrayNode tools = declaracionesHerramientas();
+            boolean mutacion = false;
+
+            try {
+                for (int i = 0; i < MAX_ITERACIONES; i++) {
+                    LlmTurn turno = llm.generateWithTools(sistema, mem.contents, tools);
+                    mem.contents.add(turno.modelContent());
+
+                    if (!turno.hasCalls()) {
+                        recortar(mem);
+                        String msg = turno.text().isBlank() ? "Hecho." : turno.text();
+                        return new AgentResponse(msg, mutacion);
+                    }
+
+                    ArrayNode partes = mapper.createArrayNode();
+                    for (FunctionCall fc : turno.calls()) {
+                        log.info("🔧 Herramienta {} args={}", fc.name(), fc.args());
+                        ToolResult res = ejecutarHerramienta(fc, usuario.getId());
+                        if (res.mutacion()) mutacion = true;
+                        partes.add(llm.functionResponsePart(fc.name(), res.json()));
+                    }
+                    ObjectNode respuestaHerr = mapper.createObjectNode();
+                    respuestaHerr.put("role", "user");
+                    respuestaHerr.set("parts", partes);
+                    mem.contents.add(respuestaHerr);
                 }
+                recortar(mem);
+                return new AgentResponse("He realizado varias operaciones pero la orden es demasiado larga para cerrarla de una vez. Revisa el calendario y dime si falta algo.", mutacion);
+
+            } catch (LlmApiClient.LlmException e) {
+                log.error("❌ Agente: fallo de IA: {}", e.getMessage());
+                // Dejar la memoria consistente: el último elemento debe ser una respuesta del modelo
+                while (mem.contents.size() > 0 && !"model".equals(mem.contents.get(mem.contents.size() - 1).path("role").asText())) {
+                    mem.contents.remove(mem.contents.size() - 1);
+                }
+                return new AgentResponse("No he podido contactar con la IA (" + e.getMessage() + "). Inténtalo de nuevo en unos segundos.", mutacion);
+            } catch (Exception e) {
+                log.error("❌ Agente: error inesperado", e);
+                return new AgentResponse("Error procesando la orden: " + e.getMessage(), mutacion);
             }
         }
-
-        return filtrados.isEmpty() ? todos : filtrados;
     }
 
-    private JsonNode extraerJsonValido(String raw) {
-        if (raw == null || raw.isBlank()) return null;
+    /** Borra la memoria de conversación del usuario actual. */
+    public void olvidar() {
+        memorias.remove(usuarioActualService.obtenerUsuarioActual().getId());
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  MEMORIA
+    // ══════════════════════════════════════════════════════════
+
+    private Memoria memoria(UUID usuarioId) {
+        memorias.entrySet().removeIf(en -> Duration.between(en.getValue().ultimoUso, Instant.now()).compareTo(TTL_MEMORIA) > 0);
+        return memorias.computeIfAbsent(usuarioId, id -> new Memoria(mapper.createArrayNode()));
+    }
+
+    /** Mantiene el historial acotado y siempre empezando por un mensaje de texto del usuario. */
+    private void recortar(Memoria mem) {
+        ArrayNode c = mem.contents;
+        while (c.size() > MAX_HISTORIAL) c.remove(0);
+        while (c.size() > 0 && !esTextoUsuario(c.get(0))) c.remove(0);
+    }
+
+    private boolean esTextoUsuario(JsonNode content) {
+        return "user".equals(content.path("role").asText())
+            && content.path("parts").size() > 0
+            && content.path("parts").get(0).has("text");
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  PROMPT DE SISTEMA
+    // ══════════════════════════════════════════════════════════
+
+    private String construirSystemPrompt(Usuario usuario) {
+        LocalDate hoy = LocalDate.now();
+        String diaSemana = hoy.getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.forLanguageTag("es-ES"));
+
+        StringBuilder agenda = new StringBuilder();
+        List<Evento> proximos = eventoRepo.findByRango(usuario.getId(), hoy, hoy.plusDays(7));
+        int n = 0;
+        for (Evento e : proximos) {
+            if (n++ >= 15) { agenda.append("- …\n"); break; }
+            agenda.append("- ").append(e.getFechaInicio());
+            if (e.getHoraInicio() != null) agenda.append(" ").append(e.getHoraInicio());
+            agenda.append(" | ").append(e.getTitulo());
+            if (e.getLugar() != null) agenda.append(" (").append(e.getLugar()).append(")");
+            agenda.append("\n");
+        }
+        if (n == 0) agenda.append("- (sin eventos)\n");
+
+        return """
+            Eres FASI, el asistente de calendario de la familia. Hablas español, de forma natural, clara y breve.
+            Hoy es %s (%s). Usuario: %s.
+
+            REGLAS DE TRABAJO:
+            1. Para consultar, modificar, anotar, copiar o borrar eventos, PRIMERO localízalos con buscar_eventos y trabaja SIEMPRE con los ids que devuelve. Nunca inventes ids ni actúes sobre eventos que no hayas visto en una búsqueda.
+            2. Si la búsqueda devuelve varios candidatos y la orden se refiere a uno solo, elige el que encaje por fecha y título. Si sigue siendo ambiguo, pregunta al usuario en lugar de actuar.
+            3. Antes de borrar más de 3 eventos pide confirmación, salvo que el usuario lo haya dicho explícitamente ("todos", "toda la serie").
+            4. Las "observaciones", "notas" o "comentarios" se añaden con anadir_nota. No cambies el título para eso.
+            5. Fechas relativas ("el jueves", "la semana que viene", "el 22") se resuelven respecto a hoy. Si el usuario da día y mes sin año y esa fecha ya pasó, usa el año siguiente.
+            6. Para copiar o repetir eventos en otro mes: busca los originales y crea los nuevos con crear_evento conservando hora, lugar, tipo y, si procede, el mismo día de la semana y posición en el mes (p. ej. "segundo martes").
+            7. Si el usuario pide algo que se repite (todos los lunes, cada día, mensual) usa crear_eventos_recurrentes. Si no indica hasta cuándo, pregúntalo.
+            8. Tras usar herramientas, confirma exactamente qué has hecho (títulos y fechas). Si no has hecho nada, dilo. No inventes eventos ni resultados.
+            9. Si falta la hora de un evento nuevo, créalo igualmente (todo el día) y menciónalo.
+
+            Tipos de evento válidos: PERSONAL, SOCIAL, SALUD, TRABAJO, FAMILIA, VIAJE, VACACIONES, APRENDIZAJE, OCIO, GESTION, OTRO.
+            Días de la semana para recurrencias: LUNES, MARTES, MIERCOLES, JUEVES, VIERNES, SABADO, DOMINGO.
+
+            AGENDA DE LOS PRÓXIMOS 7 DÍAS (orientativa; para operar usa buscar_eventos):
+            %s
+            """.formatted(hoy, diaSemana,
+                          usuario.getNombre() != null ? usuario.getNombre() : usuario.getUsername(),
+                          agenda);
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  DECLARACIÓN DE HERRAMIENTAS (esquema que ve el modelo)
+    // ══════════════════════════════════════════════════════════
+
+    private ArrayNode declaracionesHerramientas() {
+        ArrayNode tools = mapper.createArrayNode();
+
+        tools.add(herramienta("buscar_eventos",
+            "Busca eventos del usuario. Devuelve id, título, fecha, hora, tipo, lugar, personas, etiquetas y notas. Úsala antes de modificar, anotar o borrar.",
+            props(
+                p("texto", "STRING", "Palabras clave a buscar en título, lugar, personas, notas y etiquetas (opcional)."),
+                p("fechaDesde", "STRING", "Fecha inicial YYYY-MM-DD (opcional)."),
+                p("fechaHasta", "STRING", "Fecha final YYYY-MM-DD inclusive (opcional)."),
+                p("tipo", "STRING", "Filtrar por tipo de evento (opcional).")
+            )));
+
+        tools.add(herramienta("crear_evento",
+            "Crea un evento nuevo.",
+            props(
+                p("titulo", "STRING", "Título breve y descriptivo, p. ej. 'Cumpleaños de Martín'."),
+                p("fechaInicio", "STRING", "Fecha YYYY-MM-DD."),
+                p("fechaFin", "STRING", "Fecha fin YYYY-MM-DD si dura varios días (opcional)."),
+                p("horaInicio", "STRING", "Hora HH:MM (opcional)."),
+                p("horaFin", "STRING", "Hora fin HH:MM (opcional)."),
+                p("tipo", "STRING", "Tipo de evento (opcional, por defecto se infiere)."),
+                p("lugar", "STRING", "Lugar (opcional)."),
+                p("personas", "STRING", "Personas relacionadas separadas por comas (opcional)."),
+                p("descripcion", "STRING", "Notas u observaciones (opcional)."),
+                arr("etiquetas", "Etiquetas libres en minúsculas (opcional).")
+            ), "titulo", "fechaInicio"));
+
+        tools.add(herramienta("crear_eventos_recurrentes",
+            "Crea una serie de eventos repetidos entre dos fechas.",
+            props(
+                p("titulo", "STRING", "Título del evento."),
+                p("fechaInicio", "STRING", "Primera fecha posible YYYY-MM-DD."),
+                p("fechaFin", "STRING", "Última fecha YYYY-MM-DD (obligatoria)."),
+                p("frecuencia", "STRING", "DIARIA, SEMANAL o MENSUAL."),
+                arr("diasSemana", "Para SEMANAL: días en mayúsculas sin tilde, p. ej. [\"LUNES\",\"MIERCOLES\"]."),
+                p("horaInicio", "STRING", "Hora HH:MM (opcional)."),
+                p("horaFin", "STRING", "Hora fin HH:MM (opcional)."),
+                p("tipo", "STRING", "Tipo de evento (opcional)."),
+                p("lugar", "STRING", "Lugar (opcional)."),
+                p("personas", "STRING", "Personas relacionadas (opcional)."),
+                p("descripcion", "STRING", "Notas (opcional).")
+            ), "titulo", "fechaInicio", "fechaFin", "frecuencia"));
+
+        tools.add(herramienta("actualizar_evento",
+            "Modifica campos de un evento existente (mover de día u hora, cambiar título, lugar, etc.). Solo se cambian los campos indicados.",
+            props(
+                p("id", "STRING", "Id del evento obtenido con buscar_eventos."),
+                p("titulo", "STRING", "Nuevo título (opcional)."),
+                p("fechaInicio", "STRING", "Nueva fecha YYYY-MM-DD (opcional)."),
+                p("fechaFin", "STRING", "Nueva fecha fin YYYY-MM-DD (opcional)."),
+                p("horaInicio", "STRING", "Nueva hora HH:MM (opcional)."),
+                p("horaFin", "STRING", "Nueva hora fin HH:MM (opcional)."),
+                p("tipo", "STRING", "Nuevo tipo (opcional)."),
+                p("lugar", "STRING", "Nuevo lugar (opcional)."),
+                p("personas", "STRING", "Nuevas personas (opcional)."),
+                p("descripcion", "STRING", "Sustituye las notas completas (opcional; para añadir usa anadir_nota)."),
+                arr("etiquetas", "Sustituye las etiquetas (opcional).")
+            ), "id"));
+
+        tools.add(herramienta("anadir_nota",
+            "Añade una observación o nota a uno o varios eventos sin tocar el resto de campos.",
+            props(
+                arr("ids", "Ids de los eventos."),
+                p("nota", "STRING", "Texto de la nota.")
+            ), "ids", "nota"));
+
+        tools.add(herramienta("borrar_eventos",
+            "Elimina los eventos indicados por id.",
+            props(arr("ids", "Ids de los eventos a borrar.")),
+            "ids"));
+
+        return tools;
+    }
+
+    private ObjectNode herramienta(String nombre, String descripcion, ObjectNode properties, String... required) {
+        ObjectNode t = mapper.createObjectNode();
+        t.put("name", nombre);
+        t.put("description", descripcion);
+        ObjectNode params = t.putObject("parameters");
+        params.put("type", "OBJECT");
+        params.set("properties", properties);
+        if (required.length > 0) {
+            ArrayNode req = params.putArray("required");
+            for (String r : required) req.add(r);
+        }
+        return t;
+    }
+
+    private ObjectNode props(ObjectNode... campos) {
+        ObjectNode o = mapper.createObjectNode();
+        for (ObjectNode c : campos) o.set(c.get("_nombre").asText(), (ObjectNode) c.without("_nombre"));
+        return o;
+    }
+
+    private ObjectNode p(String nombre, String tipo, String desc) {
+        ObjectNode o = mapper.createObjectNode();
+        o.put("_nombre", nombre);
+        o.put("type", tipo);
+        o.put("description", desc);
+        return o;
+    }
+
+    private ObjectNode arr(String nombre, String desc) {
+        ObjectNode o = p(nombre, "ARRAY", desc);
+        o.putObject("items").put("type", "STRING");
+        return o;
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  EJECUCIÓN DE HERRAMIENTAS
+    // ══════════════════════════════════════════════════════════
+
+    private ToolResult ejecutarHerramienta(FunctionCall fc, UUID usuarioId) {
+        JsonNode a = fc.args() == null ? mapper.createObjectNode() : fc.args();
         try {
-            String s = raw.trim();
-            if (s.startsWith("```")) {
-                int firstLine = s.indexOf('\n');
-                int lastBacktick = s.lastIndexOf("```");
-                if (firstLine != -1 && lastBacktick > firstLine) {
-                    s = s.substring(firstLine + 1, lastBacktick).trim();
+            return switch (fc.name()) {
+                case "buscar_eventos"             -> new ToolResult(buscarEventos(a, usuarioId), false);
+                case "crear_evento"               -> new ToolResult(crearEvento(a), true);
+                case "crear_eventos_recurrentes"  -> new ToolResult(crearRecurrentes(a), true);
+                case "actualizar_evento"          -> new ToolResult(actualizarEvento(a), true);
+                case "anadir_nota"                -> new ToolResult(anadirNota(a), true);
+                case "borrar_eventos"             -> new ToolResult(borrarEventos(a), true);
+                default -> new ToolResult(error("Herramienta desconocida: " + fc.name()), false);
+            };
+        } catch (Exception e) {
+            log.warn("⚠️ Herramienta {} falló: {}", fc.name(), e.getMessage());
+            return new ToolResult(error(e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()), false);
+        }
+    }
+
+    // ── buscar_eventos ───────────────────────────────────────
+
+    private ObjectNode buscarEventos(JsonNode a, UUID usuarioId) {
+        LocalDate desde = fecha(a, "fechaDesde");
+        LocalDate hasta = fecha(a, "fechaHasta");
+        String texto    = str(a, "texto");
+        String tipoStr  = str(a, "tipo");
+
+        List<Evento> base;
+        if (desde != null || hasta != null) {
+            LocalDate d = desde != null ? desde : hasta.minusYears(1);
+            LocalDate h = hasta != null ? hasta : desde.plusYears(1);
+            base = eventoRepo.findByRango(usuarioId, d, h);
+        } else {
+            base = eventoRepo.findAllOptimizado(usuarioId);
+        }
+
+        if (tipoStr != null) {
+            Evento.TipoEvento tipo = Evento.TipoEvento.fromValue(tipoStr);
+            base = base.stream().filter(e -> e.getTipo() == tipo).toList();
+        }
+
+        List<Evento> filtrados = base;
+        if (texto != null) {
+            List<String> tokens = Arrays.stream(norm(texto).split("[^a-z0-9]+"))
+                    .filter(t -> t.length() >= 3 && !STOPWORDS.contains(t))
+                    .toList();
+            if (!tokens.isEmpty()) {
+                List<Evento> todos = base.stream().filter(e -> tokens.stream().allMatch(t -> textoEvento(e).contains(t))).toList();
+                if (todos.isEmpty()) {
+                    todos = base.stream().filter(e -> tokens.stream().anyMatch(t -> textoEvento(e).contains(t))).toList();
+                }
+                filtrados = todos;
+            }
+        }
+
+        ObjectNode out = mapper.createObjectNode();
+        out.put("total", filtrados.size());
+        ArrayNode arr = out.putArray("eventos");
+        filtrados.stream().limit(MAX_RESULTADOS).forEach(e -> arr.add(aJson(e)));
+        if (filtrados.size() > MAX_RESULTADOS) out.put("aviso", "Se muestran solo los primeros " + MAX_RESULTADOS + "; afina la búsqueda.");
+        if (filtrados.isEmpty()) out.put("aviso", "No hay eventos que coincidan. Prueba con menos palabras o un rango de fechas.");
+        return out;
+    }
+
+    private String textoEvento(Evento e) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(e.getTitulo()).append(' ');
+        if (e.getLugar() != null) sb.append(e.getLugar()).append(' ');
+        if (e.getPersonasRelacionadas() != null) sb.append(e.getPersonasRelacionadas()).append(' ');
+        if (e.getDescripcion() != null) sb.append(e.getDescripcion()).append(' ');
+        if (e.getEtiquetas() != null) e.getEtiquetas().forEach(t -> sb.append(t).append(' '));
+        return norm(sb.toString());
+    }
+
+    // ── crear_evento ─────────────────────────────────────────
+
+    private ObjectNode crearEvento(JsonNode a) {
+        String titulo = str(a, "titulo");
+        LocalDate fi  = fecha(a, "fechaInicio");
+        if (titulo == null || fi == null) return error("titulo y fechaInicio son obligatorios (fecha en formato YYYY-MM-DD).");
+
+        Evento e = new Evento();
+        rellenar(e, a, true);
+        e.setTitulo(titulo);
+        e.setFechaInicio(fi);
+        if (a.hasNonNull("descripcion")) e.setDescripcion(str(a, "descripcion"));
+        e.setTodoDia(e.getHoraInicio() == null);
+        Evento g = eventoService.save(e);
+
+        ObjectNode out = mapper.createObjectNode();
+        out.put("ok", true);
+        out.set("evento", aJson(g));
+        return out;
+    }
+
+    // ── crear_eventos_recurrentes ────────────────────────────
+
+    private ObjectNode crearRecurrentes(JsonNode a) {
+        String titulo = str(a, "titulo");
+        LocalDate fi = fecha(a, "fechaInicio");
+        LocalDate ff = fecha(a, "fechaFin");
+        String frec  = Optional.ofNullable(str(a, "frecuencia")).orElse("SEMANAL").toUpperCase();
+        if (titulo == null || fi == null || ff == null) return error("titulo, fechaInicio y fechaFin son obligatorios.");
+        if (ff.isBefore(fi)) return error("fechaFin no puede ser anterior a fechaInicio.");
+
+        Set<DayOfWeek> dias = new HashSet<>();
+        if (a.has("diasSemana") && a.get("diasSemana").isArray()) {
+            for (JsonNode d : a.get("diasSemana")) {
+                DayOfWeek dow = DIAS.get(norm(d.asText()).toUpperCase());
+                if (dow != null) dias.add(dow);
+            }
+        }
+
+        List<LocalDate> fechas = new ArrayList<>();
+        switch (frec) {
+            case "DIARIA" -> { for (LocalDate c = fi; !c.isAfter(ff) && fechas.size() < 120; c = c.plusDays(1)) fechas.add(c); }
+            case "MENSUAL" -> { for (LocalDate c = fi; !c.isAfter(ff) && fechas.size() < 60; c = c.plusMonths(1)) fechas.add(c); }
+            default -> {
+                if (dias.isEmpty()) dias.add(fi.getDayOfWeek());
+                for (LocalDate c = fi; !c.isAfter(ff) && fechas.size() < 120; c = c.plusDays(1)) {
+                    if (dias.contains(c.getDayOfWeek())) fechas.add(c);
                 }
             }
-
-            // Si aún no empieza con llave {, extraer el contenido entre la primera { y la última }
-            int firstBrace = s.indexOf('{');
-            int lastBrace = s.lastIndexOf('}');
-            if (firstBrace != -1 && lastBrace > firstBrace) {
-                s = s.substring(firstBrace, lastBrace + 1);
-            }
-
-            JsonNode node = objectMapper.readTree(s);
-            if (node.isObject() && node.size() > 0) {
-                return node;
-            }
-        } catch (Exception e) {
-            log.warn("No se pudo parsear como JSON: {}", raw);
         }
+        if (fechas.isEmpty()) return error("No se genera ninguna fecha con esos parámetros.");
+
+        String serieId = UUID.randomUUID().toString();
+        List<UUID> ids = new ArrayList<>();
+        for (LocalDate f : fechas) {
+            Evento e = new Evento();
+            rellenar(e, a, true);
+            e.setTitulo(titulo);
+            e.setFechaInicio(f);
+            e.setFechaFin(null);
+            if (a.hasNonNull("descripcion")) e.setDescripcion(str(a, "descripcion"));
+            e.setTodoDia(e.getHoraInicio() == null);
+            Map<String, Object> extra = new HashMap<>();
+            extra.put("recurrente", true);
+            extra.put("patron", frec);
+            extra.put("serieId", serieId);
+            e.setDatosExtra(extra);
+            ids.add(eventoService.save(e).getId());
+        }
+
+        ObjectNode out = mapper.createObjectNode();
+        out.put("ok", true);
+        out.put("creados", ids.size());
+        out.put("primeraFecha", fechas.get(0).toString());
+        out.put("ultimaFecha", fechas.get(fechas.size() - 1).toString());
+        out.put("serieId", serieId);
+        return out;
+    }
+
+    // ── actualizar_evento ────────────────────────────────────
+
+    private ObjectNode actualizarEvento(JsonNode a) {
+        UUID id = uuid(str(a, "id"));
+        if (id == null) return error("id inválido.");
+        Evento e = eventoService.findById(id);
+
+        if (a.hasNonNull("titulo"))      e.setTitulo(str(a, "titulo"));
+        if (a.hasNonNull("fechaInicio")) { LocalDate f = fecha(a, "fechaInicio"); if (f == null) return error("fechaInicio inválida"); e.setFechaInicio(f); }
+        if (a.hasNonNull("fechaFin"))    e.setFechaFin(fecha(a, "fechaFin"));
+        if (a.hasNonNull("horaInicio"))  { e.setHoraInicio(hora(a, "horaInicio")); e.setTodoDia(e.getHoraInicio() == null); }
+        if (a.hasNonNull("horaFin"))     e.setHoraFin(hora(a, "horaFin"));
+        if (a.hasNonNull("tipo"))        e.setTipo(Evento.TipoEvento.fromValue(str(a, "tipo")));
+        if (a.hasNonNull("lugar"))       e.setLugar(str(a, "lugar"));
+        if (a.hasNonNull("personas"))    e.setPersonasRelacionadas(str(a, "personas"));
+        if (a.hasNonNull("descripcion")) e.setDescripcion(str(a, "descripcion"));
+        if (a.has("etiquetas") && a.get("etiquetas").isArray()) e.setEtiquetas(etiquetas(a.get("etiquetas")));
+
+        Evento g = eventoService.update(id, e);
+        ObjectNode out = mapper.createObjectNode();
+        out.put("ok", true);
+        out.set("evento", aJson(g));
+        return out;
+    }
+
+    // ── anadir_nota ──────────────────────────────────────────
+
+    private ObjectNode anadirNota(JsonNode a) {
+        String nota = str(a, "nota");
+        if (nota == null) return error("nota vacía.");
+        List<UUID> ids = uuids(a.get("ids"));
+        if (ids.isEmpty()) return error("ids vacíos: busca primero los eventos con buscar_eventos.");
+
+        String sello = "[" + LocalDate.now().format(DateTimeFormatter.ofPattern("dd/MM")) + "] " + nota.trim();
+        ArrayNode tocados = mapper.createArrayNode();
+        for (UUID id : ids) {
+            Evento e = eventoService.findById(id);
+            String previa = e.getDescripcion() != null ? e.getDescripcion().trim() : "";
+            e.setDescripcion(previa.isBlank() ? sello : previa + "\n" + sello);
+            Evento g = eventoService.update(id, e);
+            tocados.add(aJson(g));
+        }
+        ObjectNode out = mapper.createObjectNode();
+        out.put("ok", true);
+        out.put("anotados", tocados.size());
+        out.set("eventos", tocados);
+        return out;
+    }
+
+    // ── borrar_eventos ───────────────────────────────────────
+
+    private ObjectNode borrarEventos(JsonNode a) {
+        List<UUID> ids = uuids(a.get("ids"));
+        if (ids.isEmpty()) return error("ids vacíos: busca primero los eventos con buscar_eventos.");
+        ArrayNode borrados = mapper.createArrayNode();
+        for (UUID id : ids) {
+            Evento e = eventoService.findById(id);
+            borrados.add(e.getTitulo() + " (" + e.getFechaInicio() + ")");
+            eventoService.delete(id);
+        }
+        ObjectNode out = mapper.createObjectNode();
+        out.put("ok", true);
+        out.put("borrados", borrados.size());
+        out.set("detalle", borrados);
+        return out;
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  UTILIDADES
+    // ══════════════════════════════════════════════════════════
+
+    private void rellenar(Evento e, JsonNode a, boolean inferirTipo) {
+        if (a.hasNonNull("fechaFin"))   e.setFechaFin(fecha(a, "fechaFin"));
+        if (a.hasNonNull("horaInicio")) e.setHoraInicio(hora(a, "horaInicio"));
+        if (a.hasNonNull("horaFin"))    e.setHoraFin(hora(a, "horaFin"));
+        if (a.hasNonNull("lugar"))      e.setLugar(str(a, "lugar"));
+        if (a.hasNonNull("personas"))   e.setPersonasRelacionadas(str(a, "personas"));
+        if (a.has("etiquetas") && a.get("etiquetas").isArray()) e.setEtiquetas(etiquetas(a.get("etiquetas")));
+        if (a.hasNonNull("tipo"))       e.setTipo(Evento.TipoEvento.fromValue(str(a, "tipo")));
+        else if (inferirTipo)           e.setTipo(inferirTipo(str(a, "titulo")));
+    }
+
+    private Evento.TipoEvento inferirTipo(String titulo) {
+        String t = norm(titulo == null ? "" : titulo);
+        if (t.contains("cumple") || t.contains("cena") || t.contains("comida") || t.contains("fiesta")) return Evento.TipoEvento.SOCIAL;
+        if (t.contains("medic") || t.contains("dentista") || t.contains("fisio") || t.contains("hospital")) return Evento.TipoEvento.SALUD;
+        if (t.contains("reunion") || t.contains("claustro") || t.contains("trabajo")) return Evento.TipoEvento.TRABAJO;
+        if (t.contains("tutoria") || t.contains("colegio") || t.contains("piscina")) return Evento.TipoEvento.FAMILIA;
+        if (t.contains("viaje") || t.contains("vuelo")) return Evento.TipoEvento.VIAJE;
+        if (t.contains("vacacion")) return Evento.TipoEvento.VACACIONES;
+        if (t.contains("curso") || t.contains("clase")) return Evento.TipoEvento.APRENDIZAJE;
+        if (t.contains("cine") || t.contains("teatro") || t.contains("gimnasio")) return Evento.TipoEvento.OCIO;
+        return Evento.TipoEvento.PERSONAL;
+    }
+
+    private ObjectNode aJson(Evento e) {
+        ObjectNode o = mapper.createObjectNode();
+        o.put("id", e.getId().toString());
+        o.put("titulo", e.getTitulo());
+        o.put("fecha", e.getFechaInicio().toString());
+        if (e.getFechaFin() != null)  o.put("fechaFin", e.getFechaFin().toString());
+        if (e.getHoraInicio() != null) o.put("hora", e.getHoraInicio().toString());
+        if (e.getHoraFin() != null)   o.put("horaFin", e.getHoraFin().toString());
+        o.put("tipo", e.getTipo() != null ? e.getTipo().name() : "OTRO");
+        if (e.getLugar() != null) o.put("lugar", e.getLugar());
+        if (e.getPersonasRelacionadas() != null) o.put("personas", e.getPersonasRelacionadas());
+        if (e.getEtiquetas() != null && !e.getEtiquetas().isEmpty()) {
+            ArrayNode tags = o.putArray("etiquetas");
+            e.getEtiquetas().forEach(tags::add);
+        }
+        if (e.getDescripcion() != null && !e.getDescripcion().isBlank()) {
+            String d = e.getDescripcion();
+            o.put("notas", d.length() > 300 ? d.substring(0, 300) + "…" : d);
+        }
+        return o;
+    }
+
+    private ObjectNode error(String msg) {
+        ObjectNode o = mapper.createObjectNode();
+        o.put("ok", false);
+        o.put("error", msg);
+        return o;
+    }
+
+    private static String str(JsonNode a, String k) {
+        if (a == null || !a.hasNonNull(k)) return null;
+        String s = a.get(k).asText().trim();
+        return s.isEmpty() || s.equalsIgnoreCase("null") ? null : s;
+    }
+
+    private static LocalDate fecha(JsonNode a, String k) {
+        String s = str(a, k);
+        if (s == null) return null;
+        try { return LocalDate.parse(s.substring(0, Math.min(10, s.length()))); } catch (Exception e) { return null; }
+    }
+
+    private static LocalTime hora(JsonNode a, String k) {
+        String s = str(a, k);
+        if (s == null) return null;
+        try {
+            if (s.matches("\\d{1,2}")) return LocalTime.of(Integer.parseInt(s), 0);
+            if (s.matches("\\d{1,2}:\\d{2}(:\\d{2})?")) {
+                String[] p = s.split(":");
+                return LocalTime.of(Integer.parseInt(p[0]), Integer.parseInt(p[1]));
+            }
+        } catch (Exception ignored) {}
         return null;
+    }
+
+    private static UUID uuid(String s) {
+        try { return s == null ? null : UUID.fromString(s.trim()); } catch (Exception e) { return null; }
+    }
+
+    private static List<UUID> uuids(JsonNode arr) {
+        List<UUID> out = new ArrayList<>();
+        if (arr == null) return out;
+        if (arr.isArray()) { for (JsonNode n : arr) { UUID u = uuid(n.asText()); if (u != null) out.add(u); } }
+        else { UUID u = uuid(arr.asText()); if (u != null) out.add(u); }
+        return out;
+    }
+
+    private static Set<String> etiquetas(JsonNode arr) {
+        Set<String> s = new HashSet<>();
+        for (JsonNode n : arr) {
+            String t = norm(n.asText()).replaceAll("[^a-z0-9]", "");
+            if (!t.isEmpty()) s.add(t);
+        }
+        return s;
+    }
+
+    private static String norm(String s) {
+        if (s == null) return "";
+        String n = Normalizer.normalize(s, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
+        return n.toLowerCase(Locale.ROOT).trim();
     }
 }
