@@ -124,12 +124,13 @@
         </div>
         <div>
           <p class="text-sm font-semibold" sec:authentication="name">usuario</p>
-          <p class="text-xs text-gray-400">Administrador</p>
+          <p class="text-xs text-gray-400" sec:authorize="hasRole('ADMIN')">Administrador</p>
+          <p class="text-xs text-gray-400" sec:authorize="!hasRole('ADMIN')">Familiar</p>
         </div>
       </div>
     </div>
 
-    <div class="flex-1 py-3 space-y-1 px-3">
+    <div class="flex-1 py-3 space-y-1 px-3 overflow-y-auto">
 
       <a th:href="@{/calendario}"
          onclick="cerrarMenu()"
@@ -150,8 +151,15 @@
       <button onclick="cerrarMenu(); toggleDark();"
               class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-700 transition text-left">
         <span id="menu-dark-icon">🌙</span> <span>Modo noche/día</span>
-      <a th:href="@{/admin/usuarios}" sec:authorize="hasRole('ADMIN')" onclick="cerrarMenu()" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-700 transition text-purple-300">👥 <span>Gestión Usuarios</span></a>
       </button>
+
+      <!-- ENLACE DE GESTIÓN SOLO PARA ADMIN -->
+      <a th:href="@{/admin/usuarios}"
+         sec:authorize="hasRole('ADMIN')"
+         onclick="cerrarMenu()"
+         class="flex items-center gap-3 px-4 py-3 rounded-xl bg-purple-900/30 hover:bg-purple-900/50 text-purple-300 transition font-medium border border-purple-800/40">
+        👥 <span>Gestión Usuarios</span>
+      </a>
 
       <a th:href="@{/contexto}"
          onclick="cerrarMenu()"
@@ -254,10 +262,10 @@
                 class="absolute top-4 right-4 w-8 h-8 flex items-center justify-center
                        bg-gray-200 dark:bg-gray-600 hover:bg-red-100 dark:hover:bg-red-900
                        text-gray-600 dark:text-gray-200 rounded-full text-lg font-bold transition z-10">
-          &#x2715;
+          ✕
         </button>
         <h3 class="text-lg font-bold text-gray-800 dark:text-gray-100 mb-1">
-          &#127908; Nuevo evento
+          🎤 Nuevo evento
         </h3>
         <p class="text-xs text-gray-400">
           Habla o escribe: <em>"Cita médica el jueves para Rocío a las 10"</em>
@@ -278,12 +286,12 @@
             <button id="gp-btn-micro" onclick="gpToggleMicrofono()"
                     class="flex-1 flex items-center justify-center gap-2 bg-red-500
                            hover:bg-red-600 text-white py-2.5 rounded-xl font-semibold transition text-sm">
-              &#127908; <span id="gp-micro-label">Grabar</span>
+              🎤 <span id="gp-micro-label">Grabar</span>
             </button>
             <button onclick="gpInterpretarTexto()"
                     class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5
                            rounded-xl font-semibold transition text-sm">
-              &#10024; Interpretar
+              ✨ Interpretar
             </button>
           </div>
         </div>
@@ -331,13 +339,13 @@
             <button id="gp-btn-confirmar" onclick="gpConfirmarEvento()"
                     class="flex-1 bg-green-600 hover:bg-green-700 text-white py-2
                            rounded-lg font-semibold transition text-sm">
-              &#9989; Confirmar
+              ✅ Confirmar
             </button>
             <button onclick="gpEditarManual()"
                     class="flex-1 border border-gray-300 dark:border-gray-500
                            text-gray-700 dark:text-gray-200 py-2 rounded-lg text-sm
                            hover:bg-gray-50 dark:hover:bg-gray-600 transition">
-              &#9999;&#65039; Editar
+              ✏️ Editar
             </button>
           </div>
         </div>
@@ -357,7 +365,6 @@
   <!-- SCRIPTS GLOBALES                                        -->
   <!-- ═══════════════════════════════════════════════════════ -->
   <script>
-    // ── Dark mode ────────────────────────────────────────────
     const htmlEl = document.documentElement;
 
     function applyDark(isDark) {
@@ -378,7 +385,6 @@
                                : window.matchMedia('(prefers-color-scheme: dark)').matches);
     })();
 
-    // ── Menú hamburguesa ─────────────────────────────────────
     const menuOverlay   = document.getElementById('menu-overlay');
     const hamburgerMenu = document.getElementById('hamburger-menu');
 
@@ -397,7 +403,6 @@
       menuOverlay.classList.add('hidden');
     }
 
-    // ── Buscador IA ──────────────────────────────────────────
     function abrirBuscadorIA() {
       document.getElementById('modal-buscador').classList.remove('hidden');
       setTimeout(() => document.getElementById('ia-search-input').focus(), 100);
@@ -440,7 +445,6 @@
       }
     }
 
-    // ── Vaciar BD ────────────────────────────────────────────
     async function confirmarVaciarBD() {
       if (!confirm('⚠️ ¿Borrar TODOS los eventos?')) return;
       if (!confirm('¿Seguro? Esta acción no se puede deshacer.')) return;
@@ -454,16 +458,11 @@
       return d.innerHTML;
     }
 
-    // ── PWA Service Worker ───────────────────────────────────
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js')
         .then(() => console.log('✅ PWA lista'))
         .catch(e => console.warn('⚠️ PWA no disponible:', e));
     }
-
-    // ══════════════════════════════════════════════════════════
-    //  MODAL VOZ GLOBAL
-    // ══════════════════════════════════════════════════════════
 
     function normalizarFecha(val) {
       if (!val) return null;
@@ -726,7 +725,6 @@
       cerrarModalVozGlobal();
       window.location = '/calendario/nuevo?fecha=' + (gpEventoActual.fechaInicio || new Date().toISOString().split('T')[0]);
     }
-
   </script>
 
 </body>
