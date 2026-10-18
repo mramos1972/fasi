@@ -2,7 +2,6 @@ package com.miempresa.fasi.ia;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -17,71 +16,141 @@ import java.util.Map;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class LlmApiClient {
 
-    @Value("${fasi.ai.provider.url:https://generativelanguage.googleapis.com/v1beta/openai}")
+    @Value("${fasi.ai.provider.url:https://generativelanguage.googleapis.com/v1beta}")
     private String apiUrl;
 
     @Value("${fasi.ai.provider.api-key:}")
     private String apiKey;
 
-    @Value("${fasi.ai.provider.model:gemini-3.8-flash}")
+    @Value("${fasi.ai.provider.model:gemini-2.5-flash}")
     private String model;
 
     private final ObjectMapper objectMapper;
-    private final HttpClient httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(10))
-            .build();
+    private final HttpClient httpClient;
 
-    public String chat(String systemPrompt, String userMessage) {
-        return callApi(systemPrompt, userMessage, false);
+    public LlmApiClient(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+        this.httpClient = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1) // Evita cuelgues de negociación HTTP/2 con proxies
+                .connectTimeout(Duration.ofSeconds(10))
+                .build();
     }
 
-    public String chatJson(String systemPrompt, String userMessage) {
-        return callApi(systemPrompt, userMessage, true);
+    public String chatJson(String systemPrompt, String userPrompt) {
+        return ejecutarLlamada(systemPrompt, userPrompt, true);
     }
 
-    private String callApi(String systemPrompt, String userMessage, boolean jsonMode) {
-        if (apiKey == null || apiKey.isBlank() || apiKey.startsWith("PEGA_AQUI")) {
-            log.warn("⚠️ AI_API_KEY no configurada.");
-            return jsonMode ? "{}" : "⚠️ La API de Gemini no está configurada. Introduce tu API KEY.";
-        }
+    public String chat(String systemPrompt, String userPrompt) {
+        return ejecutarLlamada(systemPrompt, userPrompt, false);
+    }
 
+    private String ejecutarLlamada(String systemPrompt, String userPrompt, boolean forzarJson) {
         try {
-            Map<String, Object> requestBody = Map.of(
-                "model", model,
-                "messages", List.of(
-                    Map.of("role", "system", "content", systemPrompt),
-                    Map.of("role", "user", "content", userMessage)
-                ),
-                "temperature", 0.1,
-                "response_format", jsonMode ? Map.of("type", "json_object") : Map.of("type", "text")
-            );
+            // Verificamos si estamos apuntando a la API de Google Gemini
+            boolean esGoogle = apiUrl.contains("googleapis.com");
 
-            String payload = objectMapper.writeValueAsString(requestBody);
-
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(apiUrl + "/chat/completions"))
-                    .header("Content-Type", "application/json")
-                    .header("Authorization", "Bearer " + apiKey)
-                    .POST(HttpRequest.BodyPublishers.ofString(payload))
-                    .timeout(Duration.ofSeconds(30))
-                    .build();
-
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-
-            if (response.statusCode() != 200) {
-                log.error("❌ Error de API Gemini (HTTP {}): {}", response.statusCode(), response.body());
-                return jsonMode ? "{}" : "Error comunicando con Gemini (" + response.statusCode() + ").";
+            if (esGoogle) {
+                return llamarGeminiNativo(systemPrompt, userPrompt, forzarJson);
+            } else {
+                return llamarOpenAiCompatible(systemPrompt, userPrompt, forzarJson);
             }
 
-            JsonNode root = objectMapper.readTree(response.body());
-            return root.path("choices").get(0).path("message").path("content").asText();
-
         } catch (Exception e) {
-            log.error("❌ Fallo en la llamada a Gemini", e);
-            return jsonMode ? "{}" : "Error procesando con Gemini: " + e.getMessage();
+            log.error("❌ Fallo en la llamada a IA: {}", e.getMessage());
+            return "{}";
         }
+    }
+
+    private String llamarGeminiNativo(String systemPrompt, String userPrompt, boolean forzarJson) throws Exception {
+        // Normalizar nombre de modelo
+        String modeloLimpio = model.replace("models/", "").replace("openai/", "");
+        if (modeloLimpio.isBlank() || modeloLimpio.equals("gemini-1.5-flash")) {
+            modeloLimpio = "gemini-2.5-flash";
+        }
+
+        // Endpoint nativo REST v1beta: /v1beta/models/{model}:generateContent?key={apiKey}
+        String baseUrl = apiUrl.endsWith("/") ? apiUrl.substring(0, apiUrl.length() - 1) : apiUrl;
+        if (baseUrl.endsWith("/openai")) {
+            baseUrl = baseUrl.substring(0, baseUrl.length() - 7);
+        }
+        String endpoint = baseUrl + "/models/" + modeloLimpio + ":generateContent?key=" + apiKey;
+
+        Map<String, Object> contents = Map.of(
+                "role", "user",
+                "parts", List.of(Map.of("text", systemPrompt + "\n\nSolicitud del usuario:\n" + userPrompt))
+        );
+
+        Map<String, Object> generationConfig = forzarJson
+                ? Map.of("responseMimeType", "application/json", "temperature", 0.1)
+                : Map.of("temperature", 0.2);
+
+        Map<String, Object> payload = Map.of(
+                "contents", List.of(contents),
+                "generationConfig", generationConfig
+        );
+
+        String jsonPayload = objectMapper.writeValueAsString(payload);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(endpoint))
+                .header("Content-Type", "application/json")
+                .timeout(Duration.ofSeconds(12))
+                .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
+                .build();
+
+        long inicio = System.currentTimeMillis();
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        long demora = System.currentTimeMillis() - inicio;
+
+        if (response.statusCode() != 200) {
+            log.error("❌ Error de Google Gemini Nativo [HTTP {} en {}ms]: {}", response.statusCode(), demora, response.body());
+            return "{}";
+        }
+
+        log.info("⚡ Respuesta de Gemini Nativo recibida en {} ms", demora);
+        JsonNode root = objectMapper.readTree(response.body());
+        JsonNode candidates = root.path("candidates");
+        if (candidates.isArray() && !candidates.isEmpty()) {
+            JsonNode parts = candidates.get(0).path("content").path("parts");
+            if (parts.isArray() && !parts.isEmpty()) {
+                return parts.get(0).path("text").asText("{}");
+            }
+        }
+        return "{}";
+    }
+
+    private String llamarOpenAiCompatible(String systemPrompt, String userPrompt, boolean forzarJson) throws Exception {
+        Map<String, Object> payload = new java.util.HashMap<>();
+        payload.put("model", model);
+        payload.put("temperature", 0.1);
+        payload.put("messages", List.of(
+                Map.of("role", "system", "content", systemPrompt),
+                Map.of("role", "user", "content", userPrompt)
+        ));
+
+        if (forzarJson) {
+            payload.put("response_format", Map.of("type", "json_object"));
+        }
+
+        String jsonPayload = objectMapper.writeValueAsString(payload);
+        String endpoint = apiUrl.endsWith("/") ? apiUrl + "chat/completions" : apiUrl + "/chat/completions";
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(endpoint))
+                .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer " + apiKey)
+                .timeout(Duration.ofSeconds(15))
+                .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
+                .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() == 200) {
+            JsonNode root = objectMapper.readTree(response.body());
+            return root.path("choices").get(0).path("message").path("content").asText("{}");
+        }
+        log.error("Error API OpenAI-compatible [HTTP {}]: {}", response.statusCode(), response.body());
+        return "{}";
     }
 }
