@@ -5,6 +5,23 @@
 <body>
 <section class="pb-2 flex flex-col flex-1 h-[calc(100dvh-4rem)] select-none" id="swipe-area">
 
+  <!-- SELECTOR DE CALENDARIO FAMILIAR (SI HAY PERMISOS) -->
+  <div th:if="${usuariosVisibles.size() > 1}" class="flex items-center justify-between mb-2 px-1 text-xs">
+    <span class="text-gray-500 dark:text-gray-400 font-semibold">👀 Viendo agenda de:</span>
+    <select onchange="cambiarFiltroUsuario(this.value)" class="border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 font-medium">
+      <option value="mi" th:selected="${usuarioSeleccionado == 'mi'}">👤 Mi calendario</option>
+      <option value="todos" th:selected="${usuarioSeleccionado == 'todos'}">👨‍👩‍👧‍👦 Todos juntos</option>
+      <option th:each="u : ${usuariosVisibles}" th:if="${u.id != usuarioActual.id}" th:value="${u.id}" th:text="'📅 ' + ${u.nombre ?: u.username}" th:selected="${usuarioSeleccionado == u.id.toString()}"></option>
+    </select>
+  </div>
+
+  <script>
+    function cambiarFiltroUsuario(val) {
+      const url = new URL(window.location.href);
+      url.searchParams.set('usuario', val);
+      window.location.href = url.toString();
+    }
+  </script>
   <!-- CABECERA DÍAS -->
   <div class="grid grid-cols-7 mb-1 pt-1">
     <div th:each="dia : ${ {'L','M','X','J','V','S','D'} }"

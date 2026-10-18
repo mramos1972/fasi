@@ -32,6 +32,7 @@ public class SecurityConfig {
                     "/favicon.ico"
                 ).permitAll()
                 .requestMatchers("/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                .requestMatchers("/admin/**").hasRole("ADMIN")
                 .anyRequest().authenticated()
             )
             .csrf(csrf -> csrf

@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: layout(~{::title}, ~{::section})}">
+<head><title>Administración de Usuarios — FASI</title></head>
+<body>
+<section class="max-w-5xl mx-auto space-y-6">
+
+  <div class="flex items-center justify-between">
+    <div>
+      <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+        <span>👥</span> Gestión de Usuarios y Permisos
+      </h2>
+      <p class="text-sm text-gray-500 dark:text-gray-400">
+        Crea usuarios familiares y decide qué calendarios puede ver cada uno.
+      </p>
+    </div>
+    <button onclick="document.getElementById('modal-crear-usuario').classList.remove('hidden')"
+            class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-2 shadow">
+      ➕ Nuevo Usuario
+    </button>
+  </div>
+
+  <!-- LISTA DE USUARIOS -->
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden border border-gray-200 dark:border-gray-700">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm text-left">
+        <thead class="bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
+          <tr>
+            <th class="py-3 px-4">Usuario</th>
+            <th class="py-3 px-4">Rol</th>
+            <th class="py-3 px-4">Estado</th>
+            <th class="py-3 px-4">Permisos de Lectura</th>
+            <th class="py-3 px-4 text-right">Acciones</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+          <tr th:each="u : ${usuarios}" class="hover:bg-gray-50/50 dark:hover:bg-gray-700/30">
+            <td class="py-3 px-4">
+              <p class="font-bold text-gray-900 dark:text-gray-100" th:text="${u.nombre ?: u.username}"></p>
+              <p class="text-xs text-gray-400 font-mono">@<span th:text="${u.username}"></span></p>
+            </td>
+            <td class="py-3 px-4">
+              <span th:if="${u.rol == 'ADMIN'}" class="px-2 py-0.5 rounded-full text-xs font-bold bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300">
+                👑 ADMIN
+              </span>
+              <span th:if="${u.rol != 'ADMIN'}" class="px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                👤 USUARIO
+              </span>
+            </td>
+            <td class="py-3 px-4">
+              <span th:if="${u.activo}" class="text-xs text-green-600 font-semibold flex items-center gap-1">
+                <span class="w-2 h-2 rounded-full bg-green-500"></span> Activo
+              </span>
+              <span th:unless="${u.activo}" class="text-xs text-red-500 font-semibold flex items-center gap-1">
+                <span class="w-2 h-2 rounded-full bg-red-400"></span> Desactivado
+              </span>
+            </td>
+            <td class="py-3 px-4">
+              <div th:if="${u.rol == 'ADMIN'}" class="text-xs text-purple-600 dark:text-purple-400 italic">
+                Ve todos los calendarios (Superusuario)
+              </div>
+              <div th:unless="${u.rol == 'ADMIN'}" class="space-y-1">
+                <form th:action="@{/admin/usuarios/{id}/permisos(id=${u.id})}" method="post" class="flex flex-wrap items-center gap-2">
+                  <div th:each="otro : ${usuarios}" th:if="${otro.id != u.id}" class="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-md text-xs">
+                    <input type="checkbox" name="verCalendariosDe" th:value="${otro.id}"
+                           th:checked="${permisosMap.get(u.id) != null and permisosMap.get(u.id).contains(otro.id)}"
+                           th:id="'p_' + ${u.id} + '_' + ${otro.id}"
+                           onchange="this.form.submit()"
+                           class="rounded text-indigo-600 focus:ring-0 w-3.5 h-3.5"/>
+                    <label th:for="'p_' + ${u.id} + '_' + ${otro.id}" th:text="${otro.nombre ?: otro.username}" class="cursor-pointer text-gray-700 dark:text-gray-300"></label>
+                  </div>
+                </form>
+              </div>
+            </td>
+            <td class="py-3 px-4 text-right">
+              <form th:if="${u.username != 'admin'}" th:action="@{/admin/usuarios/{id}/toggle-activo(id=${u.id})}" method="post" class="inline">
+                <button type="submit" class="text-xs text-gray-500 hover:text-red-500 underline"
+                        th:text="${u.activo ? 'Desactivar' : 'Activar'}"></button>
+              </form>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- MODAL CREAR USUARIO -->
+  <div id="modal-crear-usuario" class="hidden fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-gray-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-gray-200 dark:border-gray-700">
+      <div class="flex justify-between items-center">
+        <h3 class="text-lg font-bold text-gray-900 dark:text-gray-100">Nuevo Usuario Familiar</h3>
+        <button onclick="document.getElementById('modal-crear-usuario').classList.add('hidden')" class="text-gray-400 hover:text-gray-200 text-xl font-bold">✕</button>
+      </div>
+      <form th:action="@{/admin/usuarios/guardar}" method="post" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Nombre (ej: Rocío)</label>
+          <input type="text" name="nombre" required class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"/>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Usuario / Login</label>
+          <input type="text" name="username" required class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"/>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Contraseña</label>
+          <input type="password" name="password" required class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"/>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Rol</label>
+          <select name="rol" class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+            <option value="USER">Usuario Familiar Estándar</option>
+            <option value="ADMIN">Administrador Completo</option>
+          </select>
+        </div>
+        <div class="flex gap-2 pt-2">
+          <button type="submit" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg text-sm font-semibold transition">Guardar Usuario</button>
+          <button type="button" onclick="document.getElementById('modal-crear-usuario').classList.add('hidden')" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-700 dark:text-gray-300">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+</section>
+</body>
+</html>

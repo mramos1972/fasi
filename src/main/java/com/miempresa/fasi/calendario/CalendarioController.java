@@ -1,6 +1,9 @@
 package com.miempresa.fasi.calendario;
 
 import com.miempresa.fasi.calendario.dto.IaAccionResultado;
+import com.miempresa.fasi.contexto.PermisosCalendarioService;
+import com.miempresa.fasi.contexto.Usuario;
+import com.miempresa.fasi.contexto.UsuarioActualService;
 import com.miempresa.fasi.ia.FasiAgentService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -17,22 +20,29 @@ import java.util.*;
 @RequestMapping("/calendario")
 public class CalendarioController {
 
-    private final EventoService    eventoService;
-    private final EventoIaService  eventoIaService;
-    private final FasiAgentService agentService;
+    private final EventoService            eventoService;
+    private final EventoIaService          eventoIaService;
+    private final FasiAgentService         agentService;
+    private final PermisosCalendarioService permisosService;
+    private final UsuarioActualService     usuarioActualService;
 
     public CalendarioController(EventoService eventoService,
                                 EventoIaService eventoIaService,
-                                FasiAgentService agentService) {
-        this.eventoService   = eventoService;
-        this.eventoIaService = eventoIaService;
-        this.agentService    = agentService;
+                                FasiAgentService agentService,
+                                PermisosCalendarioService permisosService,
+                                UsuarioActualService usuarioActualService) {
+        this.eventoService        = eventoService;
+        this.eventoIaService      = eventoIaService;
+        this.agentService         = agentService;
+        this.permisosService      = permisosService;
+        this.usuarioActualService = usuarioActualService;
     }
 
     @GetMapping
     public String vistaCalendario(
             @RequestParam(required = false) Integer year,
             @RequestParam(required = false) Integer month,
+            @RequestParam(required = false, defaultValue = "mi") String usuario,
             Model model) {
 
         LocalDate hoy = LocalDate.now();
@@ -41,12 +51,18 @@ public class CalendarioController {
 
         java.time.YearMonth ym = java.time.YearMonth.of(anio, mes);
 
-        model.addAttribute("eventos",   eventoService.findByMes(anio, mes));
-        model.addAttribute("proximos",  eventoService.findProximos(5));
-        model.addAttribute("tipos",     Evento.TipoEvento.values());
-        model.addAttribute("yearMonth", ym);
-        model.addAttribute("hoy",       hoy);
-        model.addAttribute("nuevoEvento", new Evento());
+        List<Usuario> visibles = permisosService.obtenerUsuariosVisibles();
+        Usuario actual = usuarioActualService.obtenerUsuarioActual();
+
+        model.addAttribute("eventos",          eventoService.findByMes(anio, mes, usuario));
+        model.addAttribute("proximos",         eventoService.findProximos(5, usuario));
+        model.addAttribute("tipos",            Evento.TipoEvento.values());
+        model.addAttribute("yearMonth",        ym);
+        model.addAttribute("hoy",              hoy);
+        model.addAttribute("nuevoEvento",      new Evento());
+        model.addAttribute("usuariosVisibles", visibles);
+        model.addAttribute("usuarioSeleccionado", usuario);
+        model.addAttribute("usuarioActual",    actual);
 
         return "calendario/index";
     }
@@ -54,10 +70,12 @@ public class CalendarioController {
     @GetMapping("/dia/{fecha}")
     public String viaDia(
             @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
+            @RequestParam(required = false, defaultValue = "mi") String usuario,
             Model model) {
         model.addAttribute("fecha",   fecha);
-        model.addAttribute("eventos", eventoService.findByDia(fecha));
+        model.addAttribute("eventos", eventoService.findByDia(fecha, usuario));
         model.addAttribute("tipos",   Evento.TipoEvento.values());
+        model.addAttribute("usuarioSeleccionado", usuario);
         return "calendario/dia";
     }
 
@@ -99,10 +117,6 @@ public class CalendarioController {
         return "redirect:/calendario";
     }
 
-    // ══════════════════════════════════════════════════════════
-    //  API AGENTE (function calling + memoria de conversación)
-    // ══════════════════════════════════════════════════════════
-
     @PostMapping("/api/agente")
     @ResponseBody
     public ResponseEntity<FasiAgentService.AgentResponse> ejecutarAgente(@RequestBody Map<String, String> body) {
@@ -110,7 +124,6 @@ public class CalendarioController {
         return ResponseEntity.ok(agentService.ejecutarOrden(orden));
     }
 
-    /** Olvida la conversación en curso (empezar de cero). */
     @PostMapping("/api/agente/reset")
     @ResponseBody
     public ResponseEntity<Map<String, Object>> resetAgente() {
@@ -118,16 +131,11 @@ public class CalendarioController {
         return ResponseEntity.ok(Map.of("ok", true));
     }
 
-    /** Etiquetas existentes del usuario (autocompletado del formulario). */
     @GetMapping("/api/etiquetas")
     @ResponseBody
     public ResponseEntity<List<String>> etiquetas() {
         return ResponseEntity.ok(eventoService.getAllEtiquetas());
     }
-
-    // ══════════════════════════════════════════════════════════
-    //  API LEGADO (se mantiene por compatibilidad)
-    // ══════════════════════════════════════════════════════════
 
     @PostMapping("/api/interpretar-accion")
     @ResponseBody

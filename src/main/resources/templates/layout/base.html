@@ -150,6 +150,7 @@
       <button onclick="cerrarMenu(); toggleDark();"
               class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-700 transition text-left">
         <span id="menu-dark-icon">🌙</span> <span>Modo noche/día</span>
+      <a th:href="@{/admin/usuarios}" sec:authorize="hasRole('ADMIN')" onclick="cerrarMenu()" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-700 transition text-purple-300">👥 <span>Gestión Usuarios</span></a>
       </button>
 
       <a th:href="@{/contexto}"
