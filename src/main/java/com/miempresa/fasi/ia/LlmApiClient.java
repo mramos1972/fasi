@@ -20,16 +20,15 @@ import java.util.List;
 /**
  * Cliente Gemini (REST nativo v1beta).
  *
- *  - chat / chatJson        : llamadas simples (compatibilidad con EventoIaService, IaService).
+ *  - chat / chatJson        : llamadas simples (EventoIaService, IaService).
  *  - generateWithTools      : function calling para el agente (FasiAgentService).
  *
- * Mejoras respecto a la versión anterior:
- *  - timeout configurable (45 s por defecto) en lugar de 12 s fijos
- *  - thinkingBudget=0 (sin "pensamiento") para latencias de 1-4 s; si el modelo
- *    no admite el parámetro se reintenta automáticamente sin él
- *  - reintentos con espera ante timeout / 429 / 503
- *  - systemInstruction nativo (el prompt de sistema ya no va concatenado al del usuario)
- *  - API key en cabecera, no en la URL
+ * Control del "pensamiento" del modelo (fasi.ai.provider.thinking):
+ *  - auto   : gemini-2.x -> thinkingBudget=0 ; gemini-3.x o superior -> thinkingLevel=<thinking-level>
+ *  - budget : fuerza thinkingBudget=0
+ *  - level  : fuerza thinkingLevel=<thinking-level>
+ *  - off    : no envia thinkingConfig
+ * Si la API rechaza el parametro (HTTP 400) se reintenta automaticamente sin el.
  */
 @Slf4j
 @Component
@@ -41,15 +40,17 @@ public class LlmApiClient {
     @Value("${fasi.ai.provider.api-key:}")
     private String apiKey;
 
-    @Value("${fasi.ai.provider.model:gemini-2.5-flash}")
+    @Value("${fasi.ai.provider.model:gemini-3.8-flash}")
     private String model;
 
     @Value("${fasi.ai.provider.timeout-seconds:45}")
     private int timeoutSeconds;
 
-    /** 0 = sin pensamiento (rápido). -1 = no enviar el parámetro (dejar el valor por defecto del modelo). */
-    @Value("${fasi.ai.provider.thinking-budget:0}")
-    private int thinkingBudget;
+    @Value("${fasi.ai.provider.thinking:auto}")
+    private String thinkingMode;
+
+    @Value("${fasi.ai.provider.thinking-level:low}")
+    private String thinkingLevel;
 
     @Value("${fasi.ai.provider.max-retries:2}")
     private int maxRetries;
@@ -79,6 +80,8 @@ public class LlmApiClient {
         public LlmException(String msg) { super(msg); }
         public LlmException(String msg, Throwable t) { super(msg, t); }
     }
+
+    private enum Thinking { BUDGET, LEVEL, OFF }
 
     // ══════════════════════════════════════════════════════════
     //  API simple (compatibilidad)
@@ -129,7 +132,7 @@ public class LlmApiClient {
             if (part.has("functionCall")) {
                 JsonNode fc = part.get("functionCall");
                 calls.add(new FunctionCall(fc.path("name").asText(), fc.path("args")));
-            } else if (part.has("text")) {
+            } else if (part.has("text") && !part.path("thought").asBoolean(false)) {
                 texto.append(part.get("text").asText());
             }
         }
@@ -173,8 +176,8 @@ public class LlmApiClient {
             throw new LlmException("Este cliente solo soporta la API nativa de Gemini (googleapis.com)");
         }
 
-        int budget = thinkingBudget;
-        ObjectNode payload = construirPayload(systemInstruction, contents, tools, forzarJson, budget);
+        Thinking thinking = resolverThinking();
+        ObjectNode payload = construirPayload(systemInstruction, contents, tools, forzarJson, thinking);
 
         int intento = 0;
         while (true) {
@@ -190,11 +193,11 @@ public class LlmApiClient {
                     return mapper.readTree(r.body());
                 }
 
-                // El modelo no admite thinkingConfig -> reintentar sin él (no cuenta como intento)
-                if (st == 400 && budget >= 0 && r.body().toLowerCase().contains("thinking")) {
-                    log.warn("⚠️ El modelo {} rechaza thinkingConfig; reintento sin él", model);
-                    budget = -1;
-                    payload = construirPayload(systemInstruction, contents, tools, forzarJson, budget);
+                // La API no admite el thinkingConfig enviado -> reintentar sin él (no cuenta como intento)
+                if (st == 400 && thinking != Thinking.OFF && r.body().toLowerCase().contains("thinking")) {
+                    log.warn("⚠️ El modelo {} rechaza thinkingConfig ({}); reintento sin él", model, thinking);
+                    thinking = Thinking.OFF;
+                    payload = construirPayload(systemInstruction, contents, tools, forzarJson, thinking);
                     intento--;
                     continue;
                 }
@@ -220,11 +223,30 @@ public class LlmApiClient {
         }
     }
 
+    private Thinking resolverThinking() {
+        String mode = thinkingMode == null ? "auto" : thinkingMode.trim().toLowerCase();
+        switch (mode) {
+            case "budget": return Thinking.BUDGET;
+            case "level":  return Thinking.LEVEL;
+            case "off":
+            case "none":   return Thinking.OFF;
+            default:
+                String m = modeloLimpio();
+                // gemini-2.x -> thinkingBudget ; gemini-3.x y posteriores -> thinkingLevel
+                if (m.startsWith("gemini-2")) return Thinking.BUDGET;
+                if (m.startsWith("gemini-"))  return Thinking.LEVEL;
+                return Thinking.OFF;   // gemma, otros
+        }
+    }
+
+    private String modeloLimpio() {
+        return model.replace("models/", "").replace("openai/", "").trim();
+    }
+
     private HttpResponse<String> enviar(ObjectNode payload) throws Exception {
         String base = apiUrl.endsWith("/") ? apiUrl.substring(0, apiUrl.length() - 1) : apiUrl;
         if (base.endsWith("/openai")) base = base.substring(0, base.length() - 7);
-        String modelo = model.replace("models/", "").replace("openai/", "").trim();
-        String endpoint = base + "/models/" + modelo + ":generateContent";
+        String endpoint = base + "/models/" + modeloLimpio() + ":generateContent";
 
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(endpoint))
@@ -238,7 +260,7 @@ public class LlmApiClient {
     }
 
     private ObjectNode construirPayload(String systemInstruction, ArrayNode contents,
-                                        ArrayNode tools, boolean forzarJson, int budget) {
+                                        ArrayNode tools, boolean forzarJson, Thinking thinking) {
         ObjectNode payload = mapper.createObjectNode();
 
         if (systemInstruction != null && !systemInstruction.isBlank()) {
@@ -257,7 +279,12 @@ public class LlmApiClient {
         ObjectNode gen = payload.putObject("generationConfig");
         gen.put("temperature", forzarJson ? 0.1 : 0.2);
         if (forzarJson) gen.put("responseMimeType", "application/json");
-        if (budget >= 0) gen.putObject("thinkingConfig").put("thinkingBudget", budget);
+
+        switch (thinking) {
+            case BUDGET -> gen.putObject("thinkingConfig").put("thinkingBudget", 0);
+            case LEVEL  -> gen.putObject("thinkingConfig").put("thinkingLevel", thinkingLevel == null ? "low" : thinkingLevel.trim().toLowerCase());
+            case OFF    -> { /* sin thinkingConfig */ }
+        }
 
         return payload;
     }
@@ -265,7 +292,9 @@ public class LlmApiClient {
     private String extraerTexto(JsonNode root, String porDefecto) {
         JsonNode parts = root.path("candidates").path(0).path("content").path("parts");
         StringBuilder sb = new StringBuilder();
-        for (JsonNode p : parts) if (p.has("text")) sb.append(p.get("text").asText());
+        for (JsonNode p : parts) {
+            if (p.has("text") && !p.path("thought").asBoolean(false)) sb.append(p.get("text").asText());
+        }
         String t = sb.toString().trim();
         return t.isEmpty() ? porDefecto : t;
     }
