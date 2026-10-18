@@ -58,14 +58,13 @@
   <!-- Lista de eventos del día -->
   <div class="space-y-3">
     <div th:each="e : ${eventos}"
-         class="bg-white dark:bg-gray-800 rounded-xl shadow p-5 flex gap-4 items-start
-                border-l-4"
-         th:style="'border-color:' + ${e.tipo.color}">
+         class="bg-white dark:bg-gray-800 rounded-xl shadow p-5 flex gap-4 items-start border-l-4"
+         th:style="'border-color:' + ${e.colorEfectivo}">
       <span class="text-3xl" th:text="${e.tipo.emoji}"></span>
       <div class="flex-1">
         <div class="flex items-center gap-2 mb-1">
           <span class="text-xs font-semibold px-2 py-0.5 rounded-full text-white"
-                th:style="'background-color:' + ${e.tipo.color}"
+                th:style="'background-color:' + ${e.colorEfectivo}"
                 th:text="${e.tipo.label}"></span>
           <span th:if="${e.horaInicio != null}"
                 class="text-sm text-gray-500"
@@ -110,17 +109,13 @@
     /*<![CDATA[*/
     const FECHA_DIA = /*[[${#temporals.format(fecha, 'yyyy-MM-dd')}]]*/ '';
 
-    // ── Inyectar navegación de día en el header ──────────────
-    // Usamos aritmética pura sobre el string YYYY-MM-DD
-    // para evitar bugs de zona horaria con new Date()
+    // Inyectar navegación de día en el header
     (function inyectarHeaderDia() {
       const slot = document.getElementById('header-title-slot');
       if (!slot) return;
 
-      // Sumar o restar días a un string "YYYY-MM-DD" sin usar Date
       function sumarDias(fechaStr, dias) {
         const parts = fechaStr.split('-');
-        // Usamos UTC explícito para evitar DST
         const ms = Date.UTC(
           parseInt(parts[0], 10),
           parseInt(parts[1], 10) - 1,
@@ -136,7 +131,6 @@
       const prevFecha = sumarDias(FECHA_DIA, -1);
       const nextFecha = sumarDias(FECHA_DIA, +1);
 
-      // Nombre del día para mostrar — también con UTC
       const parts = FECHA_DIA.split('-');
       const fechaUTC = new Date(Date.UTC(
         parseInt(parts[0], 10),
@@ -166,7 +160,7 @@
         '          transition font-semibold flex-shrink-0">✏️ Manual</a>';
     })();
 
-    // ── Datos contextuales (mareas/sol) ──────────────────────
+    // Datos contextuales (mareas/sol)
     (async function() {
       try {
         const resp = await fetch('/contexto/api/datos?fecha=' + FECHA_DIA);

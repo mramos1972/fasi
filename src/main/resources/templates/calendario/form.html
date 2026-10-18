@@ -23,19 +23,52 @@
     <form th:action="${evento.id == null} ? @{/calendario} : @{/calendario/{id}(id=${evento.id})}"
           th:object="${evento}" method="post" class="space-y-5">
 
-      <!-- Tipo de evento -->
-      <div>
-        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tipo de evento *</label>
-        <select name="tipo" required
-                class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2
-                       bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
-          <option value="">— Selecciona un tipo —</option>
-          <option th:each="t : ${tipos}"
-                  th:value="${t.name()}"
-                  th:text="${t.emoji + ' ' + t.label}"
-                  th:selected="${evento.tipo != null and evento.tipo.name() == t.name()}"></option>
-        </select>
+      <!-- Tipo de evento y Color personalizado -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+        <div class="sm:col-span-2">
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tipo de evento *</label>
+          <select name="tipo" id="selector-tipo" required onchange="sincronizarColorTipo()"
+                  class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2
+                         bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+            <option value="">— Selecciona un tipo —</option>
+            <option th:each="t : ${tipos}"
+                    th:value="${t.name()}"
+                    th:text="${t.emoji + ' ' + t.label}"
+                    th:data-color="${t.color}"
+                    th:selected="${evento.tipo != null and evento.tipo.name() == t.name()}"></option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Color del evento</label>
+          <div class="flex items-center gap-2">
+            <input type="color" id="input-color" th:field="*{colorPersonalizado}"
+                   class="h-10 w-16 p-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 cursor-pointer"/>
+            <button type="button" onclick="restablecerColorTipo()" 
+                    class="text-xs text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 underline">
+              Restablecer
+            </button>
+          </div>
+        </div>
       </div>
+
+      <script>
+        function sincronizarColorTipo() {
+          const colorInput = document.getElementById('input-color');
+          // Solo actualiza el picker si aún no tiene un color o al cambiar de tipo
+          restablecerColorTipo();
+        }
+
+        function restablecerColorTipo() {
+          const select = document.getElementById('selector-tipo');
+          const opt = select.options[select.selectedIndex];
+          if (opt && opt.dataset.color) {
+            document.getElementById('input-color').value = opt.dataset.color;
+          } else {
+            document.getElementById('input-color').value = "#3b82f6";
+          }
+        }
+      </script>
 
       <!-- Título -->
       <div>

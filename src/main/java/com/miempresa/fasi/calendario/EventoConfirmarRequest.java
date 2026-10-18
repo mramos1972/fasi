@@ -23,9 +23,10 @@ public class EventoConfirmarRequest {
     private String            personasRelacionadas;
     private String            descripcion;
     private Integer           recordatorioMinutos;
+    private String            colorPersonalizado;
     private Map<String, Object> datosExtra;
     private String            textoOriginalVoz;
-    private Set<String>       etiquetas;   // ← NUEVO
+    private Set<String>       etiquetas;
 
     public Evento toEvento() {
         Evento e = new Evento();
@@ -40,8 +41,9 @@ public class EventoConfirmarRequest {
         e.setPersonasRelacionadas(personasRelacionadas);
         e.setDescripcion(descripcion);
         e.setRecordatorioMinutos(recordatorioMinutos);
+        e.setColorPersonalizado(colorPersonalizado);
         e.setTextoOriginalVoz(textoOriginalVoz);
-        e.setEtiquetas(etiquetas != null ? etiquetas : new HashSet<>());  // ← NUEVO
+        e.setEtiquetas(etiquetas != null ? etiquetas : new HashSet<>());
 
         Map<String, Object> extra = datosExtra != null
             ? new HashMap<>(datosExtra)

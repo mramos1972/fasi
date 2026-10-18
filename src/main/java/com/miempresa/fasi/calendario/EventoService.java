@@ -9,9 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.DayOfWeek;
 import java.time.LocalDate;
-import java.time.temporal.TemporalAdjusters;
 import java.util.*;
 
 @Slf4j
@@ -25,7 +23,7 @@ public class EventoService {
     private final PermisosCalendarioService permisosService;
 
     // ══════════════════════════════════════════════════════════
-    //  LECTURA (RESPETA PERMISOS DE VISIBILIDAD)
+    //  LECTURA
     // ══════════════════════════════════════════════════════════
 
     public List<Evento> findByMes(int year, int month, String targetUserId) {
@@ -53,8 +51,6 @@ public class EventoService {
     }
 
     public Evento findById(UUID id) {
-        Usuario actual = usuarioActualService.obtenerUsuarioActual();
-        // El admin o los autorizados pueden leerlo, pero solo el dueño o el admin pueden modificarlo
         List<UUID> uids = permisosService.resolverIdsConsultables("todos");
         return repo.findByIdAndPermitidos(id, uids)
             .orElseThrow(() -> new EntityNotFoundException("Evento no encontrado o sin permisos: " + id));
@@ -86,7 +82,6 @@ public class EventoService {
         Evento e = findById(id);
         Usuario actual = usuarioActualService.obtenerUsuarioActual();
 
-        // Control de permisos de modificación: o eres admin o eres el propietario
         if (!"ADMIN".equalsIgnoreCase(actual.getRol()) && !e.getUsuario().getId().equals(actual.getId())) {
             throw new IllegalStateException("Solo el propietario del evento o un Administrador pueden modificarlo.");
         }
@@ -104,6 +99,7 @@ public class EventoService {
         e.setRecordatorioMinutos(datos.getRecordatorioMinutos());
         e.setDatosExtra(datos.getDatosExtra());
         e.setEtiquetas(datos.getEtiquetas());
+        e.setColorPersonalizado(datos.getColorPersonalizado());
         return repo.save(e);
     }
 

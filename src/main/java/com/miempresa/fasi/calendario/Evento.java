@@ -74,6 +74,9 @@ public class Evento {
     @Builder.Default
     private boolean recordatorioEnviado = false;
 
+    @Column(name = "color_personalizado", length = 7)
+    private String colorPersonalizado;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "datos_extra", columnDefinition = "jsonb")
     @Builder.Default
@@ -84,6 +87,17 @@ public class Evento {
     @Column(name = "etiqueta")
     @Builder.Default
     private Set<String> etiquetas = new HashSet<>();
+
+    /**
+     * Color efectivo para UI: prioriza el personalizado si existe,
+     * o cae al predeterminado del TipoEvento.
+     */
+    public String getColorEfectivo() {
+        if (colorPersonalizado != null && !colorPersonalizado.isBlank()) {
+            return colorPersonalizado;
+        }
+        return (tipo != null && tipo.getColor() != null) ? tipo.getColor() : "#64748b";
+    }
 
     public enum TipoEvento {
         PERSONAL("Personal", "👤", "#3b82f6"),

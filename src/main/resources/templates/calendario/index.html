@@ -190,10 +190,14 @@
         eventosDia.slice(0, 2).forEach(e => {
           const pill = document.createElement('div');
           pill.className = 'text-[10px] px-1 py-0.5 rounded text-white truncate font-medium flex items-center gap-0.5';
-          pill.style.backgroundColor = (e.tipo && e.tipo.color) ? e.tipo.color : '#6366f1';
+          
+          // Color efectivo (personalizado o del tipo)
+          const colorFinal = (e.colorPersonalizado && e.colorPersonalizado.trim() !== '') 
+                             ? e.colorPersonalizado 
+                             : ((e.tipo && e.tipo.color) ? e.tipo.color : '#6366f1');
+          pill.style.backgroundColor = colorFinal;
           
           let textoPill = (e.tipo && e.tipo.emoji ? e.tipo.emoji + ' ' : '') + e.titulo;
-          // Si estamos viendo "todos", mostramos inicial del dueño
           if (USUARIO_PARAM === 'todos' && e.usuario && e.usuario.nombre) {
             textoPill = `[${e.usuario.nombre.charAt(0)}] ` + textoPill;
           }
