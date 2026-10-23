@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="es" xmlns:th="http://www.thymeleaf.org"
       xmlns:sec="http://www.thymeleaf.org/extras/spring-security"
-      th:fragment="layout">
+      th:fragment="layout(title, content)">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -257,6 +257,5 @@
   }
 </script>
 
-<th:block th:if="${scripts != null}" th:replace="${scripts}"/>
 </body>
 </html>
