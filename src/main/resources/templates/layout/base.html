@@ -34,14 +34,14 @@
     <div id="header-title-slot" class="flex items-center gap-1 min-w-0 flex-1 overflow-hidden"></div>
   </div>
 
-  <div class="flex items-center gap-1 flex-shrink-0">
-    <button onclick="abrirModalVozGlobal()"
-            class="w-10 h-10 flex items-center justify-center rounded-full bg-indigo-600 hover:bg-indigo-500 text-white transition text-xl font-bold shadow"
+  <div class="flex items-center gap-2 flex-shrink-0">
+    <button type="button" onclick="window.abrirModalVozGlobal()"
+            class="w-10 h-10 flex items-center justify-center rounded-full bg-indigo-600 hover:bg-indigo-500 text-white transition text-xl font-bold shadow cursor-pointer"
             title="Asistente Inteligente FASI">
       +
     </button>
-    <button onclick="toggleMenu()"
-            class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-stone-200 dark:hover:bg-gray-700 transition text-2xl"
+    <button type="button" onclick="window.toggleMenu()"
+            class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-stone-200 dark:hover:bg-gray-700 transition text-2xl cursor-pointer"
             title="Menú">
       ☰
     </button>
@@ -51,13 +51,13 @@
 <!-- ══════════════════════════════════════════════════════════
      DRAWER LATERAL (SIMPLIFICADO)
 ══════════════════════════════════════════════════════════ -->
-<div id="menu-overlay" onclick="cerrarMenu()" style="display:none" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 transition-opacity"></div>
+<div id="menu-overlay" onclick="window.cerrarMenu()" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-40 transition-opacity"></div>
 
-<aside id="sidebar-menu" style="transform: translateX(100%)" class="fixed top-0 right-0 h-full w-72 bg-gray-900 text-gray-100 z-50 flex flex-col transition-transform duration-300 shadow-2xl">
+<aside id="sidebar-menu" class="fixed top-0 right-0 h-full w-72 bg-gray-900 text-gray-100 z-50 flex flex-col transition-transform duration-300 shadow-2xl translate-x-full">
   
   <div class="flex items-center justify-between px-5 py-4 border-b border-gray-800">
     <span class="font-bold text-lg">⚡ FASI</span>
-    <button onclick="cerrarMenu()" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-800 transition text-gray-400 hover:text-white">✕</button>
+    <button type="button" onclick="window.cerrarMenu()" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-800 transition text-gray-400 hover:text-white cursor-pointer">✕</button>
   </div>
 
   <div class="px-5 py-3 border-b border-gray-800 bg-gray-800/40">
@@ -74,23 +74,23 @@
   </div>
 
   <div class="flex-1 py-3 space-y-1 px-3 overflow-y-auto">
-    <a th:href="@{/calendario}" onclick="cerrarMenu()" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-800 transition">
+    <a th:href="@{/calendario}" onclick="window.cerrarMenu()" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-800 transition">
       📅 <span>Calendario</span>
     </a>
 
-    <a th:href="@{/compra}" onclick="cerrarMenu()" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-800 transition">
+    <a th:href="@{/compra}" onclick="window.cerrarMenu()" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-800 transition">
       🛒 <span>Lista de la Compra</span>
     </a>
 
-    <button onclick="cerrarMenu(); abrirModalVozGlobal();" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-800 transition text-left">
+    <button type="button" onclick="window.cerrarMenu(); window.abrirModalVozGlobal();" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-800 transition text-left cursor-pointer">
       🧠 <span>Asistente Inteligente</span>
     </button>
 
-    <button onclick="cerrarMenu(); toggleDark();" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-800 transition text-left">
+    <button type="button" onclick="window.cerrarMenu(); window.toggleDark();" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-800 transition text-left cursor-pointer">
       <span id="menu-dark-icon">🌙</span> <span>Modo noche/día</span>
     </button>
 
-    <a th:href="@{/admin/usuarios}" sec:authorize="hasRole('ADMIN')" onclick="cerrarMenu()"
+    <a th:href="@{/admin/usuarios}" sec:authorize="hasRole('ADMIN')" onclick="window.cerrarMenu()"
        class="flex items-center gap-3 px-4 py-3 rounded-xl bg-purple-900/30 hover:bg-purple-900/50 text-purple-300 transition font-medium border border-purple-800/40">
       👥 <span>Gestión Usuarios</span>
     </a>
@@ -98,7 +98,7 @@
 
   <div class="px-5 py-4 border-t border-gray-800">
     <form th:action="@{/logout}" method="post">
-      <button type="submit" class="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-red-600/20 hover:bg-red-600/40 text-red-400 transition text-sm">
+      <button type="submit" class="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-red-600/20 hover:bg-red-600/40 text-red-400 transition text-sm cursor-pointer">
         🚪 Cerrar sesión
       </button>
     </form>
@@ -115,7 +115,7 @@
 <!-- ══════════════════════════════════════════════════════════
      MODAL UNIFICADO: ASISTENTE FASI (IA)
 ══════════════════════════════════════════════════════════ -->
-<div id="modal-voz-global" style="display:none" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+<div id="modal-voz-global" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
   <div class="bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl flex flex-col border border-gray-200 dark:border-gray-700">
     
     <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
@@ -125,7 +125,7 @@
         </h3>
         <p class="text-xs text-gray-400">Pídele eventos, notas o gestionar tu compra</p>
       </div>
-      <button onclick="cerrarModalVozGlobal()" class="text-gray-400 hover:text-gray-200 text-2xl font-bold p-1">✕</button>
+      <button type="button" onclick="window.cerrarModalVozGlobal()" class="text-gray-400 hover:text-gray-200 text-2xl font-bold p-1 cursor-pointer">✕</button>
     </div>
 
     <div class="p-4 space-y-3">
@@ -134,17 +134,17 @@
                 class="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm resize-none"></textarea>
 
       <div class="flex gap-2">
-        <button id="agente-btn-micro" onclick="toggleMicroAgente()"
-                class="flex-1 flex items-center justify-center gap-2 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-xl font-semibold transition text-sm">
+        <button type="button" id="agente-btn-micro" onclick="window.toggleMicroAgente()"
+                class="flex-1 flex items-center justify-center gap-2 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-xl font-semibold transition text-sm cursor-pointer">
           🎤 <span id="agente-micro-label">Grabar</span>
         </button>
-        <button onclick="ejecutarAgenteGlobal()"
-                class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-xl font-semibold transition text-sm shadow">
+        <button type="button" onclick="window.ejecutarAgenteGlobal()"
+                class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-xl font-semibold transition text-sm shadow cursor-pointer">
           ⚡ Ejecutar
         </button>
       </div>
 
-      <div id="agente-spinner" style="display:none" class="flex flex-col items-center justify-center py-4 space-y-2">
+      <div id="agente-spinner" class="hidden flex-col items-center justify-center py-4 space-y-2">
         <div class="flex gap-1.5">
           <div class="w-2.5 h-2.5 bg-indigo-500 rounded-full animate-bounce"></div>
           <div class="w-2.5 h-2.5 bg-indigo-500 rounded-full animate-bounce" style="animation-delay:150ms"></div>
@@ -153,10 +153,10 @@
         <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">FASI está procesando tu orden...</span>
       </div>
 
-      <div id="agente-resultado" style="display:none" class="p-4 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 rounded-xl space-y-3">
+      <div id="agente-resultado" class="hidden p-4 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 rounded-xl space-y-3">
         <p id="agente-mensaje-respuesta" class="text-sm text-gray-800 dark:text-gray-100 leading-relaxed whitespace-pre-wrap"></p>
-        <button onclick="cerrarModalVozGlobal(); window.location.reload();"
-                class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg font-semibold text-xs transition">
+        <button type="button" onclick="window.cerrarModalVozGlobal(); window.location.reload();"
+                class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg font-semibold text-xs transition cursor-pointer">
           Aceptar y actualizar 👍
         </button>
       </div>
@@ -165,40 +165,62 @@
 </div>
 
 <script>
-  function toggleMenu() {
+  window.toggleMenu = function() {
     const s = document.getElementById('sidebar-menu');
     const o = document.getElementById('menu-overlay');
-    const open = s.style.transform === 'translateX(0px)';
-    s.style.transform = open ? 'translateX(100%)' : 'translateX(0px)';
-    o.style.display = open ? 'none' : 'block';
-  }
-  function cerrarMenu() {
-    document.getElementById('sidebar-menu').style.transform = 'translateX(100%)';
-    document.getElementById('menu-overlay').style.display = 'none';
-  }
+    if (!s || !o) return;
+    const isClosed = s.classList.contains('translate-x-full');
+    if (isClosed) {
+      s.classList.remove('translate-x-full');
+      o.classList.remove('hidden');
+    } else {
+      s.classList.add('translate-x-full');
+      o.classList.add('hidden');
+    }
+  };
 
-  function toggleDark() {
+  window.cerrarMenu = function() {
+    const s = document.getElementById('sidebar-menu');
+    const o = document.getElementById('menu-overlay');
+    if (s) s.classList.add('translate-x-full');
+    if (o) o.classList.add('hidden');
+  };
+
+  window.toggleDark = function() {
     document.documentElement.classList.toggle('dark');
     const isDark = document.documentElement.classList.contains('dark');
     localStorage.setItem('fasi-theme', isDark ? 'dark' : 'light');
-    document.getElementById('menu-dark-icon').textContent = isDark ? '☀️' : '🌙';
-  }
+    const icon = document.getElementById('menu-dark-icon');
+    if (icon) icon.textContent = isDark ? '☀️' : '🌙';
+  };
+
   if (localStorage.getItem('fasi-theme') === 'dark' || (!localStorage.getItem('fasi-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
     document.documentElement.classList.add('dark');
   }
 
-  function abrirModalVozGlobal() {
-    document.getElementById('agente-resultado').style.display = 'none';
-    document.getElementById('agente-input-texto').value = '';
-    document.getElementById('modal-voz-global').style.display = 'flex';
-  }
-  function cerrarModalVozGlobal() {
-    document.getElementById('modal-voz-global').style.display = 'none';
-  }
+  window.abrirModalVozGlobal = function() {
+    const res = document.getElementById('agente-resultado');
+    const inp = document.getElementById('agente-input-texto');
+    const mod = document.getElementById('modal-voz-global');
+    if (res) res.classList.add('hidden');
+    if (inp) inp.value = '';
+    if (mod) {
+      mod.classList.remove('hidden');
+      mod.classList.add('flex');
+    }
+  };
+
+  window.cerrarModalVozGlobal = function() {
+    const mod = document.getElementById('modal-voz-global');
+    if (mod) {
+      mod.classList.add('hidden');
+      mod.classList.remove('flex');
+    }
+  };
 
   let recognition = null;
   let grabando = false;
-  function toggleMicroAgente() {
+  window.toggleMicroAgente = function() {
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
       alert('Tu navegador no soporta dictado por voz.');
       return;
@@ -215,30 +237,39 @@
 
     recognition.onstart = () => {
       grabando = true;
-      document.getElementById('agente-micro-label').textContent = 'Escuchando...';
-      document.getElementById('agente-btn-micro').classList.replace('bg-red-500', 'bg-amber-600');
+      const lbl = document.getElementById('agente-micro-label');
+      const btn = document.getElementById('agente-btn-micro');
+      if (lbl) lbl.textContent = 'Escuchando...';
+      if (btn) btn.classList.replace('bg-red-500', 'bg-amber-600');
     };
     recognition.onresult = (e) => {
-      document.getElementById('agente-input-texto').value = e.results[0][0].transcript;
+      const inp = document.getElementById('agente-input-texto');
+      if (inp) inp.value = e.results[0][0].transcript;
     };
     recognition.onend = () => {
       grabando = false;
-      document.getElementById('agente-micro-label').textContent = 'Grabar';
-      document.getElementById('agente-btn-micro').classList.replace('bg-amber-600', 'bg-red-500');
+      const lbl = document.getElementById('agente-micro-label');
+      const btn = document.getElementById('agente-btn-micro');
+      if (lbl) lbl.textContent = 'Grabar';
+      if (btn) btn.classList.replace('bg-amber-600', 'bg-red-500');
     };
     recognition.start();
-  }
+  };
 
-  async function ejecutarAgenteGlobal() {
-    const texto = document.getElementById('agente-input-texto').value.trim();
+  window.ejecutarAgenteGlobal = async function() {
+    const inp = document.getElementById('agente-input-texto');
+    const texto = inp ? inp.value.trim() : '';
     if (!texto) return;
 
     const spinner = document.getElementById('agente-spinner');
     const resultado = document.getElementById('agente-resultado');
     const msg = document.getElementById('agente-mensaje-respuesta');
 
-    spinner.style.display = 'flex';
-    resultado.style.display = 'none';
+    if (spinner) {
+      spinner.classList.remove('hidden');
+      spinner.classList.add('flex');
+    }
+    if (resultado) resultado.classList.add('hidden');
 
     try {
       const resp = await fetch('/calendario/api/agente', {
@@ -247,14 +278,20 @@
         body: JSON.stringify({ texto })
       });
       const data = await resp.json();
-      spinner.style.display = 'none';
-      msg.textContent = data.mensaje;
-      resultado.style.display = 'block';
+      if (spinner) {
+        spinner.classList.add('hidden');
+        spinner.classList.remove('flex');
+      }
+      if (msg) msg.textContent = data.mensaje;
+      if (resultado) resultado.classList.remove('hidden');
     } catch (err) {
-      spinner.style.display = 'none';
+      if (spinner) {
+        spinner.classList.add('hidden');
+        spinner.classList.remove('flex');
+      }
       alert('Error contactando con el asistente: ' + err.message);
     }
-  }
+  };
 </script>
 
 </body>
