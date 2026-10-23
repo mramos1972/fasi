@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.miempresa.fasi.calendario.Evento;
 import com.miempresa.fasi.calendario.EventoRepository;
 import com.miempresa.fasi.calendario.EventoService;
+import com.miempresa.fasi.compra.CompraService;
 import com.miempresa.fasi.contexto.Usuario;
 import com.miempresa.fasi.contexto.UsuarioActualService;
 import com.miempresa.fasi.ia.LlmApiClient.FunctionCall;
@@ -26,10 +27,6 @@ import java.time.format.TextStyle;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Agente de calendario basado en function calling con memoria por usuario.
- * El modelo opera siempre sobre IDs obtenidos con buscar_eventos.
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -39,6 +36,7 @@ public class FasiAgentService {
     private final ObjectMapper mapper;
     private final EventoService eventoService;
     private final EventoRepository eventoRepo;
+    private final CompraService compraService;
     private final UsuarioActualService usuarioActualService;
 
     private static final int      MAX_ITERACIONES = 8;
@@ -47,7 +45,6 @@ public class FasiAgentService {
     private static final int      MAX_RESULTADOS  = 40;
 
     public record AgentResponse(String mensaje, boolean huboMutacion, long tiempoMs, int pasos) {}
-
     private record ToolResult(ObjectNode json, boolean mutacion) {}
 
     private static final class Memoria {
@@ -59,26 +56,21 @@ public class FasiAgentService {
     private final Map<UUID, Memoria> memorias = new ConcurrentHashMap<>();
 
     private static final Set<String> STOPWORDS = Set.of(
-        "de", "del", "la", "el", "los", "las", "en", "a", "al", "y", "o", "con", "para", "por",
-        "que", "un", "una", "unos", "unas", "mi", "mis", "su", "sus", "evento", "eventos", "cita");
+            "de", "del", "la", "el", "los", "las", "en", "a", "al", "y", "o", "con", "para", "por",
+            "que", "un", "una", "unos", "unas", "mi", "mis", "su", "sus", "evento", "eventos", "cita");
 
     private static final Map<String, DayOfWeek> DIAS = Map.ofEntries(
-        Map.entry("LUNES", DayOfWeek.MONDAY), Map.entry("MARTES", DayOfWeek.TUESDAY),
-        Map.entry("MIERCOLES", DayOfWeek.WEDNESDAY), Map.entry("JUEVES", DayOfWeek.THURSDAY),
-        Map.entry("VIERNES", DayOfWeek.FRIDAY), Map.entry("SABADO", DayOfWeek.SATURDAY),
-        Map.entry("DOMINGO", DayOfWeek.SUNDAY));
+            Map.entry("LUNES", DayOfWeek.MONDAY), Map.entry("MARTES", DayOfWeek.TUESDAY),
+            Map.entry("MIERCOLES", DayOfWeek.WEDNESDAY), Map.entry("JUEVES", DayOfWeek.THURSDAY),
+            Map.entry("VIERNES", DayOfWeek.FRIDAY), Map.entry("SABADO", DayOfWeek.SATURDAY),
+            Map.entry("DOMINGO", DayOfWeek.SUNDAY));
 
-    /** Declaraciones de herramientas: se construyen una vez (no cambian). */
     private volatile ArrayNode toolsCache;
-
-    // ══════════════════════════════════════════════════════════
-    //  API PÚBLICA
-    // ══════════════════════════════════════════════════════════
 
     public AgentResponse ejecutarOrden(String texto) {
         long t0 = System.currentTimeMillis();
         if (texto == null || texto.isBlank()) {
-            return new AgentResponse("Dime qué quieres hacer con el calendario.", false, 0, 0);
+            return new AgentResponse("Dime qué quieres hacer.", false, 0, 0);
         }
 
         Usuario usuario = usuarioActualService.obtenerUsuarioActual();
@@ -99,7 +91,7 @@ public class FasiAgentService {
                     LlmTurn turno = llm.generateWithTools(sistema, mem.contents, tools);
                     pasos++;
                     log.info("⏱ LLM#{} {} ms{}", pasos, System.currentTimeMillis() - tl,
-                             turno.hasCalls() ? " -> " + turno.calls().stream().map(FunctionCall::name).toList() : " -> respuesta final");
+                            turno.hasCalls() ? " -> " + turno.calls().stream().map(FunctionCall::name).toList() : " -> respuesta final");
                     mem.contents.add(turno.modelContent());
 
                     if (!turno.hasCalls()) {
@@ -124,7 +116,7 @@ public class FasiAgentService {
                     mem.contents.add(respuestaHerr);
                 }
                 recortar(mem);
-                return new AgentResponse("He realizado varias operaciones pero la orden es demasiado larga para cerrarla de una vez. Revisa el calendario y dime si falta algo.",
+                return new AgentResponse("He realizado varias operaciones. Comprueba si falta algo.",
                         mutacion, System.currentTimeMillis() - t0, pasos);
 
             } catch (LlmApiClient.LlmException e) {
@@ -132,12 +124,10 @@ public class FasiAgentService {
                 while (mem.contents.size() > 0 && !"model".equals(mem.contents.get(mem.contents.size() - 1).path("role").asText())) {
                     mem.contents.remove(mem.contents.size() - 1);
                 }
-                return new AgentResponse("⚠️ " + e.userMessage(),
-                        mutacion, System.currentTimeMillis() - t0, pasos);
+                return new AgentResponse("⚠️ " + e.userMessage(), mutacion, System.currentTimeMillis() - t0, pasos);
             } catch (Exception e) {
                 log.error("❌ Agente: error inesperado", e);
-                return new AgentResponse("Error procesando la orden: " + e.getMessage(),
-                        mutacion, System.currentTimeMillis() - t0, pasos);
+                return new AgentResponse("Error procesando la orden: " + e.getMessage(), mutacion, System.currentTimeMillis() - t0, pasos);
             }
         }
     }
@@ -145,10 +135,6 @@ public class FasiAgentService {
     public void olvidar() {
         memorias.remove(usuarioActualService.obtenerUsuarioActual().getId());
     }
-
-    // ══════════════════════════════════════════════════════════
-    //  MEMORIA
-    // ══════════════════════════════════════════════════════════
 
     private Memoria memoria(UUID usuarioId) {
         memorias.entrySet().removeIf(en -> Duration.between(en.getValue().ultimoUso, Instant.now()).compareTo(TTL_MEMORIA) > 0);
@@ -163,13 +149,9 @@ public class FasiAgentService {
 
     private boolean esTextoUsuario(JsonNode content) {
         return "user".equals(content.path("role").asText())
-            && content.path("parts").size() > 0
-            && content.path("parts").get(0).has("text");
+                && content.path("parts").size() > 0
+                && content.path("parts").get(0).has("text");
     }
-
-    // ══════════════════════════════════════════════════════════
-    //  PROMPT DE SISTEMA (compacto)
-    // ══════════════════════════════════════════════════════════
 
     private String construirSystemPrompt(Usuario usuario) {
         LocalDate hoy = LocalDate.now();
@@ -187,104 +169,104 @@ public class FasiAgentService {
         if (n == 0) agenda.append("- (sin eventos)\n");
 
         return """
-            Eres FASI, asistente de calendario familiar. Responde en español, breve y natural.
+            Eres FASI, el asistente personal inteligente del hogar. Responde en español, breve y natural.
             Hoy: %s (%s). Usuario: %s.
 
-            Reglas:
-            - Para modificar, anotar, copiar o borrar, primero buscar_eventos y usa SOLO los ids devueltos.
-            - Si hay varios candidatos y la orden es de uno, elige por fecha/título; si sigue ambiguo, pregunta.
-            - Borrar más de 3 eventos requiere confirmación salvo orden explícita ("todos", "la serie").
-            - Observaciones/notas: anadir_nota (no cambies el título).
-            - Fechas relativas respecto a hoy; día y mes sin año ya pasados -> año siguiente.
-            - Copiar a otro mes: busca originales y crea con crear_evento conservando hora, lugar y tipo.
-            - Repeticiones: crear_eventos_recurrentes; si falta el fin, pregúntalo.
-            - Sin hora: crea el evento como todo el día y dilo.
-            - Al terminar confirma exactamente qué has hecho (títulos y fechas). No inventes.
+            Reglas generales:
+            - Gestionas tanto el CALENDARIO como la LISTA DE LA COMPRA.
+            - LISTA DE LA COMPRA: Si el usuario te pide añadir o quitar cosas ("pon leche en la lista", "quita el arroz", "compra huevos y pan"), usa las herramientas 'anadir_a_lista_compra' o 'quitar_de_lista_compra'. Puedes pasar múltiples elementos en un array.
+            - CALENDARIO: Para modificar, anotar, copiar o borrar eventos, primero 'buscar_eventos' y usa SOLO los ids devueltos.
+            - Borrar más de 3 eventos requiere confirmación.
+            - Al terminar confirma con exactitud lo realizado.
 
-            Tipos: PERSONAL, SOCIAL, SALUD, TRABAJO, FAMILIA, VIAJE, VACACIONES, APRENDIZAJE, OCIO, GESTION, OTRO.
-            Días: LUNES, MARTES, MIERCOLES, JUEVES, VIERNES, SABADO, DOMINGO.
-
-            Próximos 3 días (orientativo; para operar usa buscar_eventos):
+            Próximos 3 días en agenda:
             %s""".formatted(hoy, diaSemana,
-                            usuario.getNombre() != null ? usuario.getNombre() : usuario.getUsername(),
-                            agenda);
+                usuario.getNombre() != null ? usuario.getNombre() : usuario.getUsername(),
+                agenda);
     }
-
-    // ══════════════════════════════════════════════════════════
-    //  DECLARACIÓN DE HERRAMIENTAS
-    // ══════════════════════════════════════════════════════════
 
     private ArrayNode declaracionesHerramientas() {
         ArrayNode cache = toolsCache;
         if (cache != null) return cache;
-
         ArrayNode tools = mapper.createArrayNode();
 
+        // ── Herramientas de Compra ──
+        tools.add(herramienta("anadir_a_lista_compra",
+                "Añade uno o varios productos a la lista de la compra del usuario.",
+                props(arr("items", "Lista de nombres de productos a añadir (ej: [\"aceite\", \"azúcar\"]).")),
+                "items"));
+
+        tools.add(herramienta("quitar_de_lista_compra",
+                "Quita o elimina productos de la lista de la compra del usuario.",
+                props(arr("items", "Lista de nombres de productos a quitar (ej: [\"arroz\"]).")),
+                "items"));
+
+        // ── Herramientas de Calendario ──
         tools.add(herramienta("buscar_eventos",
-            "Busca eventos del usuario y devuelve id, título, fecha, hora, tipo, lugar, personas, etiquetas y notas.",
-            props(
-                p("texto", "STRING", "Palabras clave (título, lugar, personas, notas, etiquetas). Opcional."),
-                p("fechaDesde", "STRING", "YYYY-MM-DD. Opcional."),
-                p("fechaHasta", "STRING", "YYYY-MM-DD inclusive. Opcional."),
-                p("tipo", "STRING", "Tipo de evento. Opcional.")
-            )));
+                "Busca eventos del usuario y devuelve id, título, fecha, hora, tipo, lugar, personas, etiquetas y notas.",
+                props(
+                        p("texto", "STRING", "Palabras clave. Opcional."),
+                        p("fechaDesde", "STRING", "YYYY-MM-DD. Opcional."),
+                        p("fechaHasta", "STRING", "YYYY-MM-DD. Opcional."),
+                        p("tipo", "STRING", "Tipo. Opcional.")
+                )));
 
         tools.add(herramienta("crear_evento",
-            "Crea un evento.",
-            props(
-                p("titulo", "STRING", "Título breve, p. ej. 'Cumpleaños de Martín'."),
-                p("fechaInicio", "STRING", "YYYY-MM-DD."),
-                p("fechaFin", "STRING", "YYYY-MM-DD si dura varios días. Opcional."),
-                p("horaInicio", "STRING", "HH:MM. Opcional."),
-                p("horaFin", "STRING", "HH:MM. Opcional."),
-                p("tipo", "STRING", "Tipo. Opcional."),
-                p("lugar", "STRING", "Opcional."),
-                p("personas", "STRING", "Separadas por comas. Opcional."),
-                p("descripcion", "STRING", "Notas. Opcional."),
-                arr("etiquetas", "Etiquetas en minúsculas. Opcional.")
-            ), "titulo", "fechaInicio"));
+                "Crea un evento.",
+                props(
+                        p("titulo", "STRING", "Título."),
+                        p("fechaInicio", "STRING", "YYYY-MM-DD."),
+                        p("fechaFin", "STRING", "YYYY-MM-DD. Opcional."),
+                        p("horaInicio", "STRING", "HH:MM. Opcional."),
+                        p("horaFin", "STRING", "HH:MM. Opcional."),
+                        p("tipo", "STRING", "Tipo. Opcional."),
+                        p("lugar", "STRING", "Opcional."),
+                        p("personas", "STRING", "Opcional."),
+                        p("descripcion", "STRING", "Notas. Opcional."),
+                        arr("etiquetas", "Etiquetas. Opcional.")
+                ), "titulo", "fechaInicio"));
 
         tools.add(herramienta("crear_eventos_recurrentes",
-            "Crea una serie repetida entre dos fechas.",
-            props(
-                p("titulo", "STRING", "Título."),
-                p("fechaInicio", "STRING", "YYYY-MM-DD."),
-                p("fechaFin", "STRING", "YYYY-MM-DD (obligatoria)."),
-                p("frecuencia", "STRING", "DIARIA, SEMANAL o MENSUAL."),
-                arr("diasSemana", "Para SEMANAL, p. ej. [\"LUNES\",\"MIERCOLES\"]."),
-                p("horaInicio", "STRING", "HH:MM. Opcional."),
-                p("horaFin", "STRING", "HH:MM. Opcional."),
-                p("tipo", "STRING", "Opcional."),
-                p("lugar", "STRING", "Opcional."),
-                p("personas", "STRING", "Opcional."),
-                p("descripcion", "STRING", "Opcional.")
-            ), "titulo", "fechaInicio", "fechaFin", "frecuencia"));
+                "Crea una serie repetida entre dos fechas.",
+                props(
+                        p("titulo", "STRING", "Título."),
+                        p("fechaInicio", "STRING", "YYYY-MM-DD."),
+                        p("fechaFin", "STRING", "YYYY-MM-DD."),
+                        p("frecuencia", "STRING", "DIARIA, SEMANAL o MENSUAL."),
+                        arr("diasSemana", "Días semana."),
+                        p("horaInicio", "STRING", "HH:MM. Opcional."),
+                        p("horaFin", "STRING", "HH:MM. Opcional."),
+                        p("tipo", "STRING", "Opcional."),
+                        p("lugar", "STRING", "Opcional."),
+                        p("personas", "STRING", "Opcional."),
+                        p("descripcion", "STRING", "Opcional.")
+                ), "titulo", "fechaInicio", "fechaFin", "frecuencia"));
 
         tools.add(herramienta("actualizar_evento",
-            "Modifica campos de un evento (solo los indicados).",
-            props(
-                p("id", "STRING", "Id obtenido con buscar_eventos."),
-                p("titulo", "STRING", "Opcional."),
-                p("fechaInicio", "STRING", "YYYY-MM-DD. Opcional."),
-                p("fechaFin", "STRING", "YYYY-MM-DD. Opcional."),
-                p("horaInicio", "STRING", "HH:MM. Opcional."),
-                p("horaFin", "STRING", "HH:MM. Opcional."),
-                p("tipo", "STRING", "Opcional."),
-                p("lugar", "STRING", "Opcional."),
-                p("personas", "STRING", "Opcional."),
-                p("descripcion", "STRING", "Sustituye las notas. Para añadir usa anadir_nota."),
-                arr("etiquetas", "Sustituye las etiquetas. Opcional.")
-            ), "id"));
+                "Modifica campos de un evento.",
+                props(
+                        p("id", "STRING", "Id del evento."),
+                        p("titulo", "STRING", "Opcional."),
+                        p("fechaInicio", "STRING", "YYYY-MM-DD. Opcional."),
+                        p("fechaFin", "STRING", "YYYY-MM-DD. Opcional."),
+                        p("horaInicio", "STRING", "HH:MM. Opcional."),
+                        p("horaFin", "STRING", "HH:MM. Opcional."),
+                        p("tipo", "STRING", "Opcional."),
+                        p("lugar", "STRING", "Opcional."),
+                        p("personas", "STRING", "Opcional."),
+                        p("descripcion", "STRING", "Opcional."),
+                        arr("etiquetas", "Opcional.")
+                ), "id"));
 
         tools.add(herramienta("anadir_nota",
-            "Añade una observación a uno o varios eventos sin tocar lo demás.",
-            props(arr("ids", "Ids de los eventos."), p("nota", "STRING", "Texto de la nota.")),
-            "ids", "nota"));
+                "Añade una observación a eventos.",
+                props(arr("ids", "Ids de eventos."), p("nota", "STRING", "Texto.")),
+                "ids", "nota"));
 
         tools.add(herramienta("borrar_eventos",
-            "Elimina eventos por id.",
-            props(arr("ids", "Ids a borrar.")),
-            "ids"));
+                "Elimina eventos por id.",
+                props(arr("ids", "Ids a borrar.")),
+                "ids"));
 
         toolsCache = tools;
         return tools;
@@ -324,26 +306,50 @@ public class FasiAgentService {
         return o;
     }
 
-    // ══════════════════════════════════════════════════════════
-    //  EJECUCIÓN DE HERRAMIENTAS
-    // ══════════════════════════════════════════════════════════
-
     private ToolResult ejecutarHerramienta(FunctionCall fc, UUID usuarioId) {
         JsonNode a = fc.args() == null ? mapper.createObjectNode() : fc.args();
         try {
             return switch (fc.name()) {
-                case "buscar_eventos"             -> new ToolResult(buscarEventos(a, usuarioId), false);
-                case "crear_evento"               -> new ToolResult(crearEvento(a), true);
-                case "crear_eventos_recurrentes"  -> new ToolResult(crearRecurrentes(a), true);
-                case "actualizar_evento"          -> new ToolResult(actualizarEvento(a), true);
-                case "anadir_nota"                -> new ToolResult(anadirNota(a), true);
-                case "borrar_eventos"             -> new ToolResult(borrarEventos(a), true);
+                case "anadir_a_lista_compra"    -> new ToolResult(ejecutarAnadirCompra(a, usuarioId), true);
+                case "quitar_de_lista_compra"    -> new ToolResult(ejecutarQuitarCompra(a, usuarioId), true);
+                case "buscar_eventos"            -> new ToolResult(buscarEventos(a, usuarioId), false);
+                case "crear_evento"              -> new ToolResult(crearEvento(a), true);
+                case "crear_eventos_recurrentes" -> new ToolResult(crearRecurrentes(a), true);
+                case "actualizar_evento"         -> new ToolResult(actualizarEvento(a), true);
+                case "anadir_nota"               -> new ToolResult(anadirNota(a), true);
+                case "borrar_eventos"            -> new ToolResult(borrarEventos(a), true);
                 default -> new ToolResult(error("Herramienta desconocida: " + fc.name()), false);
             };
         } catch (Exception e) {
             log.warn("⚠️ Herramienta {} falló: {}", fc.name(), e.getMessage());
             return new ToolResult(error(e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()), false);
         }
+    }
+
+    private ObjectNode ejecutarAnadirCompra(JsonNode a, UUID usuarioId) {
+        List<String> items = new ArrayList<>();
+        if (a.has("items") && a.get("items").isArray()) {
+            for (JsonNode n : a.get("items")) items.add(n.asText());
+        }
+        List<String> agregados = compraService.anadirElementos(items, usuarioId);
+        ObjectNode out = mapper.createObjectNode();
+        out.put("ok", true);
+        out.put("mensaje", "Añadidos a la lista de la compra: " + String.join(", ", agregados));
+        return out;
+    }
+
+    private ObjectNode ejecutarQuitarCompra(JsonNode a, UUID usuarioId) {
+        List<String> items = new ArrayList<>();
+        if (a.has("items") && a.get("items").isArray()) {
+            for (JsonNode n : a.get("items")) items.add(n.asText());
+        }
+        List<String> quitados = compraService.quitarElementos(items, usuarioId);
+        ObjectNode out = mapper.createObjectNode();
+        out.put("ok", true);
+        out.put("mensaje", quitados.isEmpty() 
+                ? "No se encontraron esos productos en la lista." 
+                : "Eliminados de la lista: " + String.join(", ", quitados));
+        return out;
     }
 
     private ObjectNode buscarEventos(JsonNode a, UUID usuarioId) {
@@ -384,8 +390,8 @@ public class FasiAgentService {
         out.put("total", filtrados.size());
         ArrayNode arr = out.putArray("eventos");
         filtrados.stream().limit(MAX_RESULTADOS).forEach(e -> arr.add(aJson(e)));
-        if (filtrados.size() > MAX_RESULTADOS) out.put("aviso", "Se muestran solo los primeros " + MAX_RESULTADOS + "; afina la búsqueda.");
-        if (filtrados.isEmpty()) out.put("aviso", "No hay eventos que coincidan. Prueba con menos palabras o un rango de fechas.");
+        if (filtrados.size() > MAX_RESULTADOS) out.put("aviso", "Se muestran solo los primeros " + MAX_RESULTADOS + ".");
+        if (filtrados.isEmpty()) out.put("aviso", "No hay eventos que coincidan.");
         return out;
     }
 
@@ -402,7 +408,7 @@ public class FasiAgentService {
     private ObjectNode crearEvento(JsonNode a) {
         String titulo = str(a, "titulo");
         LocalDate fi  = fecha(a, "fechaInicio");
-        if (titulo == null || fi == null) return error("titulo y fechaInicio son obligatorios (YYYY-MM-DD).");
+        if (titulo == null || fi == null) return error("titulo y fechaInicio son obligatorios.");
 
         Evento e = new Evento();
         rellenar(e, a, true);
@@ -502,7 +508,7 @@ public class FasiAgentService {
         String nota = str(a, "nota");
         if (nota == null) return error("nota vacía.");
         List<UUID> ids = uuids(a.get("ids"));
-        if (ids.isEmpty()) return error("ids vacíos: busca primero los eventos con buscar_eventos.");
+        if (ids.isEmpty()) return error("ids vacíos: busca primero con buscar_eventos.");
 
         String sello = "[" + LocalDate.now().format(DateTimeFormatter.ofPattern("dd/MM")) + "] " + nota.trim();
         ArrayNode tocados = mapper.createArrayNode();
@@ -521,7 +527,7 @@ public class FasiAgentService {
 
     private ObjectNode borrarEventos(JsonNode a) {
         List<UUID> ids = uuids(a.get("ids"));
-        if (ids.isEmpty()) return error("ids vacíos: busca primero los eventos con buscar_eventos.");
+        if (ids.isEmpty()) return error("ids vacíos: busca primero con buscar_eventos.");
         ArrayNode borrados = mapper.createArrayNode();
         for (UUID id : ids) {
             Evento e = eventoService.findById(id);
@@ -534,10 +540,6 @@ public class FasiAgentService {
         out.set("detalle", borrados);
         return out;
     }
-
-    // ══════════════════════════════════════════════════════════
-    //  UTILIDADES
-    // ══════════════════════════════════════════════════════════
 
     private void rellenar(Evento e, JsonNode a, boolean inferirTipo) {
         if (a.hasNonNull("fechaFin"))   e.setFechaFin(fecha(a, "fechaFin"));

@@ -1,731 +1,262 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org"
+<html lang="es" xmlns:th="http://www.thymeleaf.org"
       xmlns:sec="http://www.thymeleaf.org/extras/spring-security"
-      th:fragment="layout(title, content)">
+      th:fragment="layout(title, content, scripts)">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title th:replace="${title}">FASI</title>
-
-  <!-- PWA Meta Tags -->
-  <link rel="manifest" href="/manifest.json"/>
-  <meta name="theme-color" content="#4f46e5"/>
-  <meta name="apple-mobile-web-app-capable" content="yes"/>
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-  <meta name="apple-mobile-web-app-title" content="FASI"/>
-  <link rel="apple-touch-icon" href="/images/icon-192.png"/>
-
-  <script th:src="@{/js/tailwind.min.js}"></script>
-  <script th:src="@{/js/htmx.min.js}"></script>
-  <script>tailwind.config = { darkMode: 'class' };</script>
-
-  <style>
-    *, *::before, *::after {
-      transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
-    }
-    .scrollbar-hide::-webkit-scrollbar { display: none; }
-    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-
-    #hamburger-menu {
-      transition: transform 0.3s ease, opacity 0.3s ease;
-    }
-    #hamburger-menu.hidden-menu {
-      transform: translateX(100%);
-      opacity: 0;
-      pointer-events: none;
-    }
-
-    .main-content {
-      display: flex;
-      flex-direction: column;
-      flex: 1;
-      min-height: 0;
-      overflow-y: auto;
-      padding-top: 56px;
-      padding-bottom: 16px;
-    }
-
-    @supports (padding: env(safe-area-inset-top)) {
-      header { padding-top: env(safe-area-inset-top); }
-      .main-content { padding-top: calc(56px + env(safe-area-inset-top)); }
-    }
-  </style>
-</head>
-<body class="bg-gray-100 dark:bg-gray-950 h-screen flex flex-col overflow-hidden">
-
-  <!-- ═══════════════════════════════════════════════════════ -->
-  <!-- HEADER FIJO                                             -->
-  <!-- ═══════════════════════════════════════════════════════ -->
-  <header class="fixed top-0 left-0 right-0 z-50
-                 bg-stone-50 dark:bg-gray-900
-                 text-gray-800 dark:text-white
-                 border-b border-stone-200 dark:border-gray-700
-                 h-14 flex items-center justify-between shadow-sm px-2">
-
-    <!-- LOGO + SLOT PARA TÍTULO/NAVEGACIÓN DE CADA VISTA -->
-    <div class="flex items-center gap-1 min-w-0 flex-1">
-      <a th:href="@{/}"
-         class="flex items-center justify-center w-10 h-10 text-2xl flex-shrink-0
-                hover:bg-stone-200 dark:hover:bg-gray-700
-                rounded-full transition"
-         title="Inicio">
-        ⚡
-      </a>
-      <!-- Cada vista inyecta aquí su título/navegación vía JS -->
-      <div id="header-title-slot"
-           class="flex items-center gap-1 min-w-0 flex-1 overflow-hidden">
-      </div>
-    </div>
-
-    <div class="flex items-center gap-1 flex-shrink-0">
-      <button onclick="abrirModalVozGlobal()"
-              class="w-10 h-10 flex items-center justify-center rounded-full
-                     bg-indigo-600 hover:bg-indigo-500 text-white
-                     transition text-xl font-bold"
-              title="Nuevo evento">
-        +
-      </button>
-
-      <button onclick="toggleMenu()"
-              class="w-10 h-10 flex items-center justify-center rounded-full
-                     hover:bg-stone-200 dark:hover:bg-gray-700
-                     transition text-2xl"
-              title="Menú">
-        ☰
-      </button>
-    </div>
-  </header>
-
-  <!-- ═══════════════════════════════════════════════════════ -->
-  <!-- MENÚ HAMBURGUESA                                        -->
-  <!-- ═══════════════════════════════════════════════════════ -->
-  <div id="menu-overlay" class="hidden fixed inset-0 z-40 bg-black/50"
-       onclick="cerrarMenu()"></div>
-
-  <nav id="hamburger-menu"
-       class="hidden-menu fixed top-0 right-0 bottom-0 z-50 w-72
-              bg-gray-900 dark:bg-gray-800 text-white shadow-2xl
-              flex flex-col">
-
-    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-700">
-      <span class="font-bold text-lg">⚡ FASI</span>
-      <button onclick="cerrarMenu()"
-              class="w-8 h-8 flex items-center justify-center rounded-full
-                     hover:bg-gray-700 transition text-gray-400 hover:text-white">
-        ✕
-      </button>
-    </div>
-
-    <div class="px-5 py-3 border-b border-gray-700 bg-gray-800/50">
-      <div class="flex items-center gap-3">
-        <div class="w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center
-                    text-sm font-bold">
-          <span sec:authentication="name" class="uppercase">U</span>
-        </div>
-        <div>
-          <p class="text-sm font-semibold" sec:authentication="name">usuario</p>
-          <p class="text-xs text-gray-400" sec:authorize="hasRole('ADMIN')">Administrador</p>
-          <p class="text-xs text-gray-400" sec:authorize="!hasRole('ADMIN')">Familiar</p>
-        </div>
-      </div>
-    </div>
-
-    <div class="flex-1 py-3 space-y-1 px-3 overflow-y-auto">
-
-      <a th:href="@{/calendario}"
-         onclick="cerrarMenu()"
-         class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-700 transition">
-        📅 <span>Calendario</span>
-      </a>
-
-      <button onclick="cerrarMenu(); abrirModalVozGlobal();"
-              class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-700 transition text-left">
-        ➕ <span>Nuevo evento</span>
-      </button>
-
-      <button onclick="cerrarMenu(); abrirBuscadorIA();"
-              class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-700 transition text-left">
-        🔍 <span>Buscar</span>
-      </button>
-
-      <button onclick="cerrarMenu(); toggleDark();"
-              class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-700 transition text-left">
-        <span id="menu-dark-icon">🌙</span> <span>Modo noche/día</span>
-      </button>
-
-      <!-- ENLACE DE GESTIÓN SOLO PARA ADMIN -->
-      <a th:href="@{/admin/usuarios}"
-         sec:authorize="hasRole('ADMIN')"
-         onclick="cerrarMenu()"
-         class="flex items-center gap-3 px-4 py-3 rounded-xl bg-purple-900/30 hover:bg-purple-900/50 text-purple-300 transition font-medium border border-purple-800/40">
-        👥 <span>Gestión Usuarios</span>
-      </a>
-
-      <a th:href="@{/contexto}"
-         onclick="cerrarMenu()"
-         class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-700 transition">
-        🧠 <span>Carga de Datos</span>
-      </a>
-
-      <a th:href="@{/ia}"
-         onclick="cerrarMenu()"
-         class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-700 transition">
-        🤖 <span>Asistente IA</span>
-      </a>
-
-      <div class="border-t border-gray-700 my-2"></div>
-
-      <button onclick="cerrarMenu(); confirmarVaciarBD();"
-              class="w-full flex items-center gap-3 px-4 py-3 rounded-xl
-                     hover:bg-red-900/50 text-red-400 transition text-left text-sm">
-        🗑️ <span>Vaciar BD <span class="text-xs text-gray-500">(pruebas)</span></span>
-      </button>
-    </div>
-
-    <div class="px-5 py-4 border-t border-gray-700">
-      <form th:action="@{/logout}" method="post">
-        <button type="submit"
-                class="w-full flex items-center justify-center gap-2 py-2 rounded-xl
-                       bg-red-600/20 hover:bg-red-600/40 text-red-400 transition text-sm">
-          🚪 Cerrar sesión
-        </button>
-      </form>
-    </div>
-  </nav>
-
-  <!-- ═══════════════════════════════════════════════════════ -->
-  <!-- MODAL BUSCADOR IA                                       -->
-  <!-- ═══════════════════════════════════════════════════════ -->
-  <div id="modal-buscador"
-       class="hidden fixed inset-0 z-50 flex items-start justify-center pt-16 px-4 bg-black/60">
-    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg">
-
-      <div class="flex items-center gap-3 p-4 border-b border-gray-200 dark:border-gray-700">
-        <span class="text-xl">🔍</span>
-        <input type="text" id="ia-search-input"
-               placeholder="Pregunta algo... ¿Qué tengo el próximo fin de semana?"
-               class="flex-1 bg-transparent text-gray-900 dark:text-gray-100
-                      focus:outline-none text-sm placeholder-gray-400"/>
-        <button onclick="cerrarBuscadorIA()"
-                class="w-8 h-8 flex items-center justify-center rounded-full
-                       bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 text-gray-500 text-sm">
-          ✕
-        </button>
-      </div>
-
-      <div class="p-3 flex flex-wrap gap-2 border-b border-gray-100 dark:border-gray-700">
-        <button onclick="buscarIA('¿Qué tengo esta semana?')"
-                class="text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600
-                       dark:text-indigo-300 px-3 py-1 rounded-full hover:bg-indigo-100 transition">
-          Esta semana
-        </button>
-        <button onclick="buscarIA('¿Qué eventos hay este mes?')"
-                class="text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600
-                       dark:text-indigo-300 px-3 py-1 rounded-full hover:bg-indigo-100 transition">
-          Este mes
-        </button>
-        <button onclick="buscarIA('¿Cuándo es el próximo cumpleaños?')"
-                class="text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600
-                       dark:text-indigo-300 px-3 py-1 rounded-full hover:bg-indigo-100 transition">
-          Próximo cumpleaños
-        </button>
-      </div>
-
-      <div id="ia-search-result" class="p-4 min-h-24 max-h-80 overflow-y-auto">
-        <p class="text-sm text-gray-400 text-center pt-4">
-          Escribe una pregunta o elige una sugerencia 👆
-        </p>
-      </div>
-
-      <div id="ia-search-spinner" style="display:none"
-           class="flex items-center gap-2 px-4 pb-4 text-sm text-gray-400">
-        <div class="w-2 h-2 bg-indigo-400 rounded-full animate-bounce"></div>
-        <div class="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:150ms"></div>
-        <div class="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:300ms"></div>
-        <span>Consultando a la IA...</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- ═══════════════════════════════════════════════════════ -->
-  <!-- MODAL VOZ GLOBAL                                        -->
-  <!-- ═══════════════════════════════════════════════════════ -->
-  <div id="modal-voz-global"
-       class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4">
-    <div class="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl
-                w-full sm:max-w-lg mx-0 sm:mx-4 relative
-                max-h-[90vh] sm:max-h-[85vh] flex flex-col">
-
-      <!-- HEADER -->
-      <div class="flex-shrink-0 p-6 pb-3 border-b border-gray-200 dark:border-gray-700">
-        <button onclick="cerrarModalVozGlobal()"
-                class="absolute top-4 right-4 w-8 h-8 flex items-center justify-center
-                       bg-gray-200 dark:bg-gray-600 hover:bg-red-100 dark:hover:bg-red-900
-                       text-gray-600 dark:text-gray-200 rounded-full text-lg font-bold transition z-10">
-          ✕
-        </button>
-        <h3 class="text-lg font-bold text-gray-800 dark:text-gray-100 mb-1">
-          🎤 Nuevo evento
-        </h3>
-        <p class="text-xs text-gray-400">
-          Habla o escribe: <em>"Cita médica el jueves para Rocío a las 10"</em>
-        </p>
-      </div>
-
-      <!-- CONTENIDO -->
-      <div class="flex-1 overflow-y-auto px-6 py-4 space-y-3">
-
-        <div id="gp-paso-inicial">
-          <textarea id="gp-voz-texto" rows="3"
-                    placeholder="Pulsa el micrófono o escribe aquí..."
-                    class="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3
-                           bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
-                           focus:outline-none focus:ring-2 focus:ring-red-400 text-sm resize-none"></textarea>
-
-          <div class="flex gap-2 mt-3">
-            <button id="gp-btn-micro" onclick="gpToggleMicrofono()"
-                    class="flex-1 flex items-center justify-center gap-2 bg-red-500
-                           hover:bg-red-600 text-white py-2.5 rounded-xl font-semibold transition text-sm">
-              🎤 <span id="gp-micro-label">Grabar</span>
-            </button>
-            <button onclick="gpInterpretarTexto()"
-                    class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5
-                           rounded-xl font-semibold transition text-sm">
-              ✨ Interpretar
-            </button>
-          </div>
-        </div>
-
-        <div id="gp-paso-limite" style="display:none">
-          <div class="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700
-                      rounded-xl p-4">
-            <p class="text-sm text-yellow-800 dark:text-yellow-200 whitespace-pre-wrap"
-               id="gp-mensaje-limite"></p>
-          </div>
-          <textarea id="gp-limite-texto" rows="2"
-                    placeholder="'hasta agosto', 'hasta el 31/12', 'indefinido'..."
-                    class="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3
-                           bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
-                           focus:outline-none focus:ring-2 focus:ring-yellow-400 text-sm
-                           resize-none mt-3"></textarea>
-          <div class="flex gap-2 mt-3">
-            <button onclick="gpProcesarLimite()"
-                    class="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white py-2.5
-                           rounded-xl font-semibold transition text-sm">
-              ✅ Establecer límite
-            </button>
-            <button onclick="gpVolverAlInicio()"
-                    class="px-4 py-2.5 border border-gray-300 dark:border-gray-600
-                           text-gray-700 dark:text-gray-200 rounded-xl text-sm
-                           hover:bg-gray-50 dark:hover:bg-gray-700 transition">
-              ← Volver
-            </button>
-          </div>
-        </div>
-
-        <div id="gp-spinner" style="display:none"
-             class="flex items-center gap-2 text-xs text-gray-400">
-          <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce"></div>
-          <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:150ms"></div>
-          <div class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:300ms"></div>
-          <span>Interpretando...</span>
-        </div>
-
-        <div id="gp-preview" style="display:none"
-             class="bg-gray-50 dark:bg-gray-700 rounded-xl p-4">
-          <h4 class="font-semibold text-sm text-gray-700 dark:text-gray-200 mb-2">Vista previa:</h4>
-          <div id="gp-preview-contenido" class="text-sm space-y-1 text-gray-700 dark:text-gray-200"></div>
-          <div class="flex gap-2 mt-3">
-            <button id="gp-btn-confirmar" onclick="gpConfirmarEvento()"
-                    class="flex-1 bg-green-600 hover:bg-green-700 text-white py-2
-                           rounded-lg font-semibold transition text-sm">
-              ✅ Confirmar
-            </button>
-            <button onclick="gpEditarManual()"
-                    class="flex-1 border border-gray-300 dark:border-gray-500
-                           text-gray-700 dark:text-gray-200 py-2 rounded-lg text-sm
-                           hover:bg-gray-50 dark:hover:bg-gray-600 transition">
-              ✏️ Editar
-            </button>
-          </div>
-        </div>
-
-      </div>
-    </div>
-  </div>
-
-  <!-- ═══════════════════════════════════════════════════════ -->
-  <!-- CONTENIDO PRINCIPAL                                     -->
-  <!-- ═══════════════════════════════════════════════════════ -->
-  <main class="main-content w-full mx-auto px-3 lg:px-6">
-    <th:block th:replace="${content}"/>
-  </main>
-
-  <!-- ═══════════════════════════════════════════════════════ -->
-  <!-- SCRIPTS GLOBALES                                        -->
-  <!-- ═══════════════════════════════════════════════════════ -->
+  
+  <script src="/js/tailwind.min.js"></script>
   <script>
-    const htmlEl = document.documentElement;
-
-    function applyDark(isDark) {
-      isDark ? htmlEl.classList.add('dark') : htmlEl.classList.remove('dark');
-      const menuIcon = document.getElementById('menu-dark-icon');
-      if (menuIcon) menuIcon.textContent = isDark ? '☀️' : '🌙';
-    }
-
-    function toggleDark() {
-      const isDark = !htmlEl.classList.contains('dark');
-      localStorage.setItem('fasi-dark', isDark ? '1' : '0');
-      applyDark(isDark);
-    }
-
-    (function() {
-      const saved = localStorage.getItem('fasi-dark');
-      applyDark(saved !== null ? saved === '1'
-                               : window.matchMedia('(prefers-color-scheme: dark)').matches);
-    })();
-
-    const menuOverlay   = document.getElementById('menu-overlay');
-    const hamburgerMenu = document.getElementById('hamburger-menu');
-
-    function toggleMenu() {
-      const isHidden = hamburgerMenu.classList.contains('hidden-menu');
-      if (isHidden) {
-        hamburgerMenu.classList.remove('hidden-menu');
-        menuOverlay.classList.remove('hidden');
-      } else {
-        cerrarMenu();
-      }
-    }
-
-    function cerrarMenu() {
-      hamburgerMenu.classList.add('hidden-menu');
-      menuOverlay.classList.add('hidden');
-    }
-
-    function abrirBuscadorIA() {
-      document.getElementById('modal-buscador').classList.remove('hidden');
-      setTimeout(() => document.getElementById('ia-search-input').focus(), 100);
-    }
-
-    function cerrarBuscadorIA() {
-      document.getElementById('modal-buscador').classList.add('hidden');
-    }
-
-    document.getElementById('ia-search-input').addEventListener('keydown', e => {
-      if (e.key === 'Enter') buscarIA(e.target.value.trim());
-      if (e.key === 'Escape') cerrarBuscadorIA();
-    });
-
-    async function buscarIA(pregunta) {
-      if (!pregunta) pregunta = document.getElementById('ia-search-input').value.trim();
-      if (!pregunta) return;
-      document.getElementById('ia-search-input').value = pregunta;
-
-      const result  = document.getElementById('ia-search-result');
-      const spinner = document.getElementById('ia-search-spinner');
-      result.innerHTML = '';
-      spinner.style.display = 'flex';
-
-      try {
-        const resp = await fetch('/calendario/api/consulta', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify(pregunta)
-        });
-        const texto = await resp.text();
-        result.innerHTML = `
-          <div class="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">
-            ${escapeHtml(texto)}
-          </div>`;
-      } catch (err) {
-        result.innerHTML = `<p class="text-sm text-red-500">Error: ${escapeHtml(err.message)}</p>`;
-      } finally {
-        spinner.style.display = 'none';
-      }
-    }
-
-    async function confirmarVaciarBD() {
-      if (!confirm('⚠️ ¿Borrar TODOS los eventos?')) return;
-      if (!confirm('¿Seguro? Esta acción no se puede deshacer.')) return;
-      const resp = await fetch('/calendario/api/vaciar', { method: 'DELETE' });
-      if (resp.ok) window.location.reload();
-    }
-
-    function escapeHtml(text) {
-      const d = document.createElement('div');
-      d.appendChild(document.createTextNode(String(text)));
-      return d.innerHTML;
-    }
-
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js')
-        .then(() => console.log('✅ PWA lista'))
-        .catch(e => console.warn('⚠️ PWA no disponible:', e));
-    }
-
-    function normalizarFecha(val) {
-      if (!val) return null;
-      if (Array.isArray(val) && val.length >= 3) {
-        return val[0] + '-' + String(val[1]).padStart(2,'0') + '-' + String(val[2]).padStart(2,'0');
-      }
-      return typeof val === 'string' ? val : null;
-    }
-
-    function normalizarHora(val) {
-      if (!val) return null;
-      if (Array.isArray(val) && val.length >= 2) {
-        return String(val[0]).padStart(2,'0') + ':' + String(val[1]).padStart(2,'0');
-      }
-      return typeof val === 'string' ? val.substring(0,5) : null;
-    }
-
-    function normalizarEvento(e) {
-      if (!e) return e;
-      e.fechaInicio = normalizarFecha(e.fechaInicio);
-      e.fechaFin    = normalizarFecha(e.fechaFin);
-      e.horaInicio  = normalizarHora(e.horaInicio);
-      e.horaFin     = normalizarHora(e.horaFin);
-      return e;
-    }
-
-    function abrirModalVozGlobal() {
-      if (typeof window.abrirModalVoz === 'function') {
-        window.abrirModalVoz();
-        return;
-      }
-      _gpResetear();
-      document.getElementById('modal-voz-global').classList.remove('hidden');
-      setTimeout(() => document.getElementById('gp-voz-texto').focus(), 100);
-    }
-
-    function cerrarModalVozGlobal() {
-      document.getElementById('modal-voz-global').classList.add('hidden');
-      if (gpGrabando) gpPararMicrofono();
-      _gpResetear();
-    }
-
-    function _gpResetear() {
-      document.getElementById('gp-paso-inicial').style.display = 'block';
-      document.getElementById('gp-paso-limite').style.display  = 'none';
-      document.getElementById('gp-preview').style.display      = 'none';
-      document.getElementById('gp-spinner').style.display      = 'none';
-      document.getElementById('gp-voz-texto').value            = '';
-      document.getElementById('gp-limite-texto').value         = '';
-      gpEventoActual = null;
-      gpEventoBase   = null;
-    }
-
-    function gpVolverAlInicio() {
-      document.getElementById('gp-paso-limite').style.display = 'none';
-      document.getElementById('gp-paso-inicial').style.display = 'block';
-      gpEventoBase = null;
-    }
-
-    var gpGrabando     = false;
-    var gpRecognition  = null;
-    var gpEventoActual = null;
-    var gpEventoBase   = null;
-
-    function gpToggleMicrofono() { gpGrabando ? gpPararMicrofono() : gpIniciarMicrofono(); }
-
-    function gpIniciarMicrofono() {
-      if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-        alert('Tu navegador no soporta reconocimiento de voz.'); return;
-      }
-      navigator.mediaDevices.getUserMedia({ audio: true })
-        .then(stream => {
-          stream.getTracks().forEach(t => t.stop());
-          _gpIniciarReconocimiento();
-        })
-        .catch(err => alert('Permiso de micrófono denegado: ' + err.message));
-    }
-
-    function _gpIniciarReconocimiento() {
-      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-      gpRecognition = new SR();
-      gpRecognition.lang = 'es-ES';
-      gpRecognition.continuous = true;
-      gpRecognition.interimResults = true;
-      let acumulado = '';
-      gpRecognition.onresult = e => {
-        let interino = '';
-        for (let i = e.resultIndex; i < e.results.length; i++) {
-          if (e.results[i].isFinal) acumulado += e.results[i][0].transcript + ' ';
-          else interino += e.results[i][0].transcript;
-        }
-        document.getElementById('gp-voz-texto').value = acumulado + interino;
-      };
-      gpRecognition.onend = () => {
-        if (gpGrabando) setTimeout(() => { try { gpRecognition.start(); } catch(e){} }, 300);
-      };
-      gpRecognition.onerror = e => {
-        if (e.error === 'no-speech') { gpGrabando = false; _gpActualizarMicro(false); return; }
-        gpGrabando = false; _gpActualizarMicro(false);
-      };
-      gpRecognition.start();
-      gpGrabando = true;
-      _gpActualizarMicro(true);
-    }
-
-    function gpPararMicrofono() {
-      gpGrabando = false;
-      if (gpRecognition) gpRecognition.stop();
-      _gpActualizarMicro(false);
-    }
-
-    function _gpActualizarMicro(activo) {
-      document.getElementById('gp-micro-label').textContent = activo ? 'Parar' : 'Grabar';
-      const btn = document.getElementById('gp-btn-micro');
-      activo ? btn.classList.add('bg-red-700') : btn.classList.remove('bg-red-700');
-    }
-
-    async function gpInterpretarTexto() {
-      const texto = document.getElementById('gp-voz-texto').value.trim();
-      if (!texto) { alert('Escribe o dicta algo primero.'); return; }
-
-      document.getElementById('gp-spinner').style.display = 'flex';
-      document.getElementById('gp-preview').style.display = 'none';
-
-      try {
-        const resp = await fetch('/calendario/api/interpretar-preview', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ texto })
-        });
-        const data = await resp.json();
-
-        if (data.necesitaLimite) {
-          gpEventoBase = data.eventoBase;
-          document.getElementById('gp-mensaje-limite').textContent = data.mensajeLimite;
-          document.getElementById('gp-paso-inicial').style.display = 'none';
-          document.getElementById('gp-paso-limite').style.display  = 'block';
-          return;
-        }
-        if (data.error) { alert('Error: ' + data.error); return; }
-        if (data.evento) {
-          gpEventoActual = normalizarEvento(data.evento);
-          gpEventoActual.esRecurrente = data.esRecurrente;
-          gpEventoActual.descripcionPreview = data.descripcionPreview;
-          _gpMostrarPreview(gpEventoActual, data);
-        }
-      } catch (err) {
-        alert('Error: ' + err.message);
-      } finally {
-        document.getElementById('gp-spinner').style.display = 'none';
-      }
-    }
-
-    async function gpProcesarLimite() {
-      const respuestaLimite = document.getElementById('gp-limite-texto').value.trim();
-      if (!respuestaLimite) { alert('Escribe un límite primero.'); return; }
-
-      document.getElementById('gp-spinner').style.display = 'flex';
-      try {
-        const resp = await fetch('/calendario/api/procesar-limite', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ eventoBase: gpEventoBase, respuestaLimite })
-        });
-        const data = await resp.json();
-        if (data.error) { alert('Error: ' + data.error); return; }
-
-        gpEventoActual = normalizarEvento(data.evento);
-        gpEventoActual.esRecurrente = data.esRecurrente;
-        gpEventoActual.descripcionPreview = data.descripcionPreview;
-        document.getElementById('gp-paso-limite').style.display  = 'none';
-        document.getElementById('gp-paso-inicial').style.display = 'block';
-        _gpMostrarPreview(gpEventoActual, data);
-      } catch (err) {
-        alert('Error: ' + err.message);
-      } finally {
-        document.getElementById('gp-spinner').style.display = 'none';
-      }
-    }
-
-    function _gpMostrarPreview(evento, dataExtra) {
-      const tipoLabel = (evento.tipo && evento.tipo.label) ? evento.tipo.label : (evento.tipo || '');
-      const tipoEmoji = (evento.tipo && evento.tipo.emoji) ? evento.tipo.emoji : '';
-      const esRec     = evento.datosExtra && evento.datosExtra.recurrente === true;
-
-      let html = '<div class="space-y-2">';
-      html += '<p><strong>Tipo:</strong> ' + tipoEmoji + ' ' + tipoLabel + '</p>';
-      html += '<p><strong>Título:</strong> ' + escapeHtml(evento.titulo || '-') + '</p>';
-      if (evento.horaInicio) {
-        html += '<p><strong>Hora:</strong> ' + evento.horaInicio;
-        if (evento.horaFin) html += ' - ' + evento.horaFin;
-        html += '</p>';
-      }
-      if (evento.lugar) html += '<p><strong>Lugar:</strong> ' + escapeHtml(evento.lugar) + '</p>';
-      if (evento.personasRelacionadas) html += '<p><strong>Personas:</strong> ' + escapeHtml(evento.personasRelacionadas) + '</p>';
-
-      if (esRec && dataExtra.descripcionPreview) {
-        html += '<div class="mt-2 p-3 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg border border-indigo-200 dark:border-indigo-700">';
-        html += '<p class="text-xs font-semibold text-indigo-700 dark:text-indigo-300 mb-1">🔄 Recurrente:</p>';
-        html += '<pre class="text-xs whitespace-pre-wrap font-mono">' + escapeHtml(dataExtra.descripcionPreview) + '</pre>';
-        html += '</div>';
-      } else {
-        let fechaStr = evento.fechaInicio || '-';
-        if (evento.fechaFin && evento.fechaFin !== evento.fechaInicio) {
-          fechaStr += ' al ' + evento.fechaFin;
-        }
-        html += '<p><strong>Fecha:</strong> ' + fechaStr + '</p>';
-      }
-
-      if (!evento.horaInicio && !evento.todoDia) {
-        html += '<div class="mt-2 p-2 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 rounded text-xs text-yellow-700 dark:text-yellow-300">';
-        html += '⚠️ Sin hora — se guardará como pendiente';
-        html += '</div>';
-      }
-      html += '</div>';
-
-      document.getElementById('gp-preview-contenido').innerHTML = html;
-
-      const btnConf = document.getElementById('gp-btn-confirmar');
-      if (esRec && dataExtra.totalEventos) {
-        btnConf.textContent = '✅ Confirmar ' + dataExtra.totalEventos + ' evento' + (dataExtra.totalEventos > 1 ? 's' : '');
-        btnConf.className = 'flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg font-semibold transition text-sm';
-      } else {
-        btnConf.textContent = '✅ Confirmar';
-        btnConf.className = 'flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-semibold transition text-sm';
-      }
-
-      document.getElementById('gp-preview').style.display = 'block';
-    }
-
-    async function gpConfirmarEvento() {
-      if (!gpEventoActual) return;
-      const esRec    = gpEventoActual.datosExtra && gpEventoActual.datosExtra.recurrente === true;
-      const endpoint = esRec ? '/calendario/api/confirmar-recurrente' : '/calendario/api/confirmar';
-      try {
-        const resp = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(gpEventoActual)
-        });
-        if (resp.ok) {
-          const data = await resp.json();
-          if (esRec && Array.isArray(data)) alert(data.length + ' eventos creados.');
-          cerrarModalVozGlobal();
-          if (window.location.pathname.startsWith('/calendario')) {
-            window.location.reload();
-          } else {
-            window.location = '/calendario';
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: { 50:'#eef2ff', 100:'#e0e7ff', 500:'#6366f1', 600:'#4f46e5', 700:'#4338ca' }
           }
-        } else {
-          alert('Error al guardar.');
         }
-      } catch (err) {
-        alert('Error: ' + err.message);
       }
-    }
-
-    function gpEditarManual() {
-      if (!gpEventoActual) return;
-      cerrarModalVozGlobal();
-      window.location = '/calendario/nuevo?fecha=' + (gpEventoActual.fechaInicio || new Date().toISOString().split('T')[0]);
     }
   </script>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen flex flex-col font-sans transition-colors duration-200">
 
+<!-- ══════════════════════════════════════════════════════════
+     TOPBAR SUPERIOR
+══════════════════════════════════════════════════════════ -->
+<header class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-30 px-4 py-2.5 flex items-center justify-between shadow-sm">
+  <div class="flex items-center gap-1 min-w-0 flex-1">
+    <a th:href="@{/}" class="flex items-center justify-center w-10 h-10 text-2xl flex-shrink-0 hover:bg-stone-200 dark:hover:bg-gray-700 rounded-full transition" title="Inicio">
+      ⚡
+    </a>
+    <div id="header-title-slot" class="flex items-center gap-1 min-w-0 flex-1 overflow-hidden"></div>
+  </div>
+
+  <div class="flex items-center gap-1 flex-shrink-0">
+    <button onclick="abrirModalVozGlobal()"
+            class="w-10 h-10 flex items-center justify-center rounded-full bg-indigo-600 hover:bg-indigo-500 text-white transition text-xl font-bold shadow"
+            title="Asistente Inteligente FASI">
+      +
+    </button>
+    <button onclick="toggleMenu()"
+            class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-stone-200 dark:hover:bg-gray-700 transition text-2xl"
+            title="Menú">
+      ☰
+    </button>
+  </div>
+</header>
+
+<!-- ══════════════════════════════════════════════════════════
+     DRAWER LATERAL (SIMPLIFICADO)
+══════════════════════════════════════════════════════════ -->
+<div id="menu-overlay" onclick="cerrarMenu()" style="display:none" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 transition-opacity"></div>
+
+<aside id="sidebar-menu" style="transform: translateX(100%)" class="fixed top-0 right-0 h-full w-72 bg-gray-900 text-gray-100 z-50 flex flex-col transition-transform duration-300 shadow-2xl">
+  
+  <div class="flex items-center justify-between px-5 py-4 border-b border-gray-800">
+    <span class="font-bold text-lg">⚡ FASI</span>
+    <button onclick="cerrarMenu()" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-800 transition text-gray-400 hover:text-white">✕</button>
+  </div>
+
+  <div class="px-5 py-3 border-b border-gray-800 bg-gray-800/40">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center text-sm font-bold">
+        <span sec:authentication="name" class="uppercase">U</span>
+      </div>
+      <div>
+        <p class="text-sm font-semibold" sec:authentication="name">usuario</p>
+        <p class="text-xs text-gray-400" sec:authorize="hasRole('ADMIN')">Administrador</p>
+        <p class="text-xs text-gray-400" sec:authorize="!hasRole('ADMIN')">Familiar</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="flex-1 py-3 space-y-1 px-3 overflow-y-auto">
+    <a th:href="@{/calendario}" onclick="cerrarMenu()" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-800 transition">
+      📅 <span>Calendario</span>
+    </a>
+
+    <a th:href="@{/compra}" onclick="cerrarMenu()" class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-800 transition">
+      🛒 <span>Lista de la Compra</span>
+    </a>
+
+    <button onclick="cerrarMenu(); abrirModalVozGlobal();" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-800 transition text-left">
+      🧠 <span>Asistente Inteligente</span>
+    </button>
+
+    <button onclick="cerrarMenu(); toggleDark();" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-800 transition text-left">
+      <span id="menu-dark-icon">🌙</span> <span>Modo noche/día</span>
+    </button>
+
+    <a th:href="@{/admin/usuarios}" sec:authorize="hasRole('ADMIN')" onclick="cerrarMenu()"
+       class="flex items-center gap-3 px-4 py-3 rounded-xl bg-purple-900/30 hover:bg-purple-900/50 text-purple-300 transition font-medium border border-purple-800/40">
+      👥 <span>Gestión Usuarios</span>
+    </a>
+  </div>
+
+  <div class="px-5 py-4 border-t border-gray-800">
+    <form th:action="@{/logout}" method="post">
+      <button type="submit" class="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-red-600/20 hover:bg-red-600/40 text-red-400 transition text-sm">
+        🚪 Cerrar sesión
+      </button>
+    </form>
+  </div>
+</aside>
+
+<!-- ══════════════════════════════════════════════════════════
+     CONTENIDO DINÁMICO
+══════════════════════════════════════════════════════════ -->
+<div class="flex-1">
+  <div th:replace="${content}"></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     MODAL UNIFICADO: ASISTENTE FASI (IA)
+══════════════════════════════════════════════════════════ -->
+<div id="modal-voz-global" style="display:none" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+  <div class="bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl flex flex-col border border-gray-200 dark:border-gray-700">
+    
+    <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+      <div>
+        <h3 class="text-base font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+          <span>🧠</span> Asistente Inteligente FASI
+        </h3>
+        <p class="text-xs text-gray-400">Pídele eventos, notas o gestionar tu compra</p>
+      </div>
+      <button onclick="cerrarModalVozGlobal()" class="text-gray-400 hover:text-gray-200 text-2xl font-bold p-1">✕</button>
+    </div>
+
+    <div class="p-4 space-y-3">
+      <textarea id="agente-input-texto" rows="3"
+                placeholder="Ej: 'Añade a la compra aceite y leche', 'Cena el sábado a las 21:00' o 'Quita el arroz'..."
+                class="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm resize-none"></textarea>
+
+      <div class="flex gap-2">
+        <button id="agente-btn-micro" onclick="toggleMicroAgente()"
+                class="flex-1 flex items-center justify-center gap-2 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-xl font-semibold transition text-sm">
+          🎤 <span id="agente-micro-label">Grabar</span>
+        </button>
+        <button onclick="ejecutarAgenteGlobal()"
+                class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-xl font-semibold transition text-sm shadow">
+          ⚡ Ejecutar
+        </button>
+      </div>
+
+      <div id="agente-spinner" style="display:none" class="flex flex-col items-center justify-center py-4 space-y-2">
+        <div class="flex gap-1.5">
+          <div class="w-2.5 h-2.5 bg-indigo-500 rounded-full animate-bounce"></div>
+          <div class="w-2.5 h-2.5 bg-indigo-500 rounded-full animate-bounce" style="animation-delay:150ms"></div>
+          <div class="w-2.5 h-2.5 bg-indigo-500 rounded-full animate-bounce" style="animation-delay:300ms"></div>
+        </div>
+        <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">FASI está procesando tu orden...</span>
+      </div>
+
+      <div id="agente-resultado" style="display:none" class="p-4 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 rounded-xl space-y-3">
+        <p id="agente-mensaje-respuesta" class="text-sm text-gray-800 dark:text-gray-100 leading-relaxed whitespace-pre-wrap"></p>
+        <button onclick="cerrarModalVozGlobal(); window.location.reload();"
+                class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg font-semibold text-xs transition">
+          Aceptar y actualizar 👍
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function toggleMenu() {
+    const s = document.getElementById('sidebar-menu');
+    const o = document.getElementById('menu-overlay');
+    const open = s.style.transform === 'translateX(0px)';
+    s.style.transform = open ? 'translateX(100%)' : 'translateX(0px)';
+    o.style.display = open ? 'none' : 'block';
+  }
+  function cerrarMenu() {
+    document.getElementById('sidebar-menu').style.transform = 'translateX(100%)';
+    document.getElementById('menu-overlay').style.display = 'none';
+  }
+
+  function toggleDark() {
+    document.documentElement.classList.toggle('dark');
+    const isDark = document.documentElement.classList.contains('dark');
+    localStorage.setItem('fasi-theme', isDark ? 'dark' : 'light');
+    document.getElementById('menu-dark-icon').textContent = isDark ? '☀️' : '🌙';
+  }
+  if (localStorage.getItem('fasi-theme') === 'dark' || (!localStorage.getItem('fasi-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    document.documentElement.classList.add('dark');
+  }
+
+  function abrirModalVozGlobal() {
+    document.getElementById('agente-resultado').style.display = 'none';
+    document.getElementById('agente-input-texto').value = '';
+    document.getElementById('modal-voz-global').style.display = 'flex';
+  }
+  function cerrarModalVozGlobal() {
+    document.getElementById('modal-voz-global').style.display = 'none';
+  }
+
+  let recognition = null;
+  let grabando = false;
+  function toggleMicroAgente() {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      alert('Tu navegador no soporta dictado por voz.');
+      return;
+    }
+    if (grabando) {
+      if (recognition) recognition.stop();
+      return;
+    }
+    const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognition = new Speech();
+    recognition.lang = 'es-ES';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    recognition.onstart = () => {
+      grabando = true;
+      document.getElementById('agente-micro-label').textContent = 'Escuchando...';
+      document.getElementById('agente-btn-micro').classList.replace('bg-red-500', 'bg-amber-600');
+    };
+    recognition.onresult = (e) => {
+      document.getElementById('agente-input-texto').value = e.results[0][0].transcript;
+    };
+    recognition.onend = () => {
+      grabando = false;
+      document.getElementById('agente-micro-label').textContent = 'Grabar';
+      document.getElementById('agente-btn-micro').classList.replace('bg-amber-600', 'bg-red-500');
+    };
+    recognition.start();
+  }
+
+  async function ejecutarAgenteGlobal() {
+    const texto = document.getElementById('agente-input-texto').value.trim();
+    if (!texto) return;
+
+    const spinner = document.getElementById('agente-spinner');
+    const resultado = document.getElementById('agente-resultado');
+    const msg = document.getElementById('agente-mensaje-respuesta');
+
+    spinner.style.display = 'flex';
+    resultado.style.display = 'none';
+
+    try {
+      const resp = await fetch('/calendario/api/agente', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texto })
+      });
+      const data = await resp.json();
+      spinner.style.display = 'none';
+      msg.textContent = data.mensaje;
+      resultado.style.display = 'block';
+    } catch (err) {
+      spinner.style.display = 'none';
+      alert('Error contactando con el asistente: ' + err.message);
+    }
+  }
+</script>
+
+<th:block th:replace="${scripts}"/>
 </body>
 </html>

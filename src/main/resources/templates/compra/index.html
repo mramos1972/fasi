@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout/base :: layout(~{::title}, ~{::main}, ~{::script})}">
+<head>
+  <title>FASI — Lista de la Compra</title>
+</head>
+<body>
+<main class="max-w-2xl mx-auto px-4 py-6">
+
+  <!-- ENCABEZADO -->
+  <div class="flex items-center justify-between mb-6">
+    <div class="flex items-center gap-3">
+      <span class="text-3xl">🛒</span>
+      <div>
+        <h1 class="text-xl font-bold text-gray-900 dark:text-gray-100">Lista de la Compra</h1>
+        <p class="text-xs text-gray-500 dark:text-gray-400">Pídeselo al asistente o anótalo manualmente</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- INPUT RÁPIDO MANUAL -->
+  <form th:action="@{/compra/anadir}" method="post" class="flex gap-2 mb-6">
+    <input type="text" name="nombre" required placeholder="Añadir producto rápido..."
+           class="flex-1 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm" />
+    <button type="submit"
+            class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition shadow-sm">
+      Añadir
+    </button>
+  </form>
+
+  <!-- LISTA DE PRODUCTOS -->
+  <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <ul th:if="${!#lists.isEmpty(items)}" class="divide-y divide-gray-100 dark:divide-gray-700/50">
+      <li th:each="item : ${items}"
+          class="flex items-center justify-between px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition">
+        
+        <!-- Toggle Comprado -->
+        <form th:action="@{/compra/{id}/toggle(id=${item.id})}" method="post" class="flex items-center gap-3 flex-1 min-w-0">
+          <button type="submit" class="flex items-center gap-3 w-full text-left">
+            <span th:class="${item.comprado ? 'w-5 h-5 rounded-full bg-green-500 text-white flex items-center justify-center text-xs font-bold' : 'w-5 h-5 rounded-full border-2 border-gray-400 dark:border-gray-500'}">
+              <span th:if="${item.comprado}">✓</span>
+            </span>
+            <span th:text="${item.nombre}"
+                  th:class="${item.comprado ? 'line-through text-gray-400 dark:text-gray-500 text-sm font-medium' : 'text-gray-800 dark:text-gray-200 text-sm font-medium'}">
+            </span>
+          </button>
+        </form>
+
+        <!-- Borrar -->
+        <form th:action="@{/compra/{id}/eliminar(id=${item.id})}" method="post">
+          <button type="submit" class="text-gray-400 hover:text-red-500 text-lg px-2 transition">
+            ✕
+          </button>
+        </form>
+      </li>
+    </ul>
+
+    <!-- LISTA VACÍA -->
+    <div th:if="${#lists.isEmpty(items)}" class="text-center py-12 px-4">
+      <p class="text-4xl mb-2">🛍️</p>
+      <p class="text-sm font-medium text-gray-500 dark:text-gray-400">La lista de la compra está vacía</p>
+      <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">
+        Pulsa <strong>+</strong> para dictarle a FASI: <em>"Añade leche y huevos a la compra"</em>
+      </p>
+    </div>
+  </div>
+
+</main>
+<script></script>
+</body>
+</html>
