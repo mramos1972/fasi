@@ -65,6 +65,21 @@ public class FasiAgentService {
             Map.entry("VIERNES", DayOfWeek.FRIDAY), Map.entry("SABADO", DayOfWeek.SATURDAY),
             Map.entry("DOMINGO", DayOfWeek.SUNDAY));
 
+    private static final Map<String, String> COLORES_COMUNES = Map.ofEntries(
+            Map.entry("rojo", "#ef4444"),
+            Map.entry("verde", "#10b981"),
+            Map.entry("azul", "#3b82f6"),
+            Map.entry("amarillo", "#f59e0b"),
+            Map.entry("naranja", "#f97316"),
+            Map.entry("morado", "#8b5cf6"),
+            Map.entry("purpura", "#a855f7"),
+            Map.entry("rosa", "#ec4899"),
+            Map.entry("cyan", "#06b6d4"),
+            Map.entry("turquesa", "#14b8a6"),
+            Map.entry("gris", "#64748b"),
+            Map.entry("negro", "#1e293b")
+    );
+
     private volatile ArrayNode toolsCache;
 
     public AgentResponse ejecutarOrden(String texto) {
@@ -164,7 +179,10 @@ public class FasiAgentService {
             if (n++ >= 8) { agenda.append("- …\n"); break; }
             agenda.append("- ").append(e.getFechaInicio());
             if (e.getHoraInicio() != null) agenda.append(" ").append(e.getHoraInicio());
-            agenda.append(" ").append(e.getTitulo()).append("\n");
+            agenda.append(" ").append(e.getTitulo());
+            if (e.getColorPersonalizado() != null) agenda.append(" [color: ").append(e.getColorPersonalizado()).append("]");
+            if (e.getRecordatorioMinutos() != null) agenda.append(" [aviso: ").append(e.getRecordatorioMinutos()).append("m]");
+            agenda.append("\n");
         }
         if (n == 0) agenda.append("- (sin eventos)\n");
 
@@ -172,12 +190,16 @@ public class FasiAgentService {
             Eres FASI, el asistente personal inteligente del hogar. Responde en español, breve y natural.
             Hoy: %s (%s). Usuario: %s.
 
-            Reglas generales:
-            - Gestionas tanto el CALENDARIO como la LISTA DE LA COMPRA.
-            - LISTA DE LA COMPRA: Si el usuario te pide añadir o quitar cosas ("pon leche en la lista", "quita el arroz", "compra huevos y pan"), usa las herramientas 'anadir_a_lista_compra' o 'quitar_de_lista_compra'. Puedes pasar múltiples elementos en un array.
-            - CALENDARIO: Para modificar, anotar, copiar o borrar eventos, primero 'buscar_eventos' y usa SOLO los ids devueltos.
-            - Borrar más de 3 eventos requiere confirmación.
-            - Al terminar confirma con exactitud lo realizado.
+            Capacidades del sistema:
+            1. GESTIÓN COMPLETA DE EVENTOS:
+               - Puedes crear, consultar, modificar notas, cambiar fechas/horas, asignar colores y configurar recordatorios.
+               - Colores: Si el usuario pide un color (ej: "ponlo en rojo", "color verde", "#f59e0b"), usa el campo 'colorPersonalizado'.
+               - Recordatorios: Si el usuario pide aviso (ej: "avísame 30 minutos antes", "recordatorio 1 hora antes", "aviso 1 día antes"), calcula los minutos (30, 60, 1440, etc.) y pásalo en 'recordatorioMinutos'. Para quitar recordatorios pasa 0 o null.
+            2. LISTA DE LA COMPRA:
+               - Añade o quita productos de la lista con 'anadir_a_lista_compra' o 'quitar_de_lista_compra'.
+            3. REGLAS:
+               - Para modificar o borrar eventos, primero busca con 'buscar_eventos' y utiliza únicamente los IDs reales encontrados.
+               - Al finalizar, resume claramente todas las propiedades configuradas (fecha, hora, color o recordatorios si aplican).
 
             Próximos 3 días en agenda:
             %s""".formatted(hoy, diaSemana,
@@ -203,7 +225,7 @@ public class FasiAgentService {
 
         // ── Herramientas de Calendario ──
         tools.add(herramienta("buscar_eventos",
-                "Busca eventos del usuario y devuelve id, título, fecha, hora, tipo, lugar, personas, etiquetas y notas.",
+                "Busca eventos del usuario y devuelve id, título, fecha, hora, tipo, lugar, personas, etiquetas, notas, color y recordatorios.",
                 props(
                         p("texto", "STRING", "Palabras clave. Opcional."),
                         p("fechaDesde", "STRING", "YYYY-MM-DD. Opcional."),
@@ -212,18 +234,20 @@ public class FasiAgentService {
                 )));
 
         tools.add(herramienta("crear_evento",
-                "Crea un evento.",
+                "Crea un evento con soporte para color y recordatorio.",
                 props(
-                        p("titulo", "STRING", "Título."),
+                        p("titulo", "STRING", "Título del evento."),
                         p("fechaInicio", "STRING", "YYYY-MM-DD."),
                         p("fechaFin", "STRING", "YYYY-MM-DD. Opcional."),
                         p("horaInicio", "STRING", "HH:MM. Opcional."),
                         p("horaFin", "STRING", "HH:MM. Opcional."),
-                        p("tipo", "STRING", "Tipo. Opcional."),
-                        p("lugar", "STRING", "Opcional."),
-                        p("personas", "STRING", "Opcional."),
-                        p("descripcion", "STRING", "Notas. Opcional."),
-                        arr("etiquetas", "Etiquetas. Opcional.")
+                        p("tipo", "STRING", "Tipo de evento. Opcional."),
+                        p("colorPersonalizado", "STRING", "Color en hexadecimal (#RRGGBB) o nombre común (rojo, verde, azul, naranja, etc.). Opcional."),
+                        p("recordatorioMinutos", "INTEGER", "Minutos previos para enviar recordatorio por email (ej: 15, 30, 60, 1440). Opcional."),
+                        p("lugar", "STRING", "Lugar físico o ciudad. Opcional."),
+                        p("personas", "STRING", "Personas involucradas. Opcional."),
+                        p("descripcion", "STRING", "Notas adicionales. Opcional."),
+                        arr("etiquetas", "Etiquetas para categorizar. Opcional.")
                 ), "titulo", "fechaInicio"));
 
         tools.add(herramienta("crear_eventos_recurrentes",
@@ -233,25 +257,29 @@ public class FasiAgentService {
                         p("fechaInicio", "STRING", "YYYY-MM-DD."),
                         p("fechaFin", "STRING", "YYYY-MM-DD."),
                         p("frecuencia", "STRING", "DIARIA, SEMANAL o MENSUAL."),
-                        arr("diasSemana", "Días semana."),
+                        arr("diasSemana", "Días de la semana."),
                         p("horaInicio", "STRING", "HH:MM. Opcional."),
                         p("horaFin", "STRING", "HH:MM. Opcional."),
                         p("tipo", "STRING", "Opcional."),
+                        p("colorPersonalizado", "STRING", "Color hex (#RRGGBB) o nombre en español. Opcional."),
+                        p("recordatorioMinutos", "INTEGER", "Minutos previos para el recordatorio. Opcional."),
                         p("lugar", "STRING", "Opcional."),
                         p("personas", "STRING", "Opcional."),
                         p("descripcion", "STRING", "Opcional.")
                 ), "titulo", "fechaInicio", "fechaFin", "frecuencia"));
 
         tools.add(herramienta("actualizar_evento",
-                "Modifica campos de un evento.",
+                "Modifica cualquier campo de un evento existente, incluidos color y recordatorios.",
                 props(
-                        p("id", "STRING", "Id del evento."),
-                        p("titulo", "STRING", "Opcional."),
+                        p("id", "STRING", "Id UUID del evento a modificar."),
+                        p("titulo", "STRING", "Nuevo título. Opcional."),
                         p("fechaInicio", "STRING", "YYYY-MM-DD. Opcional."),
                         p("fechaFin", "STRING", "YYYY-MM-DD. Opcional."),
                         p("horaInicio", "STRING", "HH:MM. Opcional."),
                         p("horaFin", "STRING", "HH:MM. Opcional."),
                         p("tipo", "STRING", "Opcional."),
+                        p("colorPersonalizado", "STRING", "Color hex (#RRGGBB) o nombre (rojo, azul, etc.). Opcional."),
+                        p("recordatorioMinutos", "INTEGER", "Minutos para recordatorio (0 o null para deshabilitar). Opcional."),
                         p("lugar", "STRING", "Opcional."),
                         p("personas", "STRING", "Opcional."),
                         p("descripcion", "STRING", "Opcional."),
@@ -259,8 +287,8 @@ public class FasiAgentService {
                 ), "id"));
 
         tools.add(herramienta("anadir_nota",
-                "Añade una observación a eventos.",
-                props(arr("ids", "Ids de eventos."), p("nota", "STRING", "Texto.")),
+                "Añade una observación o nota con fecha a uno o varios eventos.",
+                props(arr("ids", "Ids de eventos."), p("nota", "STRING", "Texto a incorporar.")),
                 "ids", "nota"));
 
         tools.add(herramienta("borrar_eventos",
@@ -486,15 +514,21 @@ public class FasiAgentService {
         if (id == null) return error("id inválido.");
         Evento e = eventoService.findById(id);
 
-        if (a.hasNonNull("titulo"))      e.setTitulo(str(a, "titulo"));
-        if (a.hasNonNull("fechaInicio")) { LocalDate f = fecha(a, "fechaInicio"); if (f == null) return error("fechaInicio inválida"); e.setFechaInicio(f); }
-        if (a.hasNonNull("fechaFin"))    e.setFechaFin(fecha(a, "fechaFin"));
-        if (a.hasNonNull("horaInicio"))  { e.setHoraInicio(hora(a, "horaInicio")); e.setTodoDia(e.getHoraInicio() == null); }
-        if (a.hasNonNull("horaFin"))     e.setHoraFin(hora(a, "horaFin"));
-        if (a.hasNonNull("tipo"))        e.setTipo(Evento.TipoEvento.fromValue(str(a, "tipo")));
-        if (a.hasNonNull("lugar"))       e.setLugar(str(a, "lugar"));
-        if (a.hasNonNull("personas"))    e.setPersonasRelacionadas(str(a, "personas"));
-        if (a.hasNonNull("descripcion")) e.setDescripcion(str(a, "descripcion"));
+        if (a.hasNonNull("titulo"))              e.setTitulo(str(a, "titulo"));
+        if (a.hasNonNull("fechaInicio"))         { LocalDate f = fecha(a, "fechaInicio"); if (f == null) return error("fechaInicio inválida"); e.setFechaInicio(f); }
+        if (a.hasNonNull("fechaFin"))            e.setFechaFin(fecha(a, "fechaFin"));
+        if (a.hasNonNull("horaInicio"))          { e.setHoraInicio(hora(a, "horaInicio")); e.setTodoDia(e.getHoraInicio() == null); }
+        if (a.hasNonNull("horaFin"))             e.setHoraFin(hora(a, "horaFin"));
+        if (a.hasNonNull("tipo"))                e.setTipo(Evento.TipoEvento.fromValue(str(a, "tipo")));
+        if (a.hasNonNull("colorPersonalizado"))  e.setColorPersonalizado(normalizarColor(str(a, "colorPersonalizado")));
+        if (a.hasNonNull("recordatorioMinutos")) {
+            int mins = a.get("recordatorioMinutos").asInt(0);
+            e.setRecordatorioMinutos(mins > 0 ? mins : null);
+            e.setRecordatorioEnviado(false);
+        }
+        if (a.hasNonNull("lugar"))               e.setLugar(str(a, "lugar"));
+        if (a.hasNonNull("personas"))            e.setPersonasRelacionadas(str(a, "personas"));
+        if (a.hasNonNull("descripcion"))         e.setDescripcion(str(a, "descripcion"));
         if (a.has("etiquetas") && a.get("etiquetas").isArray()) e.setEtiquetas(etiquetas(a.get("etiquetas")));
 
         Evento g = eventoService.update(id, e);
@@ -542,14 +576,29 @@ public class FasiAgentService {
     }
 
     private void rellenar(Evento e, JsonNode a, boolean inferirTipo) {
-        if (a.hasNonNull("fechaFin"))   e.setFechaFin(fecha(a, "fechaFin"));
-        if (a.hasNonNull("horaInicio")) e.setHoraInicio(hora(a, "horaInicio"));
-        if (a.hasNonNull("horaFin"))    e.setHoraFin(hora(a, "horaFin"));
-        if (a.hasNonNull("lugar"))      e.setLugar(str(a, "lugar"));
-        if (a.hasNonNull("personas"))   e.setPersonasRelacionadas(str(a, "personas"));
+        if (a.hasNonNull("fechaFin"))            e.setFechaFin(fecha(a, "fechaFin"));
+        if (a.hasNonNull("horaInicio"))          e.setHoraInicio(hora(a, "horaInicio"));
+        if (a.hasNonNull("horaFin"))             e.setHoraFin(hora(a, "horaFin"));
+        if (a.hasNonNull("colorPersonalizado"))  e.setColorPersonalizado(normalizarColor(str(a, "colorPersonalizado")));
+        if (a.hasNonNull("recordatorioMinutos")) {
+            int mins = a.get("recordatorioMinutos").asInt(0);
+            e.setRecordatorioMinutos(mins > 0 ? mins : null);
+            e.setRecordatorioEnviado(false);
+        }
+        if (a.hasNonNull("lugar"))               e.setLugar(str(a, "lugar"));
+        if (a.hasNonNull("personas"))            e.setPersonasRelacionadas(str(a, "personas"));
         if (a.has("etiquetas") && a.get("etiquetas").isArray()) e.setEtiquetas(etiquetas(a.get("etiquetas")));
-        if (a.hasNonNull("tipo"))       e.setTipo(Evento.TipoEvento.fromValue(str(a, "tipo")));
-        else if (inferirTipo)           e.setTipo(inferirTipo(str(a, "titulo")));
+        if (a.hasNonNull("tipo"))                e.setTipo(Evento.TipoEvento.fromValue(str(a, "tipo")));
+        else if (inferirTipo)                    e.setTipo(inferirTipo(str(a, "titulo")));
+    }
+
+    private String normalizarColor(String val) {
+        if (val == null || val.isBlank()) return null;
+        String v = val.trim().toLowerCase();
+        if (COLORES_COMUNES.containsKey(v)) return COLORES_COMUNES.get(v);
+        if (v.startsWith("#") && (v.length() == 4 || v.length() == 7)) return v;
+        if (v.matches("[0-9a-f]{6}")) return "#" + v;
+        return null;
     }
 
     private Evento.TipoEvento inferirTipo(String titulo) {
@@ -574,6 +623,8 @@ public class FasiAgentService {
         if (e.getHoraInicio() != null) o.put("hora", e.getHoraInicio().toString());
         if (e.getHoraFin() != null)   o.put("horaFin", e.getHoraFin().toString());
         o.put("tipo", e.getTipo() != null ? e.getTipo().name() : "OTRO");
+        if (e.getColorPersonalizado() != null) o.put("colorPersonalizado", e.getColorPersonalizado());
+        if (e.getRecordatorioMinutos() != null) o.put("recordatorioMinutos", e.getRecordatorioMinutos());
         if (e.getLugar() != null) o.put("lugar", e.getLugar());
         if (e.getPersonasRelacionadas() != null) o.put("personas", e.getPersonasRelacionadas());
         if (e.getEtiquetas() != null && !e.getEtiquetas().isEmpty()) {
