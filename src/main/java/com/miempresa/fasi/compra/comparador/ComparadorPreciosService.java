@@ -37,83 +37,72 @@ public class ComparadorPreciosService {
             .build();
 
     private static final int HORAS_VALIDEZ_CACHE = 48;
-
-    // Caché en memoria para no resolver almacén en cada petición
     private final Map<String, String> almacenPorCodigoPostal = new ConcurrentHashMap<>();
 
     private static final Set<String> STOPWORDS = Set.of(
             "de", "del", "la", "el", "los", "las", "en", "un", "una", "unos", "unas", "para", "con", "y", "o"
     );
 
-    /**
-     * Precarga automática al arrancar la app con los precios de la cesta básica real en España.
-     * Así FASI es 100% operativo desde el primer segundo.
-     */
     @PostConstruct
-    public void precargarCestaBasicaSiVacio() {
+    public void precargarCestaBasicaSiFalta() {
         try {
-            long totalRegistros = cacheRepo.count();
-            if (totalRegistros > 0) return;
-
-            log.info("🛒 Inicializando catálogo semilla de cesta básica para Mercadona, Carrefour y Dia...");
-
-            Optional<Supermercado> mercadona = supermercadoRepo.findByCodigoInterno("MERCADONA");
             Optional<Supermercado> carrefour = supermercadoRepo.findByCodigoInterno("CARREFOUR");
             Optional<Supermercado> dia       = supermercadoRepo.findByCodigoInterno("DIA");
+            Optional<Supermercado> mercadona = supermercadoRepo.findByCodigoInterno("MERCADONA");
 
-            if (mercadona.isEmpty() || carrefour.isEmpty() || dia.isEmpty()) return;
+            if (carrefour.isEmpty() || dia.isEmpty() || mercadona.isEmpty()) return;
 
-            // Datos base del mercado actual (2025-2026)
+            // Asegurar que Carrefour y Dia tengan datos semilla para contrastar con Mercadona
             List<Object[]> semillas = List.of(
-                // término, nombre producto, precio Mercadona, precio Carrefour, precio Dia, formato
-                new Object[]{"harina", "Harina de trigo de fuerza", 0.85, 0.89, 0.82, "1 kg"},
                 new Object[]{"harina trigo", "Harina de trigo clásica", 0.79, 0.85, 0.78, "1 kg"},
+                new Object[]{"harina", "Harina tradicional", 0.82, 0.89, 0.80, "1 kg"},
                 new Object[]{"leche", "Leche entera", 0.95, 0.98, 0.93, "1 L"},
                 new Object[]{"leche semidesnatada", "Leche semidesnatada", 0.95, 0.97, 0.93, "1 L"},
-                new Object[]{"huevos", "Huevos camperos clase L (docena)", 2.45, 2.55, 2.39, "12 uds"},
+                new Object[]{"huevos", "Huevos clase L (docena)", 2.45, 2.55, 2.39, "12 uds"},
                 new Object[]{"aceite oliva", "Aceite de oliva virgen extra", 7.95, 8.20, 7.85, "1 L"},
-                new Object[]{"aceite girasol", "Aceite de girasol refinado", 1.45, 1.49, 1.42, "1 L"},
-                new Object[]{"arroz", "Arroz redondo tradicional", 1.30, 1.35, 1.25, "1 kg"},
-                new Object[]{"detergente", "Detergente lavadora líquido (40 lavados)", 4.85, 5.20, 4.75, "Botella"},
-                new Object[]{"detergente lavadora norit", "Detergente Norit Ropa Completa", 5.20, 5.45, 4.99, "1.5 L"},
-                new Object[]{"norit", "Norit lavado a máquina ropa delicada", 5.10, 5.30, 4.95, "1.5 L"},
-                new Object[]{"pan", "Barra de pan tradicional", 0.55, 0.60, 0.50, "250 g"},
-                new Object[]{"azucar", "Azúcar blanco clásico", 1.15, 1.20, 1.10, "1 kg"},
-                new Object[]{"pasta", "Macarrones plumas clásicos", 0.90, 0.95, 0.88, "1 kg"},
+                new Object[]{"aceite girasol", "Aceite de girasol", 1.45, 1.49, 1.42, "1 L"},
+                new Object[]{"arroz", "Arroz redondo", 1.30, 1.35, 1.25, "1 kg"},
+                new Object[]{"detergente", "Detergente lavadora líquido", 4.85, 5.20, 4.75, "Botella"},
+                new Object[]{"norit", "Norit lavado a máquina", 5.20, 5.45, 4.99, "1.5 L"},
+                new Object[]{"detergente norit", "Norit Ropa Completa", 5.20, 5.45, 4.99, "1.5 L"},
+                new Object[]{"pan", "Barra de pan", 0.55, 0.60, 0.50, "250 g"},
+                new Object[]{"azucar", "Azúcar blanco", 1.15, 1.20, 1.10, "1 kg"},
+                new Object[]{"pasta", "Macarrones pluma", 0.90, 0.95, 0.88, "1 kg"},
                 new Object[]{"tomate frito", "Tomate frito casero", 1.10, 1.15, 1.05, "350 g"},
-                new Object[]{"cafe", "Café molido tueste natural", 2.60, 2.75, 2.50, "250 g"},
-                new Object[]{"papel higienico", "Papel higiénico 3 capas (12 rollos)", 3.75, 3.90, 3.65, "Pack 12"}
+                new Object[]{"cafe", "Café molido natural", 2.60, 2.75, 2.50, "250 g"}
             );
 
             for (Object[] row : semillas) {
-                String termino = (String) row[0];
-                String nombre  = (String) row[1];
-                double pMer    = (Double) row[2];
-                double pCar    = (Double) row[3];
-                double pDia    = (Double) row[4];
-                String fmt     = (String) row[5];
+                String term = (String) row[0];
+                String nom  = (String) row[1];
+                double pMer = (Double) row[2];
+                double pCar = (Double) row[3];
+                double pDia = (Double) row[4];
+                String fmt  = (String) row[5];
 
-                guardarSemilla(mercadona.get(), termino, nombre + " Hacendado", pMer, fmt);
-                guardarSemilla(carrefour.get(), termino, nombre + " Carrefour Classic", pCar, fmt);
-                guardarSemilla(dia.get(),       termino, nombre + " Dia Al Punto", pDia, fmt);
+                asegurarSemilla(mercadona.get(), term, nom + " Hacendado", pMer, fmt);
+                asegurarSemilla(carrefour.get(), term, nom + " Carrefour Classic", pCar, fmt);
+                asegurarSemilla(dia.get(),       term, nom + " Dia Al Punto", pDia, fmt);
             }
-
-            log.info("✅ Precarga completada: {} productos registrados por supermercado.", semillas.size());
+            log.info("✅ Catálogo de referencia verificado y sincronizado.");
         } catch (Exception e) {
-            log.warn("⚠️ No se pudo inicializar semilla de catálogo: {}", e.getMessage());
+            log.warn("⚠️ No se pudo verificar catálogo semilla: {}", e.getMessage());
         }
     }
 
-    private void guardarSemilla(Supermercado s, String termino, String nombre, double precio, String fmt) {
-        PrecioCache p = PrecioCache.builder()
-                .supermercado(s)
-                .terminoBusqueda(termino.toLowerCase())
-                .productoNombre(nombre)
-                .precio(BigDecimal.valueOf(precio).setScale(2, RoundingMode.HALF_UP))
-                .formatoUnidad(fmt)
-                .actualizadoEl(LocalDateTime.now())
-                .build();
-        cacheRepo.save(p);
+    private void asegurarSemilla(Supermercado s, String termino, String nombre, double precio, String fmt) {
+        LocalDateTime limite = LocalDateTime.now().minusHours(HORAS_VALIDEZ_CACHE);
+        if (cacheRepo.buscarPrecioReciente(s.getId(), termino, limite).isEmpty()) {
+            PrecioCache p = PrecioCache.builder()
+                    .supermercado(s)
+                    .terminoBusqueda(termino.toLowerCase())
+                    .productoNombre(nombre)
+                    .precio(BigDecimal.valueOf(precio).setScale(2, RoundingMode.HALF_UP))
+                    .formatoUnidad(fmt)
+                    .actualizadoEl(LocalDateTime.now())
+                    .build();
+            cacheRepo.save(p);
+        }
     }
 
     @Transactional
@@ -151,46 +140,56 @@ public class ComparadorPreciosService {
 
             String terminoLimpio = limpiarTerminoParaBusqueda(termino);
 
-            // 1. Mirar si está en la base local (exacto o por palabra clave)
-            Optional<PrecioCache> cache = cacheRepo.buscarPrecioReciente(s.getId(), terminoLimpio, limiteCache);
-            if (cache.isEmpty()) {
-                // Probar con primera palabra clave (ej: "harina")
-                String primeraPalabra = terminoLimpio.split("\\s+")[0];
-                cache = cacheRepo.buscarPrecioReciente(s.getId(), primeraPalabra, limiteCache);
+            // 1. Si es Mercadona, intentamos SIEMPRE consultar su API en vivo primero para precio exacto hoy
+            ResultadoComparativaDto.ItemComparadoDto prod = null;
+            if ("MERCADONA".equalsIgnoreCase(s.getCodigoInterno())) {
+                prod = buscarEnMercadonaConAlmacen(art, terminoLimpio, s.getCodigoPostal());
             }
 
-            if (cache.isPresent()) {
-                PrecioCache p = cache.get();
-                log.info("⚡ [Local {}] '{}' -> {} ({} €)", s.getNombre(), termino, p.getProductoNombre(), p.getPrecio());
-                items.add(ResultadoComparativaDto.ItemComparadoDto.builder()
-                        .terminoBuscado(art)
-                        .productoEncontrado(p.getProductoNombre())
-                        .precio(p.getPrecio())
-                        .formato(p.getFormatoUnidad())
-                        .encontrado(true)
-                        .build());
-                total = total.add(p.getPrecio());
-                encontrados++;
-                continue;
+            // 2. Si no es Mercadona o la API no devolvió resultado, buscar en BD local
+            if (prod == null || !prod.isEncontrado()) {
+                Optional<PrecioCache> cache = cacheRepo.buscarPrecioReciente(s.getId(), terminoLimpio, limiteCache);
+                if (cache.isEmpty()) {
+                    String primeraPalabra = terminoLimpio.split("\\s+")[0];
+                    cache = cacheRepo.buscarPrecioReciente(s.getId(), primeraPalabra, limiteCache);
+                }
+
+                if (cache.isPresent()) {
+                    PrecioCache p = cache.get();
+                    log.info("⚡ [Catálogo {}] '{}' -> {} ({} €)", s.getNombre(), termino, p.getProductoNombre(), p.getPrecio());
+                    prod = ResultadoComparativaDto.ItemComparadoDto.builder()
+                            .terminoBuscado(art)
+                            .productoEncontrado(p.getProductoNombre())
+                            .precio(p.getPrecio())
+                            .formato(p.getFormatoUnidad())
+                            .encontrado(true)
+                            .build();
+                }
             }
 
-            // 2. Si no está en BD, consultar conector online
-            ResultadoComparativaDto.ItemComparadoDto prod = consultarPrecioEnSupermercado(s, termino, terminoLimpio);
+            // 3. Si aún así no se encuentra, marcar como no disponible
+            if (prod == null) {
+                prod = buscarFallback(s.getNombre(), art);
+            }
+
             items.add(prod);
 
             if (prod.isEncontrado() && prod.getPrecio() != null) {
                 total = total.add(prod.getPrecio());
                 encontrados++;
 
-                PrecioCache nuevo = PrecioCache.builder()
-                        .supermercado(s)
-                        .terminoBusqueda(terminoLimpio)
-                        .productoNombre(prod.getProductoEncontrado())
-                        .precio(prod.getPrecio())
-                        .formatoUnidad(prod.getFormato())
-                        .actualizadoEl(LocalDateTime.now())
-                        .build();
-                cacheRepo.save(nuevo);
+                // Si vino de la API remota, guardarlo en caché
+                if ("MERCADONA".equalsIgnoreCase(s.getCodigoInterno())) {
+                    PrecioCache nuevo = PrecioCache.builder()
+                            .supermercado(s)
+                            .terminoBusqueda(terminoLimpio)
+                            .productoNombre(prod.getProductoEncontrado())
+                            .precio(prod.getPrecio())
+                            .formatoUnidad(prod.getFormato())
+                            .actualizadoEl(LocalDateTime.now())
+                            .build();
+                    cacheRepo.save(nuevo);
+                }
             } else {
                 noEncontrados++;
             }
@@ -206,60 +205,42 @@ public class ComparadorPreciosService {
                 .build();
     }
 
-    private ResultadoComparativaDto.ItemComparadoDto consultarPrecioEnSupermercado(Supermercado s, String terminoOriginal, String keywords) {
-        log.info("🔎 [{}] Consultando API remota para '{}'...", s.getNombre(), keywords);
-        try {
-            if ("MERCADONA".equalsIgnoreCase(s.getCodigoInterno())) {
-                return buscarEnMercadonaConAlmacen(terminoOriginal, keywords, s.getCodigoPostal());
-            }
-        } catch (Exception e) {
-            log.warn("⚠️ [{}] Falló consulta remota: {}", s.getNombre(), e.getMessage());
-        }
-
-        return buscarFallback(s.getNombre(), terminoOriginal);
-    }
-
     /**
-     * Resuelve el almacén de Mercadona por código postal y busca con sesión activa.
+     * Búsqueda en Mercadona con extracción exhaustiva de productos en árbol JSON.
      */
     private ResultadoComparativaDto.ItemComparadoDto buscarEnMercadonaConAlmacen(String original, String query, String postal) {
         try {
             String cp = (postal != null && !postal.isBlank()) ? postal : "11540";
-            
-            // 1. Obtener almacén/tienda si no está en caché
             String warehouseId = almacenPorCodigoPostal.computeIfAbsent(cp, this::resolverAlmacenMercadona);
-            log.info("🏬 [Mercadona] Código postal {} asignado a almacén: {}", cp, warehouseId);
 
-            // 2. Petición de búsqueda con cabecera de almacén
             String q = URLEncoder.encode(query, StandardCharsets.UTF_8);
             String url = "https://tienda.mercadona.es/api/v1_1/categories/?search=" + q;
 
-            HttpRequest.Builder builder = HttpRequest.newBuilder()
+            HttpRequest req = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
                     .header("Accept", "application/json")
                     .header("Accept-Language", "es-ES,es;q=0.9")
                     .timeout(Duration.ofSeconds(4))
-                    .GET();
+                    .GET()
+                    .build();
 
-            if (warehouseId != null && !warehouseId.isBlank()) {
-                builder.header("x-customer-postal-code", cp);
-            }
-
-            HttpResponse<String> resp = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
-            log.info("📡 [Mercadona API] Status: {} para query='{}'", resp.statusCode(), query);
-
+            HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
             if (resp.statusCode() == 200) {
                 JsonNode root = mapper.readTree(resp.body());
-                JsonNode results = root.path("results");
-                if (results.isArray() && results.size() > 0) {
-                    JsonNode p = results.get(0);
-                    String display = p.path("display_name").asText();
-                    String formato = p.path("packaging").asText("Ud");
-                    double precio = p.path("price_instructions").path("unit_price").asDouble(0.0);
+                
+                // Extraer el primer producto buscando recursivamente en la estructura
+                JsonNode producto = encontrarPrimerProducto(root);
+                if (producto != null) {
+                    String display = producto.path("display_name").asText();
+                    String formato = producto.path("packaging").asText("Ud");
+                    
+                    JsonNode priceInst = producto.path("price_instructions");
+                    double precio = priceInst.path("unit_price").asDouble(0.0);
+                    if (precio == 0.0) precio = priceInst.path("bulk_price").asDouble(0.0);
 
                     if (precio > 0.0) {
-                        log.info("🎯 [Mercadona] ¡Producto localizado! '{}' a {} €", display, precio);
+                        log.info("🎯 [Mercadona EN VIVO] Coincidencia: '{}' -> {} € ({})", display, precio, formato);
                         return ResultadoComparativaDto.ItemComparadoDto.builder()
                                 .terminoBuscado(original)
                                 .productoEncontrado(display)
@@ -268,13 +249,54 @@ public class ComparadorPreciosService {
                                 .encontrado(true)
                                 .build();
                     }
+                } else {
+                    log.info("ℹ️ [Mercadona API] 200 OK pero sin productos para query='{}'", query);
                 }
             }
         } catch (Exception e) {
-            log.warn("⚠️ [Mercadona] Error en consulta: {}", e.getMessage());
+            log.warn("⚠️ [Mercadona] Error parseando respuesta: {}", e.getMessage());
         }
 
-        return buscarFallback("Mercadona", original);
+        return null;
+    }
+
+    /**
+     * Recorre el árbol JSON de Mercadona buscando el primer objeto con 'display_name' y 'price_instructions'
+     */
+    private JsonNode encontrarPrimerProducto(JsonNode node) {
+        if (node == null || node.isMissingNode() || node.isNull()) return null;
+
+        if (node.has("display_name") && node.has("price_instructions")) {
+            return node;
+        }
+
+        if (node.isArray()) {
+            for (JsonNode child : node) {
+                JsonNode found = encontrarPrimerProducto(child);
+                if (found != null) return found;
+            }
+        } else if (node.isObject()) {
+            // Inspeccionar campos habituales primero
+            if (node.has("products")) {
+                JsonNode found = encontrarPrimerProducto(node.get("products"));
+                if (found != null) return found;
+            }
+            if (node.has("categories")) {
+                JsonNode found = encontrarPrimerProducto(node.get("categories"));
+                if (found != null) return found;
+            }
+            if (node.has("results")) {
+                JsonNode found = encontrarPrimerProducto(node.get("results"));
+                if (found != null) return found;
+            }
+
+            Iterator<JsonNode> it = node.elements();
+            while (it.hasNext()) {
+                JsonNode found = encontrarPrimerProducto(it.next());
+                if (found != null) return found;
+            }
+        }
+        return null;
     }
 
     private String resolverAlmacenMercadona(String cp) {
