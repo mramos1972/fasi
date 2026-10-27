@@ -8,6 +8,9 @@ import com.miempresa.fasi.calendario.Evento;
 import com.miempresa.fasi.calendario.EventoRepository;
 import com.miempresa.fasi.calendario.EventoService;
 import com.miempresa.fasi.compra.CompraService;
+import com.miempresa.fasi.compra.ItemCompra;
+import com.miempresa.fasi.compra.comparador.ComparadorPreciosService;
+import com.miempresa.fasi.compra.comparador.ResultadoComparativaDto;
 import com.miempresa.fasi.contexto.Usuario;
 import com.miempresa.fasi.contexto.UsuarioActualService;
 import com.miempresa.fasi.ia.LlmApiClient.FunctionCall;
@@ -37,6 +40,7 @@ public class FasiAgentService {
     private final EventoService eventoService;
     private final EventoRepository eventoRepo;
     private final CompraService compraService;
+    private final ComparadorPreciosService comparadorService;
     private final UsuarioActualService usuarioActualService;
 
     private static final int      MAX_ITERACIONES = 8;
@@ -187,19 +191,20 @@ public class FasiAgentService {
         if (n == 0) agenda.append("- (sin eventos)\n");
 
         return """
-            Eres FASI, el asistente personal inteligente del hogar. Responde en español, breve y natural.
+            Eres FASI, el asistente personal inteligente del hogar. Responde en español, breve, claro y natural.
             Hoy: %s (%s). Usuario: %s.
 
             Capacidades del sistema:
-            1. GESTIÓN COMPLETA DE EVENTOS:
-               - Puedes crear, consultar, modificar notas, cambiar fechas/horas, asignar colores y configurar recordatorios.
-               - Colores: Si el usuario pide un color (ej: "ponlo en rojo", "color verde", "#f59e0b"), usa el campo 'colorPersonalizado'.
-               - Recordatorios: Si el usuario pide aviso (ej: "avísame 30 minutos antes", "recordatorio 1 hora antes", "aviso 1 día antes"), calcula los minutos (30, 60, 1440, etc.) y pásalo en 'recordatorioMinutos'. Para quitar recordatorios pasa 0 o null.
-            2. LISTA DE LA COMPRA:
-               - Añade o quita productos de la lista con 'anadir_a_lista_compra' o 'quitar_de_lista_compra'.
+            1. LISTA DE LA COMPRA Y COMPARADOR:
+               - Añade o quita productos con 'anadir_a_lista_compra' o 'quitar_de_lista_compra'.
+               - Si el usuario te pregunta por precios, dónde comprar más barato, qué súper conviene o comparar la cesta de la compra, usa 'comparar_precios_supermercados'.
+               - Cuando uses 'comparar_precios_supermercados', explica cuál supermercado es el ganador por total económico y detalla los precios de los artículos principales.
+            2. GESTIÓN COMPLETA DE CALENDARIO:
+               - Creación, modificación, asignación de colores y configuración de recordatorios.
+               - Colores: formato hexadecimal (#RRGGBB) o nombre estándar.
+               - Recordatorios: minutos previos calculados (15, 30, 60, 1440).
             3. REGLAS:
-               - Para modificar o borrar eventos, primero busca con 'buscar_eventos' y utiliza únicamente los IDs reales encontrados.
-               - Al finalizar, resume claramente todas las propiedades configuradas (fecha, hora, color o recordatorios si aplican).
+               - Para modificar o borrar eventos, primero busca con 'buscar_eventos' y utiliza únicamente los IDs reales.
 
             Próximos 3 días en agenda:
             %s""".formatted(hoy, diaSemana,
@@ -222,6 +227,11 @@ public class FasiAgentService {
                 "Quita o elimina productos de la lista de la compra del usuario.",
                 props(arr("items", "Lista de nombres de productos a quitar (ej: [\"arroz\"]).")),
                 "items"));
+
+        tools.add(herramienta("comparar_precios_supermercados",
+                "Consulta los precios de la lista de la compra pendiente en los supermercados dados de alta (Mercadona, Dia, etc.) y calcula el total de la cesta y el supermercado más económico.",
+                props(arr("articulosEspecificos", "Lista opcional de artículos concretos a comparar. Si no se pasa ninguno, se comparan todos los pendientes de la lista de la compra."))
+        ));
 
         // ── Herramientas de Calendario ──
         tools.add(herramienta("buscar_eventos",
@@ -338,20 +348,63 @@ public class FasiAgentService {
         JsonNode a = fc.args() == null ? mapper.createObjectNode() : fc.args();
         try {
             return switch (fc.name()) {
-                case "anadir_a_lista_compra"    -> new ToolResult(ejecutarAnadirCompra(a, usuarioId), true);
-                case "quitar_de_lista_compra"    -> new ToolResult(ejecutarQuitarCompra(a, usuarioId), true);
-                case "buscar_eventos"            -> new ToolResult(buscarEventos(a, usuarioId), false);
-                case "crear_evento"              -> new ToolResult(crearEvento(a), true);
-                case "crear_eventos_recurrentes" -> new ToolResult(crearRecurrentes(a), true);
-                case "actualizar_evento"         -> new ToolResult(actualizarEvento(a), true);
-                case "anadir_nota"               -> new ToolResult(anadirNota(a), true);
-                case "borrar_eventos"            -> new ToolResult(borrarEventos(a), true);
+                case "anadir_a_lista_compra"             -> new ToolResult(ejecutarAnadirCompra(a, usuarioId), true);
+                case "quitar_de_lista_compra"             -> new ToolResult(ejecutarQuitarCompra(a, usuarioId), true);
+                case "comparar_precios_supermercados"     -> new ToolResult(ejecutarComparativaPrecios(a), false);
+                case "buscar_eventos"                     -> new ToolResult(buscarEventos(a, usuarioId), false);
+                case "crear_evento"                       -> new ToolResult(crearEvento(a), true);
+                case "crear_eventos_recurrentes"          -> new ToolResult(crearRecurrentes(a), true);
+                case "actualizar_evento"                  -> new ToolResult(actualizarEvento(a), true);
+                case "anadir_nota"                        -> new ToolResult(anadirNota(a), true);
+                case "borrar_eventos"                     -> new ToolResult(borrarEventos(a), true);
                 default -> new ToolResult(error("Herramienta desconocida: " + fc.name()), false);
             };
         } catch (Exception e) {
             log.warn("⚠️ Herramienta {} falló: {}", fc.name(), e.getMessage());
             return new ToolResult(error(e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()), false);
         }
+    }
+
+    private ObjectNode ejecutarComparativaPrecios(JsonNode a) {
+        List<String> articulos = new ArrayList<>();
+        if (a.has("articulosEspecificos") && a.get("articulosEspecificos").isArray() && a.get("articulosEspecificos").size() > 0) {
+            for (JsonNode n : a.get("articulosEspecificos")) articulos.add(n.asText());
+        } else {
+            articulos = compraService.listarTodos().stream()
+                    .filter(i -> !i.isComprado())
+                    .map(ItemCompra::getNombre)
+                    .toList();
+        }
+
+        if (articulos.isEmpty()) {
+            ObjectNode err = mapper.createObjectNode();
+            err.put("ok", false);
+            err.put("mensaje", "La lista de la compra está vacía. No hay artículos para comparar.");
+            return err;
+        }
+
+        List<ResultadoComparativaDto> comparativas = comparadorService.compararLista(articulos);
+        ObjectNode out = mapper.createObjectNode();
+        out.put("ok", true);
+        out.put("totalArticulosConsultados", articulos.size());
+        ArrayNode arr = out.putArray("supermercados");
+
+        for (ResultadoComparativaDto c : comparativas) {
+            ObjectNode sNode = arr.addObject();
+            sNode.put("nombre", c.getSupermercado());
+            sNode.put("totalEstimado", c.getTotalEstimado());
+            sNode.put("encontrados", c.getProductosEncontrados());
+            sNode.put("sinPrecio", c.getProductosSinPrecio());
+            ArrayNode prods = sNode.putArray("productos");
+            for (ResultadoComparativaDto.ItemComparadoDto p : c.getProductos()) {
+                ObjectNode pNode = prods.addObject();
+                pNode.put("termino", p.getTerminoBuscado());
+                pNode.put("encontrado", p.getProductoEncontrado());
+                if (p.getPrecio() != null) pNode.put("precio", p.getPrecio());
+                if (p.getFormato() != null) pNode.put("formato", p.getFormato());
+            }
+        }
+        return out;
     }
 
     private ObjectNode ejecutarAnadirCompra(JsonNode a, UUID usuarioId) {
