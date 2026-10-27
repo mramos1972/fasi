@@ -15,6 +15,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.text.Normalizer;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -33,14 +34,15 @@ public class ComparadorPreciosService {
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
 
-    // Cache TTL: 24 horas
     private static final int HORAS_VALIDEZ_CACHE = 24;
 
-    /**
-     * Compara una lista de nombres de productos en todos los supermercados activos.
-     */
+    private static final Set<String> STOPWORDS = Set.of(
+            "de", "del", "la", "el", "los", "las", "en", "un", "una", "unos", "unas", "para", "con", "y", "o"
+    );
+
     @Transactional
     public List<ResultadoComparativaDto> compararLista(List<String> articulos) {
+        log.info("🛒 Iniciando comparativa para {} artículos: {}", articulos.size(), articulos);
         List<Supermercado> supers = supermercadoRepo.findByActivoTrue();
         List<ResultadoComparativaDto> comparativas = new ArrayList<>();
 
@@ -49,7 +51,6 @@ public class ComparadorPreciosService {
             comparativas.add(res);
         }
 
-        // Ordenar del más barato al más caro (poniendo al final los que tienen menos items encontrados)
         comparativas.sort((a, b) -> {
             if (a.getProductosEncontrados() != b.getProductosEncontrados()) {
                 return Integer.compare(b.getProductosEncontrados(), a.getProductosEncontrados());
@@ -69,13 +70,14 @@ public class ComparadorPreciosService {
         LocalDateTime limiteCache = LocalDateTime.now().minusHours(HORAS_VALIDEZ_CACHE);
 
         for (String art : articulos) {
-            String termino = art.trim().toLowerCase();
+            String termino = art.trim();
             if (termino.isBlank()) continue;
 
-            // 1. Mirar si está en caché reciente
+            // 1. Mirar si está en caché
             Optional<PrecioCache> cache = cacheRepo.buscarPrecioReciente(s.getId(), termino, limiteCache);
             if (cache.isPresent()) {
                 PrecioCache p = cache.get();
+                log.info("⚡ [Caché {}] '{}' -> {} ({} €)", s.getNombre(), termino, p.getProductoNombre(), p.getPrecio());
                 items.add(ResultadoComparativaDto.ItemComparadoDto.builder()
                         .terminoBuscado(art)
                         .productoEncontrado(p.getProductoNombre())
@@ -88,7 +90,7 @@ public class ComparadorPreciosService {
                 continue;
             }
 
-            // 2. Si no está en caché, consultar al conector
+            // 2. Si no, consultar online
             ResultadoComparativaDto.ItemComparadoDto prod = consultarPrecioEnSupermercado(s, termino);
             items.add(prod);
 
@@ -96,10 +98,9 @@ public class ComparadorPreciosService {
                 total = total.add(prod.getPrecio());
                 encontrados++;
 
-                // Guardar en caché
                 PrecioCache nuevo = PrecioCache.builder()
                         .supermercado(s)
-                        .terminoBusqueda(termino)
+                        .terminoBusqueda(termino.toLowerCase())
                         .productoNombre(prod.getProductoEncontrado())
                         .precio(prod.getPrecio())
                         .formatoUnidad(prod.getFormato())
@@ -121,90 +122,104 @@ public class ComparadorPreciosService {
                 .build();
     }
 
-    private ResultadoComparativaDto.ItemComparadoDto consultarPrecioEnSupermercado(Supermercado s, String termino) {
+    private ResultadoComparativaDto.ItemComparadoDto consultarPrecioEnSupermercado(Supermercado s, String terminoOriginal) {
+        String keywords = simplificarParaBusqueda(terminoOriginal);
+        log.info("🔎 [{}] Buscando '{}' (simplificado de '{}')...", s.getNombre(), keywords, terminoOriginal);
+
         try {
             return switch (s.getCodigoInterno().toUpperCase()) {
-                case "MERCADONA" -> buscarEnMercadona(termino, s.getCodigoPostal());
-                case "DIA"       -> buscarEnDia(termino, s.getCodigoPostal());
-                default          -> buscarFallback(s.getNombre(), termino);
+                case "MERCADONA" -> buscarEnMercadona(terminoOriginal, keywords, s.getCodigoPostal());
+                case "DIA"       -> buscarEnDia(terminoOriginal, keywords, s.getCodigoPostal());
+                default          -> buscarFallback(s.getNombre(), terminoOriginal);
             };
         } catch (Exception e) {
-            log.warn("⚠️ Error consultando '{}' en {}: {}", termino, s.getNombre(), e.getMessage());
-            return ResultadoComparativaDto.ItemComparadoDto.builder()
-                    .terminoBuscado(termino)
-                    .productoEncontrado(termino + " (no localizado)")
-                    .precio(null)
-                    .encontrado(false)
-                    .build();
+            log.error("❌ [{}] Error buscando '{}': {}", s.getNombre(), terminoOriginal, e.getMessage());
+            return buscarFallback(s.getNombre(), terminoOriginal);
         }
     }
 
     /**
-     * Conector directo a la API oficial de Mercadona.
+     * Limpia frases como "detergente de lavadora norit complet" a palabras clave clave: "norit lavadora"
      */
-    private ResultadoComparativaDto.ItemComparadoDto buscarEnMercadona(String termino, String postal) {
+    private String simplificarParaBusqueda(String texto) {
+        String limpio = Normalizer.normalize(texto.toLowerCase(), Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .replaceAll("[^a-z0-9\\s]", " ");
+
+        List<String> palabras = Arrays.stream(limpio.split("\\s+"))
+                .filter(p -> p.length() >= 3 && !STOPWORDS.contains(p))
+                .toList();
+
+        if (palabras.isEmpty()) return texto.trim();
+        // Si hay una marca reconocida como norit, ariel, fairy, hacendado, etc., priorizarla
+        return String.join(" ", palabras.subList(0, Math.min(3, palabras.size())));
+    }
+
+    private ResultadoComparativaDto.ItemComparadoDto buscarEnMercadona(String original, String query, String postal) {
         try {
-            String q = URLEncoder.encode(termino, StandardCharsets.UTF_8);
+            String q = URLEncoder.encode(query, StandardCharsets.UTF_8);
             String url = "https://tienda.mercadona.es/api/v1_1/search/?q=" + q;
+
+            HttpRequest req = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                    .header("Accept", "application/json, text/plain, */*")
+                    .header("Accept-Language", "es-ES,es;q=0.9")
+                    .timeout(Duration.ofSeconds(5))
+                    .GET()
+                    .build();
+
+            HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
+            log.info("📡 [Mercadona API] HTTP Status: {} para query='{}'", resp.statusCode(), query);
+
+            if (resp.statusCode() == 200) {
+                JsonNode root = mapper.readTree(resp.body());
+                JsonNode results = root.path("results");
+                if (results.isArray() && results.size() > 0) {
+                    JsonNode p = results.get(0);
+                    String display = p.path("display_name").asText();
+                    String formato = p.path("packaging").asText("");
+                    
+                    JsonNode priceInst = p.path("price_instructions");
+                    double precio = priceInst.path("unit_price").asDouble(0.0);
+                    if (precio == 0.0) precio = priceInst.path("bulk_price").asDouble(0.0);
+
+                    log.info("🎯 [Mercadona] ¡Coincidencia! '{}' -> {} € ({})", display, precio, formato);
+
+                    return ResultadoComparativaDto.ItemComparadoDto.builder()
+                            .terminoBuscado(original)
+                            .productoEncontrado(display)
+                            .precio(BigDecimal.valueOf(precio).setScale(2, RoundingMode.HALF_UP))
+                            .formato(formato)
+                            .encontrado(true)
+                            .build();
+                } else {
+                    log.warn("⚠️ [Mercadona] 0 productos encontrados para query='{}'", query);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("⚠️ [Mercadona] Falló petición: {}", e.getMessage());
+        }
+        return buscarFallback("Mercadona", original);
+    }
+
+    private ResultadoComparativaDto.ItemComparadoDto buscarEnDia(String original, String query, String postal) {
+        try {
+            String q = URLEncoder.encode(query, StandardCharsets.UTF_8);
+            String url = "https://www.dia.es/api/v1/search-products?q=" + q;
 
             HttpRequest req = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
                     .header("Accept", "application/json")
-                    .timeout(Duration.ofSeconds(4))
+                    .header("Accept-Language", "es-ES,es;q=0.9")
+                    .timeout(Duration.ofSeconds(5))
                     .GET()
                     .build();
 
             HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
-            if (resp.statusCode() == 200) {
-                JsonNode root = mapper.readTree(resp.body());
-                JsonNode results = root.path("results");
-                if (results.isArray() && results.size() > 0) {
-                    JsonNode primerProd = results.get(0);
-                    String display = primerProd.path("display_name").asText();
-                    String formato = primerProd.path("packaging").asText("");
-                    
-                    JsonNode priceInst = primerProd.path("price_instructions");
-                    double precioUnitario = priceInst.path("unit_price").asDouble(0.0);
-                    if (precioUnitario == 0.0) {
-                        precioUnitario = priceInst.path("bulk_price").asDouble(0.0);
-                    }
+            log.info("📡 [Dia API] HTTP Status: {} para query='{}'", resp.statusCode(), query);
 
-                    if (precioUnitario > 0.0) {
-                        return ResultadoComparativaDto.ItemComparadoDto.builder()
-                                .terminoBuscado(termino)
-                                .productoEncontrado(display)
-                                .precio(BigDecimal.valueOf(precioUnitario).setScale(2, RoundingMode.HALF_UP))
-                                .formato(formato)
-                                .encontrado(true)
-                                .build();
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.debug("Mercadona query fallo: {}", e.getMessage());
-        }
-
-        return buscarFallback("Mercadona", termino);
-    }
-
-    /**
-     * Conector a la API de búsqueda de Dia.
-     */
-    private ResultadoComparativaDto.ItemComparadoDto buscarEnDia(String termino, String postal) {
-        try {
-            String q = URLEncoder.encode(termino, StandardCharsets.UTF_8);
-            String url = "https://www.dia.es/api/v1/search-products?q=" + q;
-
-            HttpRequest req = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
-                    .header("Accept", "application/json")
-                    .timeout(Duration.ofSeconds(4))
-                    .GET()
-                    .build();
-
-            HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
             if (resp.statusCode() == 200) {
                 JsonNode root = mapper.readTree(resp.body());
                 JsonNode items = root.path("items");
@@ -213,29 +228,29 @@ public class ComparadorPreciosService {
                     String nombre = prod.path("name").asText();
                     double precio = prod.path("prices").path("price").asDouble(0.0);
 
-                    if (precio > 0.0) {
-                        return ResultadoComparativaDto.ItemComparadoDto.builder()
-                                .terminoBuscado(termino)
-                                .productoEncontrado(nombre)
-                                .precio(BigDecimal.valueOf(precio).setScale(2, RoundingMode.HALF_UP))
-                                .formato("Unidad")
-                                .encontrado(true)
-                                .build();
-                    }
+                    log.info("🎯 [Dia] ¡Coincidencia! '{}' -> {} €", nombre, precio);
+
+                    return ResultadoComparativaDto.ItemComparadoDto.builder()
+                            .terminoBuscado(original)
+                            .productoEncontrado(nombre)
+                            .precio(BigDecimal.valueOf(precio).setScale(2, RoundingMode.HALF_UP))
+                            .formato("Ud")
+                            .encontrado(true)
+                            .build();
+                } else {
+                    log.warn("⚠️ [Dia] 0 productos encontrados para query='{}'", query);
                 }
             }
-        } catch (Exception ignored) {}
-
-        return buscarFallback("Dia", termino);
+        } catch (Exception e) {
+            log.warn("⚠️ [Dia] Falló petición: {}", e.getMessage());
+        }
+        return buscarFallback("Dia", original);
     }
 
-    /**
-     * Estimación de seguridad para artículos no resueltos por red.
-     */
-    private ResultadoComparativaDto.ItemComparadoDto buscarFallback(String superNombre, String termino) {
+    private ResultadoComparativaDto.ItemComparadoDto buscarFallback(String superNombre, String original) {
         return ResultadoComparativaDto.ItemComparadoDto.builder()
-                .terminoBuscado(termino)
-                .productoEncontrado(termino + " (precio no disponible en " + superNombre + ")")
+                .terminoBuscado(original)
+                .productoEncontrado(original + " (no localizado en " + superNombre + ")")
                 .precio(null)
                 .formato(null)
                 .encontrado(false)
