@@ -2,348 +2,346 @@ package com.miempresa.fasi.compra.comparador;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.text.Normalizer;
 import java.time.Duration;
-import java.time.LocalDateTime;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
-@Slf4j
 @Service
-@RequiredArgsConstructor
 public class ComparadorPreciosService {
 
-    private final SupermercadoRepository supermercadoRepo;
-    private final PrecioCacheRepository cacheRepo;
-    private final ObjectMapper mapper;
+    private static final Logger log = LoggerFactory.getLogger(ComparadorPreciosService.class);
 
-    private final HttpClient httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(6))
-            .followRedirects(HttpClient.Redirect.NORMAL)
-            .build();
+    private final JdbcTemplate jdbcTemplate;
+    private final ObjectMapper objectMapper;
+    private final HttpClient httpClient;
 
-    private static final int HORAS_VALIDEZ_CACHE = 24;
-    private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+    // Mapa de categorías reales de Mercadona
+    private static final Map<String, Integer> MERCADONA_CATEGORIAS = new HashMap<>();
 
-    private final Map<String, Integer> cacheCategoriasMercadona = new ConcurrentHashMap<>();
-
-    private static final Set<String> STOPWORDS = Set.of(
-            "de", "del", "la", "el", "los", "las", "en", "un", "una", "unos", "unas", "para", "con", "y", "o"
-    );
-
-    @Transactional
-    public List<ResultadoComparativaDto> compararLista(List<String> articulos) {
-        log.info("🛒 Iniciando comparativa para {} artículos: {}", articulos.size(), articulos);
-        List<Supermercado> supers = supermercadoRepo.findByActivoTrue();
-        List<ResultadoComparativaDto> comparativas = new ArrayList<>();
-
-        for (Supermercado s : supers) {
-            ResultadoComparativaDto res = compararEnSupermercado(s, articulos);
-            comparativas.add(res);
-        }
-
-        comparativas.sort((a, b) -> {
-            if (a.getProductosEncontrados() != b.getProductosEncontrados()) {
-                return Integer.compare(b.getProductosEncontrados(), a.getProductosEncontrados());
-            }
-            return a.getTotalEstimado().compareTo(b.getTotalEstimado());
-        });
-
-        return comparativas;
+    static {
+        MERCADONA_CATEGORIAS.put("harina", 69);
+        MERCADONA_CATEGORIAS.put("leche", 72);
+        MERCADONA_CATEGORIAS.put("huevos", 77);
+        MERCADONA_CATEGORIAS.put("azucar", 89);
+        MERCADONA_CATEGORIAS.put("aceite", 112);
+        MERCADONA_CATEGORIAS.put("arroz", 118);
+        MERCADONA_CATEGORIAS.put("pasta", 119);
+        MERCADONA_CATEGORIAS.put("cafe", 94);
+        MERCADONA_CATEGORIAS.put("papel higienico", 238);
+        MERCADONA_CATEGORIAS.put("detergente", 233);
+        MERCADONA_CATEGORIAS.put("tomate frito", 110);
+        MERCADONA_CATEGORIAS.put("atun", 113);
+        MERCADONA_CATEGORIAS.put("pan de molde", 60);
+        MERCADONA_CATEGORIAS.put("galletas", 84);
+        MERCADONA_CATEGORIAS.put("patatas", 28);
+        MERCADONA_CATEGORIAS.put("yogur", 75);
     }
 
-    private ResultadoComparativaDto compararEnSupermercado(Supermercado s, List<String> articulos) {
-        BigDecimal total = BigDecimal.ZERO;
-        List<ResultadoComparativaDto.ItemComparadoDto> items = new ArrayList<>();
-        int encontrados = 0;
-        int noEncontrados = 0;
-
-        LocalDateTime limiteCache = LocalDateTime.now().minusHours(HORAS_VALIDEZ_CACHE);
-
-        for (String art : articulos) {
-            String termino = art.trim();
-            if (termino.isBlank()) continue;
-
-            String terminoLimpio = limpiarTerminoParaBusqueda(termino);
-
-            // 1. Mirar si está en la caché local reciente
-            Optional<PrecioCache> cache = cacheRepo.buscarPrecioReciente(s.getId(), terminoLimpio, limiteCache);
-            if (cache.isPresent() && cache.get().getPrecio() != null) {
-                PrecioCache p = cache.get();
-                log.info("⚡ [Caché {}] '{}' -> {} ({} €)", s.getNombre(), termino, p.getProductoNombre(), p.getPrecio());
-                items.add(ResultadoComparativaDto.ItemComparadoDto.builder()
-                        .terminoBuscado(art)
-                        .productoEncontrado(p.getProductoNombre())
-                        .precio(p.getPrecio())
-                        .formato(p.getFormatoUnidad())
-                        .encontrado(true)
-                        .build());
-                total = total.add(p.getPrecio());
-                encontrados++;
-                continue;
-            }
-
-            // 2. Consultar conector en tiempo real
-            ResultadoComparativaDto.ItemComparadoDto prod = consultarPrecioEnSupermercado(s, art, terminoLimpio);
-            items.add(prod);
-
-            if (prod.isEncontrado() && prod.getPrecio() != null) {
-                total = total.add(prod.getPrecio());
-                encontrados++;
-
-                PrecioCache nuevo = PrecioCache.builder()
-                        .supermercado(s)
-                        .terminoBusqueda(terminoLimpio)
-                        .productoNombre(prod.getProductoEncontrado())
-                        .precio(prod.getPrecio())
-                        .formatoUnidad(prod.getFormato())
-                        .actualizadoEl(LocalDateTime.now())
-                        .build();
-                cacheRepo.save(nuevo);
-            } else {
-                noEncontrados++;
-            }
-        }
-
-        return ResultadoComparativaDto.builder()
-                .supermercado(s.getNombre())
-                .codigoPostal(s.getCodigoPostal())
-                .totalEstimado(total.setScale(2, RoundingMode.HALF_UP))
-                .productos(items)
-                .productosEncontrados(encontrados)
-                .productosSinPrecio(noEncontrados)
+    public ComparadorPreciosService(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
+        this.jdbcTemplate = jdbcTemplate;
+        this.objectMapper = objectMapper;
+        this.httpClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(6))
+                .followRedirects(HttpClient.Redirect.NORMAL)
                 .build();
     }
 
-    private ResultadoComparativaDto.ItemComparadoDto consultarPrecioEnSupermercado(Supermercado s, String original, String query) {
-        try {
-            String codigo = s.getCodigoInterno().toUpperCase();
-            if ("MERCADONA".equals(codigo)) {
-                return buscarEnMercadonaPorCategoria(original, query);
-            } else if ("ALCAMPO".equals(codigo)) {
-                return buscarEnAlcampo(original, query);
-            }
-        } catch (Exception e) {
-            log.warn("⚠️ [{}] Error en consulta: {}", s.getNombre(), e.getMessage());
+    public List<ComparativaSupermercadoDTO> compararCesta(List<String> articulos) {
+        if (articulos == null || articulos.isEmpty()) {
+            return Collections.emptyList();
         }
 
-        return buscarFallback(s.getNombre(), original);
+        log.info("🛒 Iniciando comparativa para {} artículos: {}", articulos.size(), articulos);
+
+        ComparativaSupermercadoDTO mercadonaDTO = new ComparativaSupermercadoDTO("Mercadona");
+        ComparativaSupermercadoDTO diaDTO = new ComparativaSupermercadoDTO("Dia");
+        ComparativaSupermercadoDTO carrefourDTO = new ComparativaSupermercadoDTO("Carrefour");
+
+        for (String art : articulos) {
+            String artLimpio = art.trim();
+
+            // 1. Mercadona (EN VIVO)
+            ProductoPrecioDTO pMercadona = obtenerPrecioConCache("Mercadona", artLimpio, this::consultarMercadonaEnVivo);
+            if (pMercadona != null) mercadonaDTO.getProductos().add(pMercadona);
+
+            // 2. Dia (EN VIVO vía API reducida)
+            ProductoPrecioDTO pDia = obtenerPrecioConCache("Dia", artLimpio, this::consultarDiaEnVivo);
+            if (pDia != null) diaDTO.getProductos().add(pDia);
+
+            // 3. Carrefour (Pendiente de endpoint verificado: no mostramos ficticios)
+            ProductoPrecioDTO pCarrefour = obtenerPrecioConCache("Carrefour", artLimpio, (term) -> null);
+            if (pCarrefour != null) carrefourDTO.getProductos().add(pCarrefour);
+        }
+
+        List<ComparativaSupermercadoDTO> resultado = new ArrayList<>();
+        resultado.add(mercadonaDTO);
+        resultado.add(diaDTO);
+        resultado.add(carrefourDTO);
+
+        marcarMasBarato(resultado);
+        return resultado;
     }
 
-    /**
-     * Búsqueda en Mercadona: Descarga de subcategoría y parseo de categories[].products[]
-     */
-    private ResultadoComparativaDto.ItemComparadoDto buscarEnMercadonaPorCategoria(String original, String query) {
+    // ==========================================
+    // 🟡 DIA EN VIVO (search/reduced)
+    // ==========================================
+    private ProductoPrecioDTO consultarDiaEnVivo(String termino) {
         try {
-            Integer categoriaId = resolverIdCategoriaMercadona(query);
-            if (categoriaId == null) {
-                log.info("ℹ️ [Mercadona] No se detectó categoría afín para '{}'", query);
-                return buscarFallback("Mercadona", original);
-            }
+            String queryLimpia = termino.toLowerCase()
+                    .replace("de", "")
+                    .replace("la", "")
+                    .replace("el", "")
+                    .replaceAll("\\s+", " ")
+                    .trim();
 
-            log.info("🎯 [Mercadona] Consultando categoría ID {} para '{}'...", categoriaId, query);
-            String url = "https://tienda.mercadona.es/api/v1_1/categories/" + categoriaId + "/";
+            String encodedQuery = URLEncoder.encode(queryLimpia, StandardCharsets.UTF_8);
+            String url = "https://www.dia.es/api/v1/search-back/search/reduced?q=" + encodedQuery + "&page=1";
 
-            HttpRequest req = HttpRequest.newBuilder()
+            log.info("🎯 [Dia] Buscando término '{}' en URL: {}", queryLimpia, url);
+
+            HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
-                    .header("User-Agent", USER_AGENT)
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
                     .header("Accept", "application/json")
-                    .timeout(Duration.ofSeconds(5))
+                    .header("Accept-Language", "es-ES,es;q=0.9")
+                    .timeout(Duration.ofSeconds(6))
                     .GET()
                     .build();
 
-            HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
-            if (resp.statusCode() == 200) {
-                JsonNode root = mapper.readTree(resp.body());
-                List<JsonNode> productos = new ArrayList<>();
-                extraerProductosMercadona(root, productos);
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
-                log.info("📦 [Mercadona] {} productos procesados en la categoría {}", productos.size(), categoriaId);
+            if (response.statusCode() == 200 && response.body() != null) {
+                JsonNode root = objectMapper.readTree(response.body());
+                JsonNode items = root.path("search_items");
 
-                String qNorm = normalizar(query);
+                if (items.isArray() && items.size() > 0) {
+                    JsonNode seleccionado = null;
+                    String[] palabrasTermino = queryLimpia.split("\\s+");
 
-                // 1. Coincidencia por coincidencia de texto
-                for (JsonNode p : productos) {
-                    String nombre = p.path("display_name").asText();
-                    String nombreNorm = normalizar(nombre);
+                    // 1. Priorizar producto de marca blanca Dia que contenga los términos
+                    for (JsonNode item : items) {
+                        String dName = item.path("display_name").asText("").toLowerCase();
+                        boolean diaBrand = item.path("dia_brand").asBoolean(false);
+                        boolean contieneTodas = Arrays.stream(palabrasTermino).allMatch(dName::contains);
 
-                    if (nombreNorm.contains(qNorm) || qNorm.contains(nombreNorm)) {
-                        return construirItemMercadona(original, p);
-                    }
-                }
-
-                // 2. Si no coincide el nombre completo, devolver el primer producto del listado
-                if (!productos.isEmpty()) {
-                    return construirItemMercadona(original, productos.get(0));
-                }
-            }
-        } catch (Exception e) {
-            log.error("❌ [Mercadona] Excepción al procesar categoría: {}", e.getMessage());
-        }
-
-        return buscarFallback("Mercadona", original);
-    }
-
-    private void extraerProductosMercadona(JsonNode root, List<JsonNode> productos) {
-        JsonNode subCats = root.path("categories");
-        if (subCats.isArray()) {
-            for (JsonNode sub : subCats) {
-                JsonNode prods = sub.path("products");
-                if (prods.isArray()) {
-                    for (JsonNode p : prods) {
-                        productos.add(p);
-                    }
-                }
-            }
-        }
-    }
-
-    private ResultadoComparativaDto.ItemComparadoDto construirItemMercadona(String original, JsonNode p) {
-        String display = p.path("display_name").asText();
-        String formato = p.path("packaging").asText("Ud");
-
-        JsonNode priceInst = p.path("price_instructions");
-        double precio = priceInst.path("unit_price").asDouble(0.0);
-        if (precio == 0.0) precio = priceInst.path("bulk_price").asDouble(0.0);
-
-        log.info("🔥 [Mercadona EN VIVO] '{}' -> {} € ({})", display, precio, formato);
-
-        return ResultadoComparativaDto.ItemComparadoDto.builder()
-                .terminoBuscado(original)
-                .productoEncontrado(display)
-                .precio(BigDecimal.valueOf(precio).setScale(2, RoundingMode.HALF_UP))
-                .formato(formato)
-                .encontrado(true)
-                .build();
-    }
-
-    private Integer resolverIdCategoriaMercadona(String query) {
-        String q = normalizar(query);
-
-        if (q.contains("harina")) return 69;   // Harina y preparado repostería
-        if (q.contains("leche")) return 72;    // Leche y bebidas vegetales
-        if (q.contains("huevo")) return 77;    // Huevos
-        if (q.contains("aceite")) return 112;  // Aceite, vinagre y sal
-        if (q.contains("arroz")) return 118;   // Arroz
-        if (q.contains("pasta") || q.contains("macarron") || q.contains("espagueti")) return 120; // Pasta
-        if (q.contains("detergente") || q.contains("suavizante") || q.contains("norit")) return 226; // Detergente y suavizante ropa
-        if (q.contains("pan")) return 59;      // Pan de horno
-        if (q.contains("azucar")) return 89;    // Azúcar y edulcorante
-        if (q.contains("cafe")) return 83;     // Café molido y en grano
-        if (q.contains("papel")) return 238;   // Papel higiénico y celulosa
-        if (q.contains("tomate")) return 126;  // Tomate
-
-        return cacheCategoriasMercadona.computeIfAbsent(q, this::buscarEnArbolRemotoMercadona);
-    }
-
-    private Integer buscarEnArbolRemotoMercadona(String termino) {
-        try {
-            String url = "https://tienda.mercadona.es/api/v1_1/categories/";
-            HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).GET().build();
-            HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
-
-            if (resp.statusCode() == 200) {
-                JsonNode root = mapper.readTree(resp.body());
-                JsonNode results = root.path("results");
-                for (JsonNode catMaestra : results) {
-                    for (JsonNode sub : catMaestra.path("categories")) {
-                        String subName = normalizar(sub.path("name").asText());
-                        if (subName.contains(termino) || termino.contains(subName)) {
-                            return sub.path("id").asInt();
+                        if (contieneTodas && diaBrand) {
+                            seleccionado = item;
+                            break;
                         }
                     }
+
+                    // 2. Si no hay marca blanca exacta, tomar el primero que contenga los términos
+                    if (seleccionado == null) {
+                        for (JsonNode item : items) {
+                            String dName = item.path("display_name").asText("").toLowerCase();
+                            if (Arrays.stream(palabrasTermino).allMatch(dName::contains)) {
+                                seleccionado = item;
+                                break;
+                            }
+                        }
+                    }
+
+                    // 3. Fallback al primer resultado de la búsqueda
+                    if (seleccionado == null) {
+                        seleccionado = items.get(0);
+                    }
+
+                    String nombre = seleccionado.path("display_name").asText();
+                    double precio = seleccionado.path("prices").path("price").asDouble(0.0);
+                    String unidad = seleccionado.path("prices").path("measure_unit").asText("Ud");
+
+                    if (precio > 0.0) {
+                        log.info("🔥 [Dia EN VIVO] '{}' -> {} € ({})", nombre, precio, unidad);
+                        return new ProductoPrecioDTO(termino, nombre, precio, unidad, true);
+                    }
                 }
+            } else {
+                log.warn("⚠️ [Dia] Respuesta HTTP {}", response.statusCode());
             }
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            log.error("❌ [Dia] Error al consultar API en vivo para '{}': {}", termino, e.getMessage());
+        }
         return null;
     }
 
-    /**
-     * Búsqueda en Alcampo: API de catálogo público
-     */
-    private ResultadoComparativaDto.ItemComparadoDto buscarEnAlcampo(String original, String query) {
+    // ==========================================
+    // 🟢 MERCADONA EN VIVO
+    // ==========================================
+    private ProductoPrecioDTO consultarMercadonaEnVivo(String termino) {
         try {
-            String q = URLEncoder.encode(query, StandardCharsets.UTF_8);
-            String url = "https://www.compraonline.alcampo.es/api/v1/catalog/products?term=" + q + "&limit=5";
+            Integer catId = resolverCategoriaMercadona(termino);
+            if (catId == null) {
+                log.info("ℹ️ [Mercadona] No hay mapeo de categoría para '{}'", termino);
+                return null;
+            }
 
-            HttpRequest req = HttpRequest.newBuilder()
+            String url = "https://tienda.mercadona.es/api/v1_1/categories/" + catId + "/";
+            log.info("🎯 [Mercadona] Consultando categoría ID {} para '{}'...", catId, termino);
+
+            HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
-                    .header("User-Agent", USER_AGENT)
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
                     .header("Accept", "application/json")
-                    .timeout(Duration.ofSeconds(5))
+                    .timeout(Duration.ofSeconds(6))
                     .GET()
                     .build();
 
-            HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
-            log.info("📡 [Alcampo API] Status: {} para query='{}'", resp.statusCode(), query);
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
-            if (resp.statusCode() == 200) {
-                JsonNode root = mapper.readTree(resp.body());
-                JsonNode items = root.path("entities");
-                if (items.isArray() && items.size() > 0) {
-                    JsonNode p = items.get(0);
-                    String nombre = p.path("name").asText();
-                    double precio = p.path("price").path("amount").asDouble(0.0);
+            if (response.statusCode() == 200 && response.body() != null) {
+                JsonNode root = objectMapper.readTree(response.body());
+                JsonNode categories = root.path("categories");
+
+                List<JsonNode> todosLosProductos = new ArrayList<>();
+                if (categories.isArray()) {
+                    for (JsonNode subcat : categories) {
+                        JsonNode products = subcat.path("products");
+                        if (products.isArray()) {
+                            for (JsonNode prod : products) {
+                                todosLosProductos.add(prod);
+                            }
+                        }
+                    }
+                }
+
+                log.info("📦 [Mercadona] {} productos procesados en la categoría {}", todosLosProductos.size(), catId);
+
+                String termNorm = normalizarTexto(termino);
+                JsonNode mejorCoincidencia = null;
+
+                for (JsonNode p : todosLosProductos) {
+                    String dName = normalizarTexto(p.path("display_name").asText());
+                    if (dName.contains(termNorm) || termNorm.contains(dName)) {
+                        mejorCoincidencia = p;
+                        break;
+                    }
+                }
+
+                if (mejorCoincidencia == null && !todosLosProductos.isEmpty()) {
+                    mejorCoincidencia = todosLosProductos.get(0);
+                }
+
+                if (mejorCoincidencia != null) {
+                    String nombre = mejorCoincidencia.path("display_name").asText();
+                    double precio = mejorCoincidencia.path("price_instructions").path("unit_price").asDouble();
+                    String formato = mejorCoincidencia.path("packaging").asText("Unidad");
 
                     if (precio > 0.0) {
-                        log.info("🔥 [Alcampo EN VIVO] '{}' -> {} €", nombre, precio);
-                        return ResultadoComparativaDto.ItemComparadoDto.builder()
-                                .terminoBuscado(original)
-                                .productoEncontrado(nombre)
-                                .precio(BigDecimal.valueOf(precio).setScale(2, RoundingMode.HALF_UP))
-                                .formato("Unidad")
-                                .encontrado(true)
-                                .build();
+                        log.info("🔥 [Mercadona EN VIVO] '{}' -> {} € ({})", nombre, precio, formato);
+                        return new ProductoPrecioDTO(termino, nombre, precio, formato, true);
                     }
                 }
             }
         } catch (Exception e) {
-            log.warn("⚠️ [Alcampo] Fallo en consulta: {}", e.getMessage());
+            log.error("❌ [Mercadona] Error al consultar API en vivo: {}", e.getMessage());
+        }
+        return null;
+    }
+
+    // ==========================================
+    // ⚡ GESTIÓN DE CACHÉ POSTGRESQL (24h)
+    // ==========================================
+    private ProductoPrecioDTO obtenerPrecioConCache(String supermercado, String termino, BuscadorEnVivo buscador) {
+        String sql = """
+            SELECT nombre_producto, precio, formato, updated_at
+            FROM precios_cache
+            WHERE supermercado = ? AND LOWER(termino_busqueda) = LOWER(?)
+            AND updated_at > NOW() - INTERVAL '24 hours'
+            LIMIT 1
+        """;
+
+        try {
+            List<ProductoPrecioDTO> cache = jdbcTemplate.query(sql, (rs, rowNum) -> new ProductoPrecioDTO(
+                    termino,
+                    rs.getString("nombre_producto"),
+                    rs.getDouble("precio"),
+                    rs.getString("formato"),
+                    true
+            ), supermercado, termino);
+
+            if (!cache.isEmpty()) {
+                ProductoPrecioDTO p = cache.get(0);
+                log.info("⚡ [Caché {}] '{}' -> {} ({} €)", supermercado, termino, p.getNombre(), p.getPrecio());
+                return p;
+            }
+        } catch (Exception e) {
+            log.warn("⚠️ No se pudo consultar la caché para {} - {}: {}", supermercado, termino, e.getMessage());
         }
 
-        return buscarFallback("Alcampo", original);
+        // Si no está en caché, llama al buscador en vivo
+        ProductoPrecioDTO obtenido = buscador.buscar(termino);
+
+        if (obtenido != null && obtenido.getPrecio() > 0.0) {
+            guardarEnCache(supermercado, termino, obtenido);
+        }
+
+        return obtenido;
     }
 
-    private String limpiarTerminoParaBusqueda(String texto) {
-        String s = normalizar(texto)
-                .replaceAll("[,.;:_-]", " ")
-                .replaceAll("\\b\\d+\\s*(kg|g|gr|gramos|kilos|l|litros|ml|cl|uds|unidades|pack)\\b", " ")
-                .replaceAll("[^a-z0-9\\s]", " ");
-
-        List<String> palabras = Arrays.stream(s.split("\\s+"))
-                .filter(p -> p.length() >= 2 && !STOPWORDS.contains(p) && !p.matches("\\d+"))
-                .toList();
-
-        if (palabras.isEmpty()) return texto.trim().toLowerCase();
-        return String.join(" ", palabras.subList(0, Math.min(2, palabras.size())));
+    private void guardarEnCache(String supermercado, String termino, ProductoPrecioDTO prod) {
+        String sql = """
+            INSERT INTO precios_cache (supermercado, termino_busqueda, nombre_producto, precio, formato, updated_at)
+            VALUES (?, LOWER(?), ?, ?, ?, NOW())
+            ON CONFLICT (supermercado, termino_busqueda)
+            DO UPDATE SET
+                nombre_producto = EXCLUDED.nombre_producto,
+                precio = EXCLUDED.precio,
+                formato = EXCLUDED.formato,
+                updated_at = NOW();
+        """;
+        try {
+            jdbcTemplate.update(sql, supermercado, termino, prod.getNombre(), prod.getPrecio(), prod.getFormato());
+        } catch (Exception e) {
+            log.warn("⚠️ No se pudo guardar en caché {} - {}: {}", supermercado, termino, e.getMessage());
+        }
     }
 
-    private String normalizar(String texto) {
-        return Normalizer.normalize(texto.toLowerCase(), Normalizer.Form.NFD)
-                .replaceAll("\\p{M}", "")
+    private Integer resolverCategoriaMercadona(String termino) {
+        String t = normalizarTexto(termino);
+        for (Map.Entry<String, Integer> entry : MERCADONA_CATEGORIAS.entrySet()) {
+            if (t.contains(entry.getKey())) {
+                return entry.getValue();
+            }
+        }
+        return null;
+    }
+
+    private String normalizarTexto(String texto) {
+        if (texto == null) return "";
+        return texto.toLowerCase()
+                .replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u")
                 .trim();
     }
 
-    private ResultadoComparativaDto.ItemComparadoDto buscarFallback(String superNombre, String original) {
-        return ResultadoComparativaDto.ItemComparadoDto.builder()
-                .terminoBuscado(original)
-                .productoEncontrado(original + " (no localizado en " + superNombre + ")")
-                .precio(null)
-                .formato(null)
-                .encontrado(false)
-                .build();
+    private void marcarMasBarato(List<ComparativaSupermercadoDTO> resultado) {
+        ComparativaSupermercadoDTO mejor = null;
+        double minTotal = Double.MAX_VALUE;
+
+        for (ComparativaSupermercadoDTO s : resultado) {
+            double total = s.getTotal();
+            if (total > 0 && total < minTotal) {
+                minTotal = total;
+                mejor = s;
+            }
+        }
+
+        if (mejor != null) {
+            mejor.setMasBarato(true);
+        }
+    }
+
+    @FunctionalInterface
+    private interface BuscadorEnVivo {
+        ProductoPrecioDTO buscar(String termino);
     }
 }
