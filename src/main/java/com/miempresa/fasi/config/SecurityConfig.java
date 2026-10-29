@@ -23,6 +23,7 @@ public class SecurityConfig {
         http
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(
+                    "/login",
                     "/css/**",
                     "/js/**",
                     "/images/**",
@@ -39,6 +40,7 @@ public class SecurityConfig {
                 .ignoringRequestMatchers(
                     "/ia/api/**",
                     "/calendario/api/**",
+                    "/compra/api/**",
                     "/contexto/prompt",
                     "/contexto/guardar"
                 )
