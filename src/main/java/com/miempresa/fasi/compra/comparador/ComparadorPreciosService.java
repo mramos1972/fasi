@@ -29,11 +29,12 @@ public class ComparadorPreciosService {
     private final ObjectMapper objectMapper;
 
     private final HttpClient httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(6))
+            .version(HttpClient.Version.HTTP_2)
+            .connectTimeout(Duration.ofSeconds(8))
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
 
-    // Categorías oficiales reales verificadas de Mercadona
+    // Categorías oficiales reales de Mercadona
     private static final Map<String, Integer> MERCADONA_CATEGORIAS = new HashMap<>();
 
     static {
@@ -103,7 +104,6 @@ public class ComparadorPreciosService {
             resultados.add(dto);
         }
 
-        // Ordenar primero el que más productos tenga y menor total presente
         resultados.sort(Comparator.comparing(
                 (ResultadoComparativaDto r) -> r.getProductosEncontrados() == 0)
                 .thenComparing(ResultadoComparativaDto::getTotalEstimado)
@@ -113,7 +113,7 @@ public class ComparadorPreciosService {
     }
 
     private ResultadoComparativaDto.ItemComparadoDto obtenerPrecio(Supermercado s, String termino, LocalDateTime limiteCache) {
-        // 1. Comprobar caché local (precios_cache)
+        // 1. Caché BD local
         Optional<PrecioCache> cache = precioCacheRepo.buscarPrecioReciente(s.getId(), termino.toLowerCase(), limiteCache);
         if (cache.isPresent()) {
             PrecioCache c = cache.get();
@@ -127,7 +127,7 @@ public class ComparadorPreciosService {
                     .build();
         }
 
-        // 2. Consulta en vivo (detección flexible de cadena)
+        // 2. Consulta en vivo
         String cod = s.getCodigoInterno() != null ? s.getCodigoInterno().toUpperCase() : "";
         String nom = normalizarTexto(s.getNombre()).toUpperCase();
 
@@ -136,10 +136,10 @@ public class ComparadorPreciosService {
         if (cod.contains("MERCADONA") || nom.contains("MERCADONA")) {
             enVivo = consultarMercadonaEnVivo(termino);
         } else if (cod.contains("DIA") || nom.contains("DIA")) {
-            enVivo = consultarDiaEnVivo(termino);
+            enVivo = consultarDiaEnVivo(termino, s.getCodigoPostal());
         }
 
-        // 3. Persistir en caché si se obtuvo resultado
+        // 3. Persistir en caché
         if (enVivo != null && enVivo.isEncontrado() && enVivo.getPrecio() != null) {
             guardarEnCache(s, termino, enVivo);
             return enVivo;
@@ -165,11 +165,12 @@ public class ComparadorPreciosService {
     }
 
     // ==========================================
-    // 🟡 DIA EN VIVO (search/reduced)
+    // 🟡 DIA EN VIVO (con cabeceras completas antibloqueo)
     // ==========================================
-    private ResultadoComparativaDto.ItemComparadoDto consultarDiaEnVivo(String termino) {
+    private ResultadoComparativaDto.ItemComparadoDto consultarDiaEnVivo(String termino, String postalCode) {
         try {
-            // Simplificar término para la API de Dia: quitar nexos comunes
+            String cp = (postalCode != null && !postalCode.isBlank()) ? postalCode.trim() : "28041";
+
             String queryLimpia = normalizarTexto(termino)
                     .replace(" de ", " ")
                     .replace(" la ", " ")
@@ -185,9 +186,18 @@ public class ComparadorPreciosService {
             HttpRequest req = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
-                    .header("Accept", "application/json")
-                    .header("Accept-Language", "es-ES,es;q=0.9")
-                    .timeout(Duration.ofSeconds(6))
+                    .header("Accept", "application/json, text/plain, */*")
+                    .header("Accept-Language", "es-ES,es;q=0.9,en;q=0.8")
+                    .header("Referer", "https://www.dia.es/compra-online/")
+                    .header("Origin", "https://www.dia.es")
+                    .header("sec-ch-ua", "\"Chromium\";v=\"124\", \"Google Chrome\";v=\"124\", \"Not-A.Brand\";v=\"99\"")
+                    .header("sec-ch-ua-mobile", "?0")
+                    .header("sec-ch-ua-platform", "\"Windows\"")
+                    .header("sec-fetch-dest", "empty")
+                    .header("sec-fetch-mode", "cors")
+                    .header("sec-fetch-site", "same-origin")
+                    .header("Cookie", "dia_postal_code=" + cp + "; cart_postal_code=" + cp)
+                    .timeout(Duration.ofSeconds(7))
                     .GET()
                     .build();
 
@@ -201,7 +211,7 @@ public class ComparadorPreciosService {
                     JsonNode seleccionado = null;
                     String primeraPalabra = queryLimpia.split(" ")[0];
 
-                    // 1. Priorizar marca blanca Dia que contenga la palabra principal
+                    // 1. Marca Dia que contenga el término principal
                     for (JsonNode item : items) {
                         String nameNorm = normalizarTexto(item.path("display_name").asText());
                         boolean diaBrand = item.path("dia_brand").asBoolean(false);
@@ -211,7 +221,7 @@ public class ComparadorPreciosService {
                         }
                     }
 
-                    // 2. Si no hay marca Dia, tomar el primer producto que contenga la palabra
+                    // 2. Coincidencia general
                     if (seleccionado == null) {
                         for (JsonNode item : items) {
                             String nameNorm = normalizarTexto(item.path("display_name").asText());
@@ -222,7 +232,7 @@ public class ComparadorPreciosService {
                         }
                     }
 
-                    // 3. Fallback al primer resultado
+                    // 3. Primer resultado
                     if (seleccionado == null) {
                         seleccionado = items.get(0);
                     }
@@ -243,10 +253,12 @@ public class ComparadorPreciosService {
                                 .build();
                     }
                 } else {
-                    log.warn("⚠️ [Dia] Sin items en respuesta para '{}'", queryLimpia);
+                    log.warn("⚠️ [Dia] Sin artículos devueltos para '{}'", queryLimpia);
                 }
             } else {
-                log.warn("⚠️ [Dia] HTTP {} en consulta de '{}'", resp.statusCode(), queryLimpia);
+                log.warn("⚠️ [Dia] HTTP {} en consulta de '{}'. Cuerpo: {}",
+                        resp.statusCode(), queryLimpia,
+                        resp.body() != null && resp.body().length() > 200 ? resp.body().substring(0, 200) : resp.body());
             }
         } catch (Exception e) {
             log.error("❌ [Dia] Error para '{}': {}", termino, e.getMessage());
@@ -269,7 +281,7 @@ public class ComparadorPreciosService {
 
             HttpRequest req = HttpRequest.newBuilder()
                     .uri(URI.create(url))
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
                     .header("Accept", "application/json")
                     .timeout(Duration.ofSeconds(6))
                     .GET()
@@ -349,5 +361,3 @@ public class ComparadorPreciosService {
                 .trim();
     }
 }
-
-
