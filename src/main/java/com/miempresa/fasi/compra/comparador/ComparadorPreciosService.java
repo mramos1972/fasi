@@ -9,8 +9,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.net.CookieManager;
-import java.net.CookiePolicy;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -20,6 +18,8 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Slf4j
 @Service
@@ -30,17 +30,16 @@ public class ComparadorPreciosService {
     private final PrecioCacheRepository precioCacheRepo;
     private final ObjectMapper objectMapper;
 
-    // CookieManager para mantener la sesión real con Dia y superar el WAF de Akamai
-    private final CookieManager cookieManager = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
-
     private final HttpClient httpClient = HttpClient.newBuilder()
-            .version(HttpClient.Version.HTTP_1_1)
-            .cookieHandler(cookieManager)
+            .version(HttpClient.Version.HTTP_2)
             .connectTimeout(Duration.ofSeconds(10))
             .followRedirects(HttpClient.Redirect.ALWAYS)
             .build();
 
-    private boolean diaSesionIniciada = false;
+    private static final Pattern NEXT_DATA_PATTERN = Pattern.compile(
+            "<script id=\"__NEXT_DATA__\" type=\"application/json\">(.*?)</script>",
+            Pattern.DOTALL
+    );
 
     // Categorías oficiales reales de Mercadona
     private static final Map<String, Integer> MERCADONA_CATEGORIAS = new HashMap<>();
@@ -121,7 +120,7 @@ public class ComparadorPreciosService {
     }
 
     private ResultadoComparativaDto.ItemComparadoDto obtenerPrecio(Supermercado s, String termino, LocalDateTime limiteCache) {
-        // 1. Comprobar caché local
+        // 1. Caché local
         Optional<PrecioCache> cache = precioCacheRepo.buscarPrecioReciente(s.getId(), termino.toLowerCase(), limiteCache);
         if (cache.isPresent()) {
             PrecioCache c = cache.get();
@@ -144,10 +143,10 @@ public class ComparadorPreciosService {
         if (cod.contains("MERCADONA") || nom.contains("MERCADONA")) {
             enVivo = consultarMercadonaEnVivo(termino);
         } else if (cod.contains("DIA") || nom.contains("DIA")) {
-            enVivo = consultarDiaEnVivo(termino);
+            enVivo = consultarDiaWeb(termino);
         }
 
-        // 3. Persistir en caché
+        // 3. Guardar en caché si se localizó precio
         if (enVivo != null && enVivo.isEncontrado() && enVivo.getPrecio() != null) {
             guardarEnCache(s, termino, enVivo);
             return enVivo;
@@ -173,34 +172,9 @@ public class ComparadorPreciosService {
     }
 
     // ==========================================
-    // 🟡 DIA EN VIVO (con inicio de sesión previo para Akamai)
+    // 🟡 DIA (Vía catálogo web público - Anti-WAF)
     // ==========================================
-    private synchronized void asegurarSesionDia() {
-        if (diaSesionIniciada) {
-            return;
-        }
-        try {
-            log.info("🌐 [Dia] Calentando sesión con dia.es para registrar cookies de Akamai...");
-            HttpRequest homeReq = HttpRequest.newBuilder()
-                    .uri(URI.create("https://www.dia.es/compra-online/"))
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
-                    .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
-                    .header("Accept-Language", "es-ES,es;q=0.9")
-                    .timeout(Duration.ofSeconds(6))
-                    .GET()
-                    .build();
-
-            httpClient.send(homeReq, HttpResponse.BodyHandlers.discarding());
-            diaSesionIniciada = true;
-            log.info("✅ [Dia] Sesión inicial establecida.");
-        } catch (Exception e) {
-            log.warn("⚠️ [Dia] Aviso calentando sesión: {}", e.getMessage());
-        }
-    }
-
-    private ResultadoComparativaDto.ItemComparadoDto consultarDiaEnVivo(String termino) {
-        asegurarSesionDia();
-
+    private ResultadoComparativaDto.ItemComparadoDto consultarDiaWeb(String termino) {
         try {
             String queryLimpia = normalizarTexto(termino)
                     .replace(" de ", " ")
@@ -210,85 +184,87 @@ public class ComparadorPreciosService {
                     .trim();
 
             String encoded = URLEncoder.encode(queryLimpia, StandardCharsets.UTF_8);
-            String url = "https://www.dia.es/api/v1/search-back/search/reduced?q=" + encoded + "&page=1";
+            String url = "https://www.dia.es/compra-online/productos/buscar?q=" + encoded;
 
-            log.info("🎯 [Dia] Consultando URL: {}", url);
+            log.info("🎯 [Dia Web] Consultando: {}", url);
 
             HttpRequest req = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
-                    .header("Accept", "application/json, text/plain, */*")
-                    .header("Accept-Language", "es-ES,es;q=0.9,en;q=0.8")
-                    .header("Referer", "https://www.dia.es/compra-online/")
-                    .header("sec-ch-ua", "\"Chromium\";v=\"124\", \"Google Chrome\";v=\"124\", \"Not-A.Brand\";v=\"99\"")
-                    .header("sec-ch-ua-mobile", "?0")
-                    .header("sec-ch-ua-platform", "\"Windows\"")
-                    .header("sec-fetch-dest", "empty")
-                    .header("sec-fetch-mode", "cors")
-                    .header("sec-fetch-site", "same-origin")
+                    .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                    .header("Accept-Language", "es-ES,es;q=0.9")
                     .timeout(Duration.ofSeconds(8))
                     .GET()
                     .build();
 
             HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
 
-            if (resp.statusCode() == 200 && resp.body() != null && resp.body().trim().startsWith("{")) {
-                JsonNode root = objectMapper.readTree(resp.body());
-                JsonNode items = root.path("search_items");
-
-                if (items.isArray() && items.size() > 0) {
-                    JsonNode seleccionado = null;
-                    String primeraPalabra = queryLimpia.split(" ")[0];
-
-                    // 1. Marca Dia con coincidencia
-                    for (JsonNode item : items) {
-                        String nameNorm = normalizarTexto(item.path("display_name").asText());
-                        boolean diaBrand = item.path("dia_brand").asBoolean(false);
-                        if (nameNorm.contains(primeraPalabra) && diaBrand) {
-                            seleccionado = item;
-                            break;
-                        }
+            if (resp.statusCode() == 200 && resp.body() != null) {
+                Matcher matcher = NEXT_DATA_PATTERN.matcher(resp.body());
+                if (matcher.find()) {
+                    String json = matcher.group(1);
+                    JsonNode root = objectMapper.readTree(json);
+                    
+                    // En Next.js de Dia los productos se alojan bajo pageProps
+                    JsonNode items = root.findPath("search_items");
+                    if (items.isMissingNode() || items.isEmpty()) {
+                        items = root.findPath("items");
                     }
 
-                    // 2. Coincidencia general
-                    if (seleccionado == null) {
+                    if (items.isArray() && items.size() > 0) {
+                        JsonNode seleccionado = null;
+                        String primeraPalabra = queryLimpia.split(" ")[0];
+
                         for (JsonNode item : items) {
                             String nameNorm = normalizarTexto(item.path("display_name").asText());
-                            if (nameNorm.contains(primeraPalabra)) {
+                            boolean diaBrand = item.path("dia_brand").asBoolean(false);
+                            if (nameNorm.contains(primeraPalabra) && diaBrand) {
                                 seleccionado = item;
                                 break;
                             }
                         }
-                    }
 
-                    // 3. Primer resultado
-                    if (seleccionado == null) {
-                        seleccionado = items.get(0);
-                    }
+                        if (seleccionado == null) {
+                            for (JsonNode item : items) {
+                                String nameNorm = normalizarTexto(item.path("display_name").asText());
+                                if (nameNorm.contains(primeraPalabra)) {
+                                    seleccionado = item;
+                                    break;
+                                }
+                            }
+                        }
 
-                    String nombre = seleccionado.path("display_name").asText();
-                    double precioDbl = seleccionado.path("prices").path("price").asDouble(0.0);
-                    String formato = seleccionado.path("prices").path("measure_unit").asText("Ud");
+                        if (seleccionado == null) {
+                            seleccionado = items.get(0);
+                        }
 
-                    if (precioDbl > 0.0) {
-                        BigDecimal precio = BigDecimal.valueOf(precioDbl).setScale(2, RoundingMode.HALF_UP);
-                        log.info("🔥 [Dia EN VIVO] '{}' -> {} € ({})", nombre, precio, formato);
-                        return ResultadoComparativaDto.ItemComparadoDto.builder()
-                                .terminoBuscado(termino)
-                                .productoEncontrado(nombre)
-                                .precio(precio)
-                                .formato(formato)
-                                .encontrado(true)
-                                .build();
+                        String nombre = seleccionado.path("display_name").asText();
+                        double precioDbl = seleccionado.path("prices").path("price").asDouble(0.0);
+                        if (precioDbl == 0.0) {
+                            precioDbl = seleccionado.findPath("price").asDouble(0.0);
+                        }
+                        String formato = seleccionado.path("prices").path("measure_unit").asText("Ud");
+
+                        if (precioDbl > 0.0) {
+                            BigDecimal precio = BigDecimal.valueOf(precioDbl).setScale(2, RoundingMode.HALF_UP);
+                            log.info("🔥 [Dia Web EN VIVO] '{}' -> {} € ({})", nombre, precio, formato);
+                            return ResultadoComparativaDto.ItemComparadoDto.builder()
+                                    .terminoBuscado(termino)
+                                    .productoEncontrado(nombre)
+                                    .precio(precio)
+                                    .formato(formato)
+                                    .encontrado(true)
+                                    .build();
+                        }
                     }
                 } else {
-                    log.warn("⚠️ [Dia] Sin artículos devueltos para '{}'", queryLimpia);
+                    log.warn("⚠️ [Dia Web] No se detectó __NEXT_DATA__ en la respuesta.");
                 }
             } else {
-                log.warn("⚠️ [Dia] Respuesta HTTP {}. Es posible que Akamai requiera reintento o proxy.", resp.statusCode());
+                log.warn("⚠️ [Dia Web] HTTP {}", resp.statusCode());
             }
         } catch (Exception e) {
-            log.error("❌ [Dia] Excepción al consultar '{}': {}", termino, e.getMessage());
+            log.error("❌ [Dia Web] Error para '{}': {}", termino, e.getMessage());
         }
         return null;
     }
