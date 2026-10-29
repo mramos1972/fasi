@@ -33,7 +33,7 @@ public class ComparadorPreciosService {
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
 
-    // Categorías oficiales reales de Mercadona
+    // Categorías oficiales reales verificadas de Mercadona
     private static final Map<String, Integer> MERCADONA_CATEGORIAS = new HashMap<>();
 
     static {
@@ -55,9 +55,6 @@ public class ComparadorPreciosService {
         MERCADONA_CATEGORIAS.put("yogur", 75);
     }
 
-    /**
-     * Compara los artículos solicitados en todos los supermercados activos.
-     */
     @Transactional
     public List<ResultadoComparativaDto> compararLista(List<String> articulos) {
         if (articulos == null || articulos.isEmpty()) {
@@ -106,7 +103,7 @@ public class ComparadorPreciosService {
             resultados.add(dto);
         }
 
-        // Ordenar primero el que tenga menor total (solo entre los que tienen artículos encontrados)
+        // Ordenar primero el que más productos tenga y menor total presente
         resultados.sort(Comparator.comparing(
                 (ResultadoComparativaDto r) -> r.getProductosEncontrados() == 0)
                 .thenComparing(ResultadoComparativaDto::getTotalEstimado)
@@ -116,7 +113,7 @@ public class ComparadorPreciosService {
     }
 
     private ResultadoComparativaDto.ItemComparadoDto obtenerPrecio(Supermercado s, String termino, LocalDateTime limiteCache) {
-        // 1. Mirar en BD local (precios_cache) reciente (menos de 24h)
+        // 1. Comprobar caché local (precios_cache)
         Optional<PrecioCache> cache = precioCacheRepo.buscarPrecioReciente(s.getId(), termino.toLowerCase(), limiteCache);
         if (cache.isPresent()) {
             PrecioCache c = cache.get();
@@ -130,17 +127,19 @@ public class ComparadorPreciosService {
                     .build();
         }
 
-        // 2. Consulta en vivo según el supermercado
-        ResultadoComparativaDto.ItemComparadoDto enVivo = null;
-        String codigo = s.getCodigoInterno() != null ? s.getCodigoInterno().toUpperCase() : "";
+        // 2. Consulta en vivo (detección flexible de cadena)
+        String cod = s.getCodigoInterno() != null ? s.getCodigoInterno().toUpperCase() : "";
+        String nom = normalizarTexto(s.getNombre()).toUpperCase();
 
-        if ("MERCADONA".equals(codigo)) {
+        ResultadoComparativaDto.ItemComparadoDto enVivo = null;
+
+        if (cod.contains("MERCADONA") || nom.contains("MERCADONA")) {
             enVivo = consultarMercadonaEnVivo(termino);
-        } else if ("DIA".equals(codigo)) {
+        } else if (cod.contains("DIA") || nom.contains("DIA")) {
             enVivo = consultarDiaEnVivo(termino);
         }
 
-        // 3. Si se localizó, persistir en la tabla precios_cache
+        // 3. Persistir en caché si se obtuvo resultado
         if (enVivo != null && enVivo.isEncontrado() && enVivo.getPrecio() != null) {
             guardarEnCache(s, termino, enVivo);
             return enVivo;
@@ -170,15 +169,18 @@ public class ComparadorPreciosService {
     // ==========================================
     private ResultadoComparativaDto.ItemComparadoDto consultarDiaEnVivo(String termino) {
         try {
-            String queryLimpia = termino.toLowerCase()
-                    .replace("de", "")
-                    .replace("la", "")
-                    .replace("el", "")
+            // Simplificar término para la API de Dia: quitar nexos comunes
+            String queryLimpia = normalizarTexto(termino)
+                    .replace(" de ", " ")
+                    .replace(" la ", " ")
+                    .replace(" el ", " ")
                     .replaceAll("\\s+", " ")
                     .trim();
 
             String encoded = URLEncoder.encode(queryLimpia, StandardCharsets.UTF_8);
             String url = "https://www.dia.es/api/v1/search-back/search/reduced?q=" + encoded + "&page=1";
+
+            log.info("🎯 [Dia] Consultando URL: {}", url);
 
             HttpRequest req = HttpRequest.newBuilder()
                     .uri(URI.create(url))
@@ -197,37 +199,23 @@ public class ComparadorPreciosService {
 
                 if (items.isArray() && items.size() > 0) {
                     JsonNode seleccionado = null;
-                    String[] palabras = queryLimpia.split("\\s+");
+                    String primeraPalabra = queryLimpia.split(" ")[0];
 
-                    // 1. Priorizar marca blanca Dia que contenga las palabras
+                    // 1. Priorizar marca blanca Dia que contenga la palabra principal
                     for (JsonNode item : items) {
-                        String name = item.path("display_name").asText("").toLowerCase();
+                        String nameNorm = normalizarTexto(item.path("display_name").asText());
                         boolean diaBrand = item.path("dia_brand").asBoolean(false);
-                        boolean coincide = true;
-                        for (String p : palabras) {
-                            if (!name.contains(p)) {
-                                coincide = false;
-                                break;
-                            }
-                        }
-                        if (coincide && diaBrand) {
+                        if (nameNorm.contains(primeraPalabra) && diaBrand) {
                             seleccionado = item;
                             break;
                         }
                     }
 
-                    // 2. Coincidencia general de palabras
+                    // 2. Si no hay marca Dia, tomar el primer producto que contenga la palabra
                     if (seleccionado == null) {
                         for (JsonNode item : items) {
-                            String name = item.path("display_name").asText("").toLowerCase();
-                            boolean coincide = true;
-                            for (String p : palabras) {
-                                if (!name.contains(p)) {
-                                    coincide = false;
-                                    break;
-                                }
-                            }
-                            if (coincide) {
+                            String nameNorm = normalizarTexto(item.path("display_name").asText());
+                            if (nameNorm.contains(primeraPalabra)) {
                                 seleccionado = item;
                                 break;
                             }
@@ -254,7 +242,11 @@ public class ComparadorPreciosService {
                                 .encontrado(true)
                                 .build();
                     }
+                } else {
+                    log.warn("⚠️ [Dia] Sin items en respuesta para '{}'", queryLimpia);
                 }
+            } else {
+                log.warn("⚠️ [Dia] HTTP {} en consulta de '{}'", resp.statusCode(), queryLimpia);
             }
         } catch (Exception e) {
             log.error("❌ [Dia] Error para '{}': {}", termino, e.getMessage());
@@ -357,3 +349,5 @@ public class ComparadorPreciosService {
                 .trim();
     }
 }
+
+
