@@ -9,6 +9,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.net.CookieManager;
+import java.net.CookiePolicy;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -28,11 +30,17 @@ public class ComparadorPreciosService {
     private final PrecioCacheRepository precioCacheRepo;
     private final ObjectMapper objectMapper;
 
+    // CookieManager para mantener la sesión real con Dia y superar el WAF de Akamai
+    private final CookieManager cookieManager = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
+
     private final HttpClient httpClient = HttpClient.newBuilder()
-            .version(HttpClient.Version.HTTP_2)
-            .connectTimeout(Duration.ofSeconds(8))
-            .followRedirects(HttpClient.Redirect.NORMAL)
+            .version(HttpClient.Version.HTTP_1_1)
+            .cookieHandler(cookieManager)
+            .connectTimeout(Duration.ofSeconds(10))
+            .followRedirects(HttpClient.Redirect.ALWAYS)
             .build();
+
+    private boolean diaSesionIniciada = false;
 
     // Categorías oficiales reales de Mercadona
     private static final Map<String, Integer> MERCADONA_CATEGORIAS = new HashMap<>();
@@ -113,7 +121,7 @@ public class ComparadorPreciosService {
     }
 
     private ResultadoComparativaDto.ItemComparadoDto obtenerPrecio(Supermercado s, String termino, LocalDateTime limiteCache) {
-        // 1. Caché BD local
+        // 1. Comprobar caché local
         Optional<PrecioCache> cache = precioCacheRepo.buscarPrecioReciente(s.getId(), termino.toLowerCase(), limiteCache);
         if (cache.isPresent()) {
             PrecioCache c = cache.get();
@@ -136,7 +144,7 @@ public class ComparadorPreciosService {
         if (cod.contains("MERCADONA") || nom.contains("MERCADONA")) {
             enVivo = consultarMercadonaEnVivo(termino);
         } else if (cod.contains("DIA") || nom.contains("DIA")) {
-            enVivo = consultarDiaEnVivo(termino, s.getCodigoPostal());
+            enVivo = consultarDiaEnVivo(termino);
         }
 
         // 3. Persistir en caché
@@ -165,12 +173,35 @@ public class ComparadorPreciosService {
     }
 
     // ==========================================
-    // 🟡 DIA EN VIVO (con cabeceras completas antibloqueo)
+    // 🟡 DIA EN VIVO (con inicio de sesión previo para Akamai)
     // ==========================================
-    private ResultadoComparativaDto.ItemComparadoDto consultarDiaEnVivo(String termino, String postalCode) {
+    private synchronized void asegurarSesionDia() {
+        if (diaSesionIniciada) {
+            return;
+        }
         try {
-            String cp = (postalCode != null && !postalCode.isBlank()) ? postalCode.trim() : "28041";
+            log.info("🌐 [Dia] Calentando sesión con dia.es para registrar cookies de Akamai...");
+            HttpRequest homeReq = HttpRequest.newBuilder()
+                    .uri(URI.create("https://www.dia.es/compra-online/"))
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+                    .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
+                    .header("Accept-Language", "es-ES,es;q=0.9")
+                    .timeout(Duration.ofSeconds(6))
+                    .GET()
+                    .build();
 
+            httpClient.send(homeReq, HttpResponse.BodyHandlers.discarding());
+            diaSesionIniciada = true;
+            log.info("✅ [Dia] Sesión inicial establecida.");
+        } catch (Exception e) {
+            log.warn("⚠️ [Dia] Aviso calentando sesión: {}", e.getMessage());
+        }
+    }
+
+    private ResultadoComparativaDto.ItemComparadoDto consultarDiaEnVivo(String termino) {
+        asegurarSesionDia();
+
+        try {
             String queryLimpia = normalizarTexto(termino)
                     .replace(" de ", " ")
                     .replace(" la ", " ")
@@ -189,21 +220,19 @@ public class ComparadorPreciosService {
                     .header("Accept", "application/json, text/plain, */*")
                     .header("Accept-Language", "es-ES,es;q=0.9,en;q=0.8")
                     .header("Referer", "https://www.dia.es/compra-online/")
-                    .header("Origin", "https://www.dia.es")
                     .header("sec-ch-ua", "\"Chromium\";v=\"124\", \"Google Chrome\";v=\"124\", \"Not-A.Brand\";v=\"99\"")
                     .header("sec-ch-ua-mobile", "?0")
                     .header("sec-ch-ua-platform", "\"Windows\"")
                     .header("sec-fetch-dest", "empty")
                     .header("sec-fetch-mode", "cors")
                     .header("sec-fetch-site", "same-origin")
-                    .header("Cookie", "dia_postal_code=" + cp + "; cart_postal_code=" + cp)
-                    .timeout(Duration.ofSeconds(7))
+                    .timeout(Duration.ofSeconds(8))
                     .GET()
                     .build();
 
             HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
 
-            if (resp.statusCode() == 200 && resp.body() != null) {
+            if (resp.statusCode() == 200 && resp.body() != null && resp.body().trim().startsWith("{")) {
                 JsonNode root = objectMapper.readTree(resp.body());
                 JsonNode items = root.path("search_items");
 
@@ -211,7 +240,7 @@ public class ComparadorPreciosService {
                     JsonNode seleccionado = null;
                     String primeraPalabra = queryLimpia.split(" ")[0];
 
-                    // 1. Marca Dia que contenga el término principal
+                    // 1. Marca Dia con coincidencia
                     for (JsonNode item : items) {
                         String nameNorm = normalizarTexto(item.path("display_name").asText());
                         boolean diaBrand = item.path("dia_brand").asBoolean(false);
@@ -256,12 +285,10 @@ public class ComparadorPreciosService {
                     log.warn("⚠️ [Dia] Sin artículos devueltos para '{}'", queryLimpia);
                 }
             } else {
-                log.warn("⚠️ [Dia] HTTP {} en consulta de '{}'. Cuerpo: {}",
-                        resp.statusCode(), queryLimpia,
-                        resp.body() != null && resp.body().length() > 200 ? resp.body().substring(0, 200) : resp.body());
+                log.warn("⚠️ [Dia] Respuesta HTTP {}. Es posible que Akamai requiera reintento o proxy.", resp.statusCode());
             }
         } catch (Exception e) {
-            log.error("❌ [Dia] Error para '{}': {}", termino, e.getMessage());
+            log.error("❌ [Dia] Excepción al consultar '{}': {}", termino, e.getMessage());
         }
         return null;
     }
