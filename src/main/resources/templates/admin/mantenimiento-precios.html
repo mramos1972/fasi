@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mantenimiento de Catálogos | FASI</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+</head>
+<body class="bg-light">
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+    <div class="container-fluid">
+        <a class="navbar-brand fw-bold" href="/calendario">
+            <i class="bi bi-shield-check text-warning me-2"></i>FASI Admin
+        </a>
+        <div class="d-flex">
+            <a href="/compra/lista" class="btn btn-outline-light btn-sm me-2">
+                <i class="bi bi-cart me-1"></i>Ir a la Compra
+            </a>
+            <a href="/calendario" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-calendar me-1"></i>Calendario
+            </a>
+        </div>
+    </div>
+</nav>
+
+<div class="container py-2">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <h4 class="card-title fw-bold text-dark mb-1">
+                                <i class="bi bi-database-fill-gear text-primary me-2"></i>Mantenimiento de Catálogos
+                            </h4>
+                            <p class="text-muted small mb-0">
+                                Sincronización masiva de precios desde el navegador para alimentar la base de datos local.
+                            </p>
+                        </div>
+                        <span class="badge bg-primary fs-6 px-3 py-2 rounded-pill">
+                            <i class="bi bi-hdd-stack me-1"></i><span id="labelTotalCache" th:text="${totalPrecios}">0</span> registros
+                        </span>
+                    </div>
+
+                    <hr>
+
+                    <!-- Tarjeta DIA -->
+                    <div class="card border border-danger-subtle bg-white shadow-sm mb-4">
+                        <div class="card-body p-4">
+                            <div class="d-flex align-items-center justify-content-between mb-3">
+                                <div class="d-flex align-items-center">
+                                    <div class="bg-danger text-white rounded p-3 me-3 fw-bold fs-4">DIA</div>
+                                    <div>
+                                        <h5 class="fw-bold mb-0">Supermercado Dia</h5>
+                                        <span class="text-muted small">Carga directa de categorías básicas y despensa</span>
+                                    </div>
+                                </div>
+                                <button id="btnSincronizarDia" class="btn btn-danger btn-lg px-4" onclick="iniciarSincronizacionDia()">
+                                    <i class="bi bi-arrow-repeat me-2"></i>Sincronizar Catálogo Dia
+                                </button>
+                            </div>
+
+                            <!-- Barra de progreso -->
+                            <div class="progress mb-3 d-none" id="progressContainer" style="height: 22px;">
+                                <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-danger" 
+                                     role="progressbar" style="width: 0%;">0%</div>
+                            </div>
+
+                            <!-- Consola de salida -->
+                            <div class="bg-dark text-success p-3 rounded font-monospace small" style="min-height: 180px; max-height: 260px; overflow-y: auto;" id="consolaLogs">
+                                <div>> Módulo listo. Haz clic en "Sincronizar Catálogo Dia" para iniciar.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+    // Palabras clave y categorías de cesta básica para barrer el catálogo
+    const TERMINOS_CATALOGO = [
+        "arroz", "harina", "azucar", "papel higienico", "leche", "aceite",
+        "huevos", "pasta", "macarrones", "tomate", "atun", "cafe", 
+        "pan de molde", "galletas", "patatas", "detergente", "suavizante", "yogur"
+    ];
+
+    function logConsola(mensaje, colorClass = "") {
+        const consola = document.getElementById("consolaLogs");
+        const linea = document.createElement("div");
+        if (colorClass) linea.className = colorClass;
+        linea.innerText = `> ${mensaje}`;
+        consola.appendChild(linea);
+        consola.scrollTop = consola.scrollHeight;
+    }
+
+    async function iniciarSincronizacionDia() {
+        const btn = document.getElementById("btnSincronizarDia");
+        const progContainer = document.getElementById("progressContainer");
+        const progBar = document.getElementById("progressBar");
+
+        btn.disabled = true;
+        progContainer.classList.remove("d-none");
+        progBar.style.width = "0%";
+        progBar.innerText = "0%";
+
+        logConsola("Iniciando proceso de sincronización con Dia...", "text-info");
+
+        let totalGuardados = 0;
+
+        for (let i = 0; i < TERMINOS_CATALOGO.length; i++) {
+            const termino = TERMINOS_CATALOGO[i];
+            const porcentaje = Math.round(((i + 1) / TERMINOS_CATALOGO.length) * 100);
+            progBar.style.width = `${porcentaje}%`;
+            progBar.innerText = `${porcentaje}%`;
+
+            logConsola(`Buscando catálogo para: '${termino}'...`);
+
+            try {
+                // Petición a la API reducida de Dia (desde el navegador del usuario)
+                const url = `https://www.dia.es/api/v1/search-back/search/reduced?q=${encodeURIComponent(termino)}&page=1`;
+                const resp = await fetch(url, {
+                    headers: { 'Accept': 'application/json' }
+                });
+
+                if (resp.ok) {
+                    const data = await resp.json();
+                    const items = data.search_items || [];
+
+                    if (items.length > 0) {
+                        const lote = items.map(it => {
+                            const p = it.prices ? (it.prices.price || 0) : 0;
+                            const u = it.prices ? (it.prices.measure_unit || "Ud") : "Ud";
+                            return {
+                                display_name: it.display_name,
+                                precio: p,
+                                measure_unit: u
+                            };
+                        });
+
+                        // Enviar lote a nuestro backend Spring Boot
+                        const sendResp = await fetch('/admin/mantenimiento-precios/api/lote-dia', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(lote)
+                        });
+
+                        if (sendResp.ok) {
+                            const resJson = await sendResp.json();
+                            totalGuardados += resJson.procesadosEnLote;
+                            document.getElementById("labelTotalCache").innerText = resJson.totalEnCache;
+                            logConsola(`✔ '${termino}': ${resJson.procesadosEnLote} productos guardados en BD local.`, "text-success");
+                        } else {
+                            logConsola(`⚠ Error guardando lote para '${termino}' en el backend.`, "text-warning");
+                        }
+                    } else {
+                        logConsola(`ℹ '${termino}': no devolvió elementos.`, "text-muted");
+                    }
+                } else {
+                    logConsola(`✖ Dia respondió HTTP ${resp.status} para '${termino}'.`, "text-danger");
+                }
+            } catch (err) {
+                logConsola(`✖ Excepción en navegador para '${termino}': ${err.message}`, "text-danger");
+            }
+
+            // Pequeña pausa de cortesía para no saturar
+            await new Promise(r => setTimeout(r, 600));
+        }
+
+        progBar.classList.remove("progress-bar-animated");
+        btn.disabled = false;
+        logConsola(`🎉 Sincronización completada. Total productos procesados: ${totalGuardados}`, "text-info fw-bold");
+    }
+</script>
+
+</body>
+</html>

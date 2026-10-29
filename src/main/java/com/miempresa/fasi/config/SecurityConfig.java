@@ -41,6 +41,7 @@ public class SecurityConfig {
                     "/ia/api/**",
                     "/calendario/api/**",
                     "/compra/api/**",
+                    "/admin/mantenimiento-precios/api/**",
                     "/contexto/prompt",
                     "/contexto/guardar"
                 )
