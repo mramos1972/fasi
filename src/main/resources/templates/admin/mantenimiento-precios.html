@@ -15,7 +15,8 @@
             <i class="bi bi-shield-check text-warning me-2"></i>FASI Admin
         </a>
         <div class="d-flex">
-            <a href="/compra/lista" class="btn btn-outline-light btn-sm me-2">
+            <!-- Enlace corregido a /compra -->
+            <a href="/compra" class="btn btn-outline-light btn-sm me-2">
                 <i class="bi bi-cart me-1"></i>Ir a la Compra
             </a>
             <a href="/calendario" class="btn btn-outline-secondary btn-sm">
@@ -41,7 +42,7 @@
                             </p>
                         </div>
                         <span class="badge bg-primary fs-6 px-3 py-2 rounded-pill">
-                            <i class="bi bi-hdd-stack me-1"></i><span id="labelTotalCache" th:text="${totalPrecios}">0</span> registros
+                            <i class="bi bi-hdd-stack me-1"></i><span id="labelTotalCache" th:text="${totalPrecios}">0</span> registros en BD
                         </span>
                     </div>
 
@@ -55,23 +56,23 @@
                                     <div class="bg-danger text-white rounded p-3 me-3 fw-bold fs-4">DIA</div>
                                     <div>
                                         <h5 class="fw-bold mb-0">Supermercado Dia</h5>
-                                        <span class="text-muted small">Carga directa de categorías básicas y despensa</span>
+                                        <span class="text-muted small">Carga masiva multicanal (Despensa, Lácteos, Frescos, Limpieza...)</span>
                                     </div>
                                 </div>
                                 <button id="btnSincronizarDia" class="btn btn-danger btn-lg px-4" onclick="iniciarSincronizacionDia()">
-                                    <i class="bi bi-arrow-repeat me-2"></i>Sincronizar Catálogo Dia
+                                    <i class="bi bi-arrow-repeat me-2"></i>Sincronizar Catálogo Completo
                                 </button>
                             </div>
 
                             <!-- Barra de progreso -->
-                            <div class="progress mb-3 d-none" id="progressContainer" style="height: 22px;">
-                                <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-danger" 
+                            <div class="progress mb-3 d-none" id="progressContainer" style="height: 24px;">
+                                <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-danger fw-bold" 
                                      role="progressbar" style="width: 0%;">0%</div>
                             </div>
 
                             <!-- Consola de salida -->
-                            <div class="bg-dark text-success p-3 rounded font-monospace small" style="min-height: 180px; max-height: 260px; overflow-y: auto;" id="consolaLogs">
-                                <div>> Módulo listo. Haz clic en "Sincronizar Catálogo Dia" para iniciar.</div>
+                            <div class="bg-dark text-success p-3 rounded font-monospace small" style="min-height: 220px; max-height: 320px; overflow-y: auto;" id="consolaLogs">
+                                <div>> Módulo listo. Haz clic en "Sincronizar Catálogo Completo" para iniciar.</div>
                             </div>
                         </div>
                     </div>
@@ -84,11 +85,21 @@
 </div>
 
 <script>
-    // Palabras clave y categorías de cesta básica para barrer el catálogo
+    // Batería completa de términos y categorías para barrer el catálogo de Dia
     const TERMINOS_CATALOGO = [
+        // Esenciales cesta básica
         "arroz", "harina", "azucar", "papel higienico", "leche", "aceite",
-        "huevos", "pasta", "macarrones", "tomate", "atun", "cafe", 
-        "pan de molde", "galletas", "patatas", "detergente", "suavizante", "yogur"
+        "huevos", "pasta", "macarrones", "espaguetis", "tomate", "atun",
+        "cafe", "pan de molde", "galletas", "patatas", "detergente", 
+        "suavizante", "yogur", "queso", "mantequilla", "legumbres",
+        // Frescos y carnicería/pescadería
+        "pollo", "ternera", "cerdo", "merluza", "salmon", "manzanas", 
+        "platanos", "naranjas", "cebollas", "lechuga",
+        // Despensa y bebidas
+        "agua", "refresco", "cerveza", "vino", "cereales", "chocolate",
+        "mermelada", "sal", "vinagre", "mayonesa", "conservas",
+        // Limpieza e higiene
+        "champu", "gel", "dentifrico", "lavavajillas", "lejia", "limpiador"
     ];
 
     function logConsola(mensaje, colorClass = "") {
@@ -110,74 +121,62 @@
         progBar.style.width = "0%";
         progBar.innerText = "0%";
 
-        logConsola("Iniciando proceso de sincronización con Dia...", "text-info");
+        logConsola("Iniciando barrido profundo del catálogo de Dia (paginado)...", "text-info");
 
         let totalGuardados = 0;
+        const totalPasos = TERMINOS_CATALOGO.length * 2; // 2 páginas por término
+        let pasoActual = 0;
 
-        for (let i = 0; i < TERMINOS_CATALOGO.length; i++) {
-            const termino = TERMINOS_CATALOGO[i];
-            const porcentaje = Math.round(((i + 1) / TERMINOS_CATALOGO.length) * 100);
-            progBar.style.width = `${porcentaje}%`;
-            progBar.innerText = `${porcentaje}%`;
+        for (const termino of TERMINOS_CATALOGO) {
+            // Consultamos página 1 y página 2 de cada término
+            for (let pagina = 1; pagina <= 2; pagina++) {
+                pasoActual++;
+                const porcentaje = Math.round((pasoActual / totalPasos) * 100);
+                progBar.style.width = `${porcentaje}%`;
+                progBar.innerText = `${porcentaje}%`;
 
-            logConsola(`Buscando catálogo para: '${termino}'...`);
+                try {
+                    const url = `https://www.dia.es/api/v1/search-back/search/reduced?q=${encodeURIComponent(termino)}&page=${pagina}`;
+                    const resp = await fetch(url, {
+                        headers: { 'Accept': 'application/json' }
+                    });
 
-            try {
-                // Petición a la API reducida de Dia (desde el navegador del usuario)
-                const url = `https://www.dia.es/api/v1/search-back/search/reduced?q=${encodeURIComponent(termino)}&page=1`;
-                const resp = await fetch(url, {
-                    headers: { 'Accept': 'application/json' }
-                });
+                    if (resp.ok) {
+                        const data = await resp.json();
+                        const items = data.search_items || [];
 
-                if (resp.ok) {
-                    const data = await resp.json();
-                    const items = data.search_items || [];
-
-                    if (items.length > 0) {
-                        const lote = items.map(it => {
-                            const p = it.prices ? (it.prices.price || 0) : 0;
-                            const u = it.prices ? (it.prices.measure_unit || "Ud") : "Ud";
-                            return {
+                        if (items.length > 0) {
+                            const lote = items.map(it => ({
                                 display_name: it.display_name,
-                                precio: p,
-                                measure_unit: u
-                            };
-                        });
+                                precio: it.prices ? (it.prices.price || 0) : 0,
+                                measure_unit: it.prices ? (it.prices.measure_unit || "Ud") : "Ud"
+                            }));
 
-                        // Enviar lote a nuestro backend Spring Boot
-                        const sendResp = await fetch('/admin/mantenimiento-precios/api/lote-dia', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify(lote)
-                        });
+                            const sendResp = await fetch('/admin/mantenimiento-precios/api/lote-dia', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(lote)
+                            });
 
-                        if (sendResp.ok) {
-                            const resJson = await sendResp.json();
-                            totalGuardados += resJson.procesadosEnLote;
-                            document.getElementById("labelTotalCache").innerText = resJson.totalEnCache;
-                            logConsola(`✔ '${termino}': ${resJson.procesadosEnLote} productos guardados en BD local.`, "text-success");
-                        } else {
-                            logConsola(`⚠ Error guardando lote para '${termino}' en el backend.`, "text-warning");
+                            if (sendResp.ok) {
+                                const resJson = await sendResp.json();
+                                totalGuardados += resJson.procesadosEnLote;
+                                document.getElementById("labelTotalCache").innerText = resJson.totalEnCache;
+                                logConsola(`✔ '${termino}' (pág. ${pagina}): +${resJson.procesadosEnLote} productos guardados.`, "text-success");
+                            }
                         }
-                    } else {
-                        logConsola(`ℹ '${termino}': no devolvió elementos.`, "text-muted");
                     }
-                } else {
-                    logConsola(`✖ Dia respondió HTTP ${resp.status} para '${termino}'.`, "text-danger");
+                } catch (err) {
+                    logConsola(`⚠ Nota '${termino}' pág ${pagina}: ${err.message}`, "text-muted");
                 }
-            } catch (err) {
-                logConsola(`✖ Excepción en navegador para '${termino}': ${err.message}`, "text-danger");
-            }
 
-            // Pequeña pausa de cortesía para no saturar
-            await new Promise(r => setTimeout(r, 600));
+                await new Promise(r => setTimeout(r, 250));
+            }
         }
 
         progBar.classList.remove("progress-bar-animated");
         btn.disabled = false;
-        logConsola(`🎉 Sincronización completada. Total productos procesados: ${totalGuardados}`, "text-info fw-bold");
+        logConsola(`🎉 ¡Barrido masivo completado! Total productos procesados en esta sesión: ${totalGuardados}`, "text-info fw-bold");
     }
 </script>
 

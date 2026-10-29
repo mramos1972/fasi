@@ -61,7 +61,6 @@ public class ComparadorPreciosService {
 
         List<Supermercado> supers = supermercadoRepo.findByActivoTrue();
         List<ResultadoComparativaDto> resultados = new ArrayList<>();
-        // En supermercados con sincronización, la validez es de 30 días
         LocalDateTime limiteCache = LocalDateTime.now().minusDays(30);
 
         for (Supermercado s : supers) {
@@ -111,8 +110,22 @@ public class ComparadorPreciosService {
     }
 
     private ResultadoComparativaDto.ItemComparadoDto obtenerPrecio(Supermercado s, String termino, LocalDateTime limiteCache) {
-        // 1. Comprobar en precios_cache
-        Optional<PrecioCache> cache = precioCacheRepo.buscarPrecioReciente(s.getId(), termino.toLowerCase(), limiteCache);
+        String terminoLimpio = normalizarTexto(termino);
+
+        // 1. Búsqueda exacta en precios_cache
+        Optional<PrecioCache> cache = precioCacheRepo.buscarPrecioReciente(s.getId(), terminoLimpio, limiteCache);
+        
+        // 2. Si no coincide exacto, buscar por la primera palabra clave (ej: "papel" o "azucar")
+        if (cache.isEmpty()) {
+            String[] palabras = terminoLimpio.split(" ");
+            for (String p : palabras) {
+                if (p.length() >= 4) {
+                    cache = precioCacheRepo.buscarPrecioReciente(s.getId(), p, limiteCache);
+                    if (cache.isPresent()) break;
+                }
+            }
+        }
+
         if (cache.isPresent()) {
             PrecioCache c = cache.get();
             log.info("⚡ [Caché {}] '{}' -> {} ({} €)", s.getNombre(), termino, c.getProductoNombre(), c.getPrecio());
@@ -125,14 +138,14 @@ public class ComparadorPreciosService {
                     .build();
         }
 
-        // 2. Consulta en vivo para Mercadona
+        // 3. Consulta en vivo para Mercadona
         String cod = s.getCodigoInterno() != null ? s.getCodigoInterno().toUpperCase() : "";
         String nom = normalizarTexto(s.getNombre()).toUpperCase();
 
         if (cod.contains("MERCADONA") || nom.contains("MERCADONA")) {
             ResultadoComparativaDto.ItemComparadoDto enVivo = consultarMercadonaEnVivo(termino);
             if (enVivo != null && enVivo.isEncontrado() && enVivo.getPrecio() != null) {
-                guardarEnCache(s, termino, enVivo);
+                guardarEnCache(s, terminoLimpio, enVivo);
                 return enVivo;
             }
         }
@@ -144,7 +157,7 @@ public class ComparadorPreciosService {
         try {
             PrecioCache pc = PrecioCache.builder()
                     .supermercado(s)
-                    .terminoBusqueda(termino.toLowerCase())
+                    .terminoBusqueda(termino)
                     .productoNombre(item.getProductoEncontrado())
                     .precio(item.getPrecio())
                     .formatoUnidad(item.getFormato())
@@ -156,9 +169,6 @@ public class ComparadorPreciosService {
         }
     }
 
-    // ==========================================
-    // 🟢 MERCADONA EN VIVO
-    // ==========================================
     private ResultadoComparativaDto.ItemComparadoDto consultarMercadonaEnVivo(String termino) {
         try {
             Integer catId = resolverCategoriaMercadona(termino);
@@ -170,7 +180,7 @@ public class ComparadorPreciosService {
 
             HttpRequest req = HttpRequest.newBuilder()
                     .uri(URI.create(url))
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
                     .header("Accept", "application/json")
                     .timeout(Duration.ofSeconds(6))
                     .GET()
