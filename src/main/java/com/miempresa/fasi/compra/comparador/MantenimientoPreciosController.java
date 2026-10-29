@@ -1,11 +1,10 @@
 package com.miempresa.fasi.compra.comparador;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
@@ -18,6 +17,7 @@ import java.util.*;
 @Slf4j
 @Controller
 @RequestMapping("/admin/mantenimiento-precios")
+@PreAuthorize("hasRole('ADMIN')")
 @RequiredArgsConstructor
 public class MantenimientoPreciosController {
 
@@ -25,105 +25,80 @@ public class MantenimientoPreciosController {
     private final PrecioCacheRepository precioCacheRepo;
 
     @GetMapping
-    public String vistaMantenimiento(Model model) {
+    public String index(Model model) {
+        long totalPrecios = precioCacheRepo.count();
         List<Supermercado> supers = supermercadoRepo.findAll();
-        long totalPreciosCache = precioCacheRepo.count();
-
+        model.addAttribute("totalPrecios", totalPrecios);
         model.addAttribute("supermercados", supers);
-        model.addAttribute("totalPrecios", totalPreciosCache);
         return "admin/mantenimiento-precios";
     }
 
     @PostMapping("/api/lote-dia")
     @ResponseBody
-    public ResponseEntity<?> procesarLoteDia(@RequestBody List<ProductoLoteDto> items) {
-        if (items == null || items.isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "El lote recibido está vacío."));
+    public ResponseEntity<Map<String, Object>> registrarLoteDia(@RequestBody List<ItemDiaDto> lote) {
+        if (lote == null || lote.isEmpty()) {
+            return ResponseEntity.ok(Map.of("procesadosEnLote", 0, "totalEnCache", precioCacheRepo.count()));
         }
 
-        Supermercado dia = supermercadoRepo.findAll().stream()
-                .filter(s -> (s.getCodigoInterno() != null && s.getCodigoInterno().equalsIgnoreCase("DIA"))
-                        || s.getNombre().equalsIgnoreCase("Dia"))
+        Supermercado dia = supermercadoRepo.findByActivoTrue().stream()
+                .filter(s -> s.getNombre().toLowerCase().contains("dia"))
                 .findFirst()
                 .orElse(null);
 
         if (dia == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Supermercado DIA no configurado en la base de datos."));
+            return ResponseEntity.badRequest().body(Map.of("error", "Supermercado DIA no encontrado o inactivo"));
         }
 
-        int procesados = 0;
-        List<PrecioCache> entidadesAGuardar = new ArrayList<>();
+        LocalDateTime ahora = LocalDateTime.now();
+        int nuevosOActualizados = 0;
 
-        for (ProductoLoteDto dto : items) {
-            if (dto.getNombre() == null || dto.getNombre().isBlank() || dto.getPrecio() == null) {
-                continue;
+        for (ItemDiaDto item : lote) {
+            if (item.getDisplay_name() == null || item.getDisplay_name().isBlank()) continue;
+            if (item.getPrecio() == null || item.getPrecio().compareTo(BigDecimal.ZERO) <= 0) continue;
+
+            String nombre = item.getDisplay_name().trim();
+            BigDecimal precio = item.getPrecio().setScale(2, RoundingMode.HALF_UP);
+            String unidad = item.getMeasure_unit() != null ? item.getMeasure_unit().trim() : "Ud";
+            String termino = item.getTermino_busqueda() != null ? item.getTermino_busqueda().trim() : nombre;
+
+            // UPSERT: Buscar si ya existe este producto para DIA (por nombre idéntico reciente)
+            Optional<PrecioCache> existente = precioCacheRepo.buscarPrecioReciente(dia.getId(), nombre, ahora.minusDays(60));
+
+            if (existente.isPresent()) {
+                PrecioCache pc = existente.get();
+                pc.setPrecio(precio);
+                pc.setFormatoUnidad(unidad);
+                pc.setActualizadoEl(ahora);
+                precioCacheRepo.save(pc);
+            } else {
+                PrecioCache pc = PrecioCache.builder()
+                        .supermercado(dia)
+                        .terminoBusqueda(termino.toLowerCase())
+                        .productoNombre(nombre)
+                        .precio(precio)
+                        .formatoUnidad(unidad)
+                        .actualizadoEl(ahora)
+                        .build();
+                precioCacheRepo.save(pc);
             }
-
-            String termino = extraerTerminoBusqueda(dto.getNombre());
-            BigDecimal precioNorm = dto.getPrecio().setScale(2, RoundingMode.HALF_UP);
-            String unidad = (dto.getUnidad() != null && !dto.getUnidad().isBlank()) ? dto.getUnidad() : "Ud";
-
-            PrecioCache pc = PrecioCache.builder()
-                    .supermercado(dia)
-                    .terminoBusqueda(termino.toLowerCase())
-                    .productoNombre(dto.getNombre().trim())
-                    .precio(precioNorm)
-                    .formatoUnidad(unidad)
-                    .actualizadoEl(LocalDateTime.now())
-                    .build();
-
-            entidadesAGuardar.add(pc);
-            procesados++;
+            nuevosOActualizados++;
         }
 
-        if (!entidadesAGuardar.isEmpty()) {
-            precioCacheRepo.saveAll(entidadesAGuardar);
-            log.info("📦 [Mantenimiento] Guardado lote de {} productos para {}", procesados, dia.getNombre());
-        }
+        long total = precioCacheRepo.count();
+        log.info("📥 [DIA Sync] Procesados {} productos (Total BD: {})", nuevosOActualizados, total);
 
-        long nuevoTotal = precioCacheRepo.count();
         return ResponseEntity.ok(Map.of(
-                "status", "ok",
-                "procesadosEnLote", procesados,
-                "totalEnCache", nuevoTotal
+                "procesadosEnLote", nuevosOActualizados,
+                "totalEnCache", total
         ));
     }
 
-    private String extraerTerminoBusqueda(String nombre) {
-        String clean = nombre.toLowerCase()
-                .replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u")
-                .replaceAll("[^a-z0-9\\s]", " ")
-                .replaceAll("\\s+", " ")
-                .trim();
-
-        String[] comunes = {
-                "papel higienico", "harina de trigo", "azucar blanco", "arroz redondo",
-                "leche entera", "leche semidesnatada", "leche desnatada",
-                "aceite de oliva", "aceite de girasol", "huevos", "pan de molde",
-                "arroz", "harina", "azucar", "leche", "aceite", "pasta", "macarrones",
-                "espaguetis", "tomate", "atun", "cafe", "detergente", "suavizante",
-                "galletas", "yogur", "patatas", "cebollas"
-        };
-
-        for (String c : comunes) {
-            if (clean.contains(c)) {
-                return c;
-            }
-        }
-
-        String[] palabras = clean.split(" ");
-        return palabras.length > 0 ? palabras[0] : clean;
-    }
-
     @Data
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public static class ProductoLoteDto {
-        @JsonProperty("display_name")
-        private String nombre;
-
+    public static class ItemDiaDto {
+        private String sku_id;
+        private String display_name;
         private BigDecimal precio;
-
-        @JsonProperty("measure_unit")
-        private String unidad;
+        private String measure_unit;
+        private String termino_busqueda;
     }
 }

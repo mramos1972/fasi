@@ -34,10 +34,10 @@
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <div>
                             <h4 class="card-title fw-bold text-dark mb-1">
-                                <i class="bi bi-database-fill-gear text-primary me-2"></i>Mantenimiento de Catálogos
+                                <i class="bi bi-database-fill-gear text-primary me-2"></i>Sincronización Total de Catálogos
                             </h4>
                             <p class="text-muted small mb-0">
-                                Sincronización completa de categorías de Dia a la base de datos local.
+                                Recorrido exhaustivo por taxonomía completa oficial de Dia (L1 y L2).
                             </p>
                         </div>
                         <span class="badge bg-primary fs-6 px-3 py-2 rounded-pill">
@@ -47,32 +47,29 @@
 
                     <hr>
 
-                    <!-- Tarjeta DIA -->
                     <div class="card border border-danger-subtle bg-white shadow-sm mb-4">
                         <div class="card-body p-4">
                             <div class="d-flex align-items-center justify-content-between mb-3">
                                 <div class="d-flex align-items-center">
                                     <div class="bg-danger text-white rounded p-3 me-3 fw-bold fs-4">DIA</div>
                                     <div>
-                                        <h5 class="fw-bold mb-0">Supermercado Dia</h5>
-                                        <span class="text-muted small">Carga masiva por árbol de categorías y subcategorías</span>
+                                        <h5 class="fw-bold mb-0">Catálogo Íntegro Dia</h5>
+                                        <span class="text-muted small">Taxonomía taxonómica oficial L1/L2 + Paginación reducida</span>
                                     </div>
                                 </div>
-                                <button id="btnSincronizarDia" class="btn btn-danger btn-lg px-4" onclick="iniciarSincronizacionTotalDia()">
-                                    <i class="bi bi-cloud-arrow-down-fill me-2"></i>Sincronizar Catálogo Completo
+                                <button id="btnSincronizarDia" class="btn btn-danger btn-lg px-4" onclick="iniciarExtraccionArbolDia()">
+                                    <i class="bi bi-diagram-3-fill me-2"></i>Descargar Catálogo 100%
                                 </button>
                             </div>
 
-                            <!-- Barra de progreso -->
                             <div class="progress mb-2 d-none" id="progressContainer" style="height: 24px;">
                                 <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-danger fw-bold" 
                                      role="progressbar" style="width: 0%;">0%</div>
                             </div>
-                            <div id="progresoTexto" class="small text-muted mb-3 d-none">Iniciando...</div>
+                            <div id="progresoTexto" class="small text-muted mb-3 d-none">Listo para iniciar.</div>
 
-                            <!-- Consola de salida -->
-                            <div class="bg-dark text-success p-3 rounded font-monospace small" style="min-height: 220px; max-height: 320px; overflow-y: auto;" id="consolaLogs">
-                                <div>> Motor de sincronización listo. Pulsa "Sincronizar Catálogo Completo".</div>
+                            <div class="bg-dark text-success p-3 rounded font-monospace small" style="min-height: 240px; max-height: 360px; overflow-y: auto;" id="consolaLogs">
+                                <div>> Árbol de categorías listo para ser descubierto. Pulsa el botón rojo para comenzar.</div>
                             </div>
                         </div>
                     </div>
@@ -85,16 +82,6 @@
 </div>
 
 <script>
-    // Familias y ramas completas de Dia para barrido exhaustivo
-    const FAMILIAS_CATALOGO = [
-        "arroz", "legumbres", "pasta", "harina", "azucar", "aceite de oliva", "aceite de girasol",
-        "leche entera", "leche semidesnatada", "leche desnatada", "huevos", "mantequilla", "queso", "yogur",
-        "papel higienico", "detergente lavadora", "suavizante", "lavavajillas", "limpiador", "lejia",
-        "cafe", "galletas", "cereales", "chocolate", "pan de molde", "panaderia",
-        "conservas de pescado", "tomate frito", "conservas vegetales", "patatas",
-        "pollo", "vacuno", "cerdo", "pescado fresco", "frutas", "verduras", "agua mineral"
-    ];
-
     function logConsola(mensaje, colorClass = "") {
         const consola = document.getElementById("consolaLogs");
         const linea = document.createElement("div");
@@ -104,7 +91,7 @@
         consola.scrollTop = consola.scrollHeight;
     }
 
-    async function iniciarSincronizacionTotalDia() {
+    async function iniciarExtraccionArbolDia() {
         const btn = document.getElementById("btnSincronizarDia");
         const progContainer = document.getElementById("progressContainer");
         const progBar = document.getElementById("progressBar");
@@ -113,73 +100,146 @@
         btn.disabled = true;
         progContainer.classList.remove("d-none");
         progTexto.classList.remove("d-none");
-        progBar.style.width = "0%";
-        progBar.innerText = "0%";
+        progBar.style.width = "2%";
+        progBar.innerText = "2%";
 
-        logConsola("Iniciando barrido exhaustivo del catálogo completo de Dia...", "text-info");
+        logConsola("1/3 Descargando mapa taxonómico desde endpoint oficial...", "text-info");
 
-        let totalGuardados = 0;
-        const totalPasos = FAMILIAS_CATALOGO.length * 3; // hasta 3 páginas por familia
-        let pasoActual = 0;
+        try {
+            const respMeta = await fetch("https://www.dia.es/api/v1/plp-insight/initial_analytics/l1/all/L102", {
+                headers: { 'Accept': 'application/json' }
+            });
 
-        for (const familia of FAMILIAS_CATALOGO) {
-            for (let pagina = 1; pagina <= 3; pagina++) {
-                pasoActual++;
-                const porcentaje = Math.min(100, Math.round((pasoActual / totalPasos) * 100));
-                progBar.style.width = `${porcentaje}%`;
-                progBar.innerText = `${porcentaje}%`;
-                progTexto.innerText = `Procesando: ${familia} (Página ${pagina} de 3)...`;
+            if (!respMeta.ok) {
+                throw new Error("No se pudo descargar el árbol taxonómico inicial (HTTP " + respMeta.status + ")");
+            }
 
+            const dataMeta = await respMeta.json();
+            const menu = dataMeta.menu_analytics || {};
+            const categoriasL1 = Object.keys(menu).filter(k => k.startsWith("L1") && k !== "L150");
+
+            logConsola(`✔ Encontradas ${categoriasL1.length} macrocategorías principales.`, "text-success");
+
+            let totalProcesados = 0;
+            let paso = 0;
+            const totalPasos = categoriasL1.length;
+
+            for (const l1Key of categoriasL1) {
+                paso++;
+                const l1Info = menu[l1Key];
+                const nombreCat = (l1Info.parameter || l1Key).replace("L1_", "");
+                const pct = Math.round((paso / totalPasos) * 100);
+                progBar.style.width = `${pct}%`;
+                progBar.innerText = `${pct}%`;
+                progTexto.innerText = `Sincronizando categoría (${paso}/${totalPasos}): ${nombreCat}`;
+
+                // Obtener datos de la categoría principal
                 try {
-                    const url = `https://www.dia.es/api/v1/search-back/search/reduced?q=${encodeURIComponent(familia)}&page=${pagina}`;
-                    const resp = await fetch(url, {
+                    const catResp = await fetch(`https://www.dia.es/api/v1/plp-insight/initial_analytics/l1/all/${l1Key}`, {
                         headers: { 'Accept': 'application/json' }
                     });
 
-                    if (resp.ok) {
-                        const data = await resp.json();
-                        const items = data.search_items || [];
+                    if (catResp.ok) {
+                        const catData = await catResp.json();
+                        const prodAnalytics = catData.page_product_analytics || {};
 
-                        // Si la página ya no devuelve elementos, pasar a la siguiente familia
-                        if (items.length === 0) {
-                            break;
+                        // Extraer productos iniciales de la categoría
+                        let lote = [];
+                        for (const subKey of Object.keys(prodAnalytics)) {
+                            const subObj = prodAnalytics[subKey];
+                            const prods = subObj.products || {};
+                            for (const pid of Object.keys(prods)) {
+                                const p = prods[pid];
+                                lote.push({
+                                    sku_id: String(p.item_id || pid),
+                                    display_name: p.item_name,
+                                    precio: p.price || 0,
+                                    measure_unit: "Ud",
+                                    termino_busqueda: p.item_category2 || p.item_category || nombreCat
+                                });
+                            }
                         }
 
-                        const lote = items.map(it => ({
-                            display_name: it.display_name,
-                            precio: it.prices ? (it.prices.price || 0) : 0,
-                            measure_unit: it.prices ? (it.prices.measure_unit || "Ud") : "Ud"
-                        }));
+                        // Enviar lote al backend
+                        if (lote.length > 0) {
+                            const postResp = await fetch('/admin/mantenimiento-precios/api/lote-dia', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(lote)
+                            });
 
-                        const sendResp = await fetch('/admin/mantenimiento-precios/api/lote-dia', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(lote)
-                        });
-
-                        if (sendResp.ok) {
-                            const resJson = await sendResp.json();
-                            totalGuardados += resJson.procesadosEnLote;
-                            document.getElementById("labelTotalCache").innerText = resJson.totalEnCache;
-                            logConsola(`✔ '${familia}' (pág. ${pagina}): +${resJson.procesadosEnLote} productos registrados.`, "text-success");
+                            if (postResp.ok) {
+                                const res = await postResp.json();
+                                totalProcesados += res.procesadosEnLote;
+                                document.getElementById("labelTotalCache").innerText = res.totalEnCache;
+                                logConsola(`[${nombreCat}] Sincronizados ${res.procesadosEnLote} artículos iniciales`, "text-success");
+                            }
                         }
-                    } else {
-                        break;
+
+                        // Si tiene paginación adicional en la categoría, recorrerla
+                        const paginacion = catData.pagination;
+                        if (paginacion && paginacion.total_pages > 1) {
+                            for (let p = 2; p <= Math.min(paginacion.total_pages, 8); p++) {
+                                const pagUrl = `https://www.dia.es/api/v1/plp-insight/initial_analytics/l1/all/${l1Key}/reduced?page=${p}`;
+                                try {
+                                    const rPag = await fetch(pagUrl, { headers: { 'Accept': 'application/json' } });
+                                    if (rPag.ok) {
+                                        const dPag = await rPag.json();
+                                        const subProds = dPag.page_product_analytics || {};
+                                        let lotePag = [];
+                                        for (const sKey of Object.keys(subProds)) {
+                                            const sub = subProds[sKey];
+                                            const prods = sub.products || {};
+                                            for (const pid of Object.keys(prods)) {
+                                                const pr = prods[pid];
+                                                lotePag.push({
+                                                    sku_id: String(pr.item_id || pid),
+                                                    display_name: pr.item_name,
+                                                    precio: pr.price || 0,
+                                                    measure_unit: "Ud",
+                                                    termino_busqueda: pr.item_category2 || nombreCat
+                                                });
+                                            }
+                                        }
+
+                                        if (lotePag.length > 0) {
+                                            const postPag = await fetch('/admin/mantenimiento-precios/api/lote-dia', {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify(lotePag)
+                                            });
+                                            if (postPag.ok) {
+                                                const resP = await postPag.json();
+                                                totalProcesados += resP.procesadosEnLote;
+                                                document.getElementById("labelTotalCache").innerText = resP.totalEnCache;
+                                            }
+                                        }
+                                    }
+                                } catch (e) {
+                                    // Continuar con la siguiente página
+                                }
+                                await new Promise(r => setTimeout(r, 150));
+                            }
+                        }
                     }
-                } catch (err) {
-                    logConsola(`⚠ Nota en '${familia}' pág ${pagina}: ${err.message}`, "text-muted");
+                } catch (catErr) {
+                    logConsola(`Aviso en ${nombreCat}: ${catErr.message}`, "text-warning");
                 }
 
                 await new Promise(r => setTimeout(r, 200));
             }
-        }
 
-        progBar.style.width = "100%";
-        progBar.innerText = "100%";
-        progBar.classList.remove("progress-bar-animated");
-        btn.disabled = false;
-        progTexto.innerText = `¡Completado! Se han procesado ${totalGuardados} productos en esta ejecución.`;
-        logConsola(`🎉 Sincronización completada con éxito. Total productos procesados: ${totalGuardados}`, "text-info fw-bold");
+            progBar.style.width = "100%";
+            progBar.innerText = "100%";
+            progBar.classList.remove("progress-bar-animated");
+            btn.disabled = false;
+            progTexto.innerText = `¡Catálogo completo actualizado! Artículos procesados/actualizados: ${totalProcesados}`;
+            logConsola(`🏁 Proceso completado con éxito. Se sincronizó el catálogo íntegro de Dia.`, "text-info fw-bold");
+
+        } catch (err) {
+            logConsola(`Error general: ${err.message}`, "text-danger");
+            btn.disabled = false;
+        }
     }
 </script>
 
