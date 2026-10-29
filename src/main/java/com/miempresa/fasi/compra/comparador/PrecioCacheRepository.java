@@ -6,6 +6,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -13,16 +14,26 @@ import java.util.UUID;
 public interface PrecioCacheRepository extends JpaRepository<PrecioCache, UUID> {
 
     @Query("""
-        SELECT p FROM PrecioCache p 
-        WHERE p.supermercado.id = :supermercadoId 
-          AND LOWER(p.terminoBusqueda) = LOWER(:termino)
-          AND p.actualizadoEl >= :validoDesde
-        ORDER BY p.actualizadoEl DESC
-        LIMIT 1
+        SELECT pc FROM PrecioCache pc
+        WHERE pc.supermercado.id = :supermercadoId
+          AND (pc.terminoBusqueda = :termino OR LOWER(pc.productoNombre) LIKE LOWER(CONCAT('%', :termino, '%')))
+          AND pc.actualizadoEl >= :limite
+        ORDER BY pc.precio ASC
     """)
     Optional<PrecioCache> buscarPrecioReciente(
             @Param("supermercadoId") UUID supermercadoId,
             @Param("termino") String termino,
-            @Param("validoDesde") LocalDateTime validoDesde
+            @Param("limite") LocalDateTime limite
+    );
+
+    @Query("""
+        SELECT pc FROM PrecioCache pc
+        WHERE pc.supermercado.id = :supermercadoId
+          AND pc.actualizadoEl >= :limite
+        ORDER BY pc.precio ASC
+    """)
+    List<PrecioCache> buscarCandidatos(
+            @Param("supermercadoId") UUID supermercadoId,
+            @Param("limite") LocalDateTime limite
     );
 }
