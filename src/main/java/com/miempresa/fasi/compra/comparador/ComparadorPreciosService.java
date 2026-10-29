@@ -10,16 +10,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.net.URI;
-import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 @Slf4j
 @Service
@@ -32,16 +28,10 @@ public class ComparadorPreciosService {
 
     private final HttpClient httpClient = HttpClient.newBuilder()
             .version(HttpClient.Version.HTTP_2)
-            .connectTimeout(Duration.ofSeconds(10))
-            .followRedirects(HttpClient.Redirect.ALWAYS)
+            .connectTimeout(Duration.ofSeconds(6))
+            .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
 
-    private static final Pattern NEXT_DATA_PATTERN = Pattern.compile(
-            "<script id=\"__NEXT_DATA__\" type=\"application/json\">(.*?)</script>",
-            Pattern.DOTALL
-    );
-
-    // Categorías oficiales reales de Mercadona
     private static final Map<String, Integer> MERCADONA_CATEGORIAS = new HashMap<>();
 
     static {
@@ -71,7 +61,8 @@ public class ComparadorPreciosService {
 
         List<Supermercado> supers = supermercadoRepo.findByActivoTrue();
         List<ResultadoComparativaDto> resultados = new ArrayList<>();
-        LocalDateTime limiteCache = LocalDateTime.now().minusHours(24);
+        // En supermercados con sincronización, la validez es de 30 días
+        LocalDateTime limiteCache = LocalDateTime.now().minusDays(30);
 
         for (Supermercado s : supers) {
             ResultadoComparativaDto dto = ResultadoComparativaDto.builder()
@@ -120,7 +111,7 @@ public class ComparadorPreciosService {
     }
 
     private ResultadoComparativaDto.ItemComparadoDto obtenerPrecio(Supermercado s, String termino, LocalDateTime limiteCache) {
-        // 1. Caché local
+        // 1. Comprobar en precios_cache
         Optional<PrecioCache> cache = precioCacheRepo.buscarPrecioReciente(s.getId(), termino.toLowerCase(), limiteCache);
         if (cache.isPresent()) {
             PrecioCache c = cache.get();
@@ -134,22 +125,16 @@ public class ComparadorPreciosService {
                     .build();
         }
 
-        // 2. Consulta en vivo
+        // 2. Consulta en vivo para Mercadona
         String cod = s.getCodigoInterno() != null ? s.getCodigoInterno().toUpperCase() : "";
         String nom = normalizarTexto(s.getNombre()).toUpperCase();
 
-        ResultadoComparativaDto.ItemComparadoDto enVivo = null;
-
         if (cod.contains("MERCADONA") || nom.contains("MERCADONA")) {
-            enVivo = consultarMercadonaEnVivo(termino);
-        } else if (cod.contains("DIA") || nom.contains("DIA")) {
-            enVivo = consultarDiaWeb(termino);
-        }
-
-        // 3. Guardar en caché si se localizó precio
-        if (enVivo != null && enVivo.isEncontrado() && enVivo.getPrecio() != null) {
-            guardarEnCache(s, termino, enVivo);
-            return enVivo;
+            ResultadoComparativaDto.ItemComparadoDto enVivo = consultarMercadonaEnVivo(termino);
+            if (enVivo != null && enVivo.isEncontrado() && enVivo.getPrecio() != null) {
+                guardarEnCache(s, termino, enVivo);
+                return enVivo;
+            }
         }
 
         return null;
@@ -172,111 +157,12 @@ public class ComparadorPreciosService {
     }
 
     // ==========================================
-    // 🟡 DIA (Vía catálogo web público - Anti-WAF)
-    // ==========================================
-    private ResultadoComparativaDto.ItemComparadoDto consultarDiaWeb(String termino) {
-        try {
-            String queryLimpia = normalizarTexto(termino)
-                    .replace(" de ", " ")
-                    .replace(" la ", " ")
-                    .replace(" el ", " ")
-                    .replaceAll("\\s+", " ")
-                    .trim();
-
-            String encoded = URLEncoder.encode(queryLimpia, StandardCharsets.UTF_8);
-            String url = "https://www.dia.es/compra-online/productos/buscar?q=" + encoded;
-
-            log.info("🎯 [Dia Web] Consultando: {}", url);
-
-            HttpRequest req = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
-                    .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-                    .header("Accept-Language", "es-ES,es;q=0.9")
-                    .timeout(Duration.ofSeconds(8))
-                    .GET()
-                    .build();
-
-            HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
-
-            if (resp.statusCode() == 200 && resp.body() != null) {
-                Matcher matcher = NEXT_DATA_PATTERN.matcher(resp.body());
-                if (matcher.find()) {
-                    String json = matcher.group(1);
-                    JsonNode root = objectMapper.readTree(json);
-                    
-                    // En Next.js de Dia los productos se alojan bajo pageProps
-                    JsonNode items = root.findPath("search_items");
-                    if (items.isMissingNode() || items.isEmpty()) {
-                        items = root.findPath("items");
-                    }
-
-                    if (items.isArray() && items.size() > 0) {
-                        JsonNode seleccionado = null;
-                        String primeraPalabra = queryLimpia.split(" ")[0];
-
-                        for (JsonNode item : items) {
-                            String nameNorm = normalizarTexto(item.path("display_name").asText());
-                            boolean diaBrand = item.path("dia_brand").asBoolean(false);
-                            if (nameNorm.contains(primeraPalabra) && diaBrand) {
-                                seleccionado = item;
-                                break;
-                            }
-                        }
-
-                        if (seleccionado == null) {
-                            for (JsonNode item : items) {
-                                String nameNorm = normalizarTexto(item.path("display_name").asText());
-                                if (nameNorm.contains(primeraPalabra)) {
-                                    seleccionado = item;
-                                    break;
-                                }
-                            }
-                        }
-
-                        if (seleccionado == null) {
-                            seleccionado = items.get(0);
-                        }
-
-                        String nombre = seleccionado.path("display_name").asText();
-                        double precioDbl = seleccionado.path("prices").path("price").asDouble(0.0);
-                        if (precioDbl == 0.0) {
-                            precioDbl = seleccionado.findPath("price").asDouble(0.0);
-                        }
-                        String formato = seleccionado.path("prices").path("measure_unit").asText("Ud");
-
-                        if (precioDbl > 0.0) {
-                            BigDecimal precio = BigDecimal.valueOf(precioDbl).setScale(2, RoundingMode.HALF_UP);
-                            log.info("🔥 [Dia Web EN VIVO] '{}' -> {} € ({})", nombre, precio, formato);
-                            return ResultadoComparativaDto.ItemComparadoDto.builder()
-                                    .terminoBuscado(termino)
-                                    .productoEncontrado(nombre)
-                                    .precio(precio)
-                                    .formato(formato)
-                                    .encontrado(true)
-                                    .build();
-                        }
-                    }
-                } else {
-                    log.warn("⚠️ [Dia Web] No se detectó __NEXT_DATA__ en la respuesta.");
-                }
-            } else {
-                log.warn("⚠️ [Dia Web] HTTP {}", resp.statusCode());
-            }
-        } catch (Exception e) {
-            log.error("❌ [Dia Web] Error para '{}': {}", termino, e.getMessage());
-        }
-        return null;
-    }
-
-    // ==========================================
     // 🟢 MERCADONA EN VIVO
     // ==========================================
     private ResultadoComparativaDto.ItemComparadoDto consultarMercadonaEnVivo(String termino) {
         try {
             Integer catId = resolverCategoriaMercadona(termino);
             if (catId == null) {
-                log.info("ℹ️ [Mercadona] Sin categoría para '{}'", termino);
                 return null;
             }
 
