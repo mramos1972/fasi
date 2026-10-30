@@ -15,6 +15,20 @@ public interface PrecioCacheRepository extends JpaRepository<PrecioCache, UUID> 
     @Query("""
         SELECT pc FROM PrecioCache pc
         WHERE pc.supermercado.id = :supermercadoId
+          AND (LOWER(pc.productoNombre) LIKE LOWER(CONCAT('%', :termino, '%'))
+               OR LOWER(pc.terminoBusqueda) LIKE LOWER(CONCAT('%', :termino, '%')))
+          AND pc.actualizadoEl >= :limite
+        ORDER BY pc.precio ASC
+    """)
+    List<PrecioCache> buscarPorTermino(
+            @Param("supermercadoId") UUID supermercadoId,
+            @Param("termino") String termino,
+            @Param("limite") LocalDateTime limite
+    );
+
+    @Query("""
+        SELECT pc FROM PrecioCache pc
+        WHERE pc.supermercado.id = :supermercadoId
           AND (pc.terminoBusqueda = :termino OR LOWER(pc.productoNombre) = LOWER(:termino))
           AND pc.actualizadoEl >= :limite
         ORDER BY pc.actualizadoEl DESC
@@ -29,7 +43,6 @@ public interface PrecioCacheRepository extends JpaRepository<PrecioCache, UUID> 
         SELECT pc FROM PrecioCache pc
         WHERE pc.supermercado.id = :supermercadoId
           AND pc.actualizadoEl >= :limite
-        ORDER BY pc.precio ASC
     """)
     List<PrecioCache> buscarCandidatos(
             @Param("supermercadoId") UUID supermercadoId,
