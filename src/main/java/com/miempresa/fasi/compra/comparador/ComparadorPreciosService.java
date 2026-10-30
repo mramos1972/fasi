@@ -9,6 +9,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.regex.Pattern;
 
 @Slf4j
 @Service
@@ -18,19 +19,24 @@ public class ComparadorPreciosService {
     private final SupermercadoRepository supermercadoRepo;
     private final PrecioCacheRepository precioCacheRepo;
 
-    // Palabras modificadoras que NO deben coincidir si el usuario no las pidió explícitamente
     private static final List<String> MODIFICADORES_EXCLUIDOS = List.of(
             "humedo", "humeda", "humedas", "toallita", "toallitas",
             "recambio", "recambios", "cuchilla", "cuchillas",
             "tortita", "tortitas", "barrita", "barritas",
-            "snack", "chocolate", "bombones"
+            "snack", "bombones"
     );
 
-    // Mapeo canónico para salvar diferencias léxicas
+    private static final Map<String, List<String>> REGLAS_EXCLUSION_CONTEXTO = Map.of(
+            "vinagre", List.of("limpieza", "desinfectar", "lavadora", "concentrado"),
+            "leche de arroz", List.of("arroz con leche", "postre", "dulce"),
+            "pan", List.of("panela", "pan rallado"),
+            "maquinilla", List.of("depilacion", "cera", "bandas")
+    );
+
     private static final Map<String, List<String>> EQUIVALENCIAS = Map.of(
             "espaguetis", List.of("espagueti", "spaghetti", "spaghettis"),
             "espagueti", List.of("espaguetis", "spaghetti", "spaghettis"),
-            "leche de arroz", List.of("bebida de arroz", "bebida arroz"),
+            "leche de arroz", List.of("bebida de arroz", "bebida arroz", "arroz bebida"),
             "pan bimbo", List.of("pan de molde")
     );
 
@@ -56,23 +62,23 @@ public class ComparadorPreciosService {
             int encontrados = 0;
             int sinPrecio = 0;
 
-            // Candidatos del súper cargados en memoria para evitar N queries por lista
             List<PrecioCache> catalogo = precioCacheRepo.buscarCandidatos(s.getId(), limite);
 
             for (String art : articulos) {
                 String original = art.trim();
-                PrecioCache match = resolverMejorProducto(original, catalogo);
+                List<ResultadoComparativaDto.OpcionProductoDto> opciones = obtenerOpcionesCandidatas(original, catalogo);
 
-                if (match != null && match.getPrecio() != null) {
-                    log.info("🎯 [Match {}] '{}' -> {} ({} €)", s.getNombre(), original, match.getProductoNombre(), match.getPrecio());
+                if (!opciones.isEmpty()) {
+                    ResultadoComparativaDto.OpcionProductoDto recomendada = opciones.get(0);
                     dto.getProductos().add(ResultadoComparativaDto.ItemComparadoDto.builder()
                             .terminoBuscado(original)
-                            .productoEncontrado(match.getProductoNombre())
-                            .precio(match.getPrecio())
-                            .formato(match.getFormatoUnidad())
+                            .productoEncontrado(recomendada.getNombre())
+                            .precio(recomendada.getPrecio())
+                            .formato(recomendada.getFormato())
                             .encontrado(true)
+                            .opciones(opciones)
                             .build());
-                    total = total.add(match.getPrecio());
+                    total = total.add(recomendada.getPrecio());
                     encontrados++;
                 } else {
                     dto.getProductos().add(ResultadoComparativaDto.ItemComparadoDto.builder()
@@ -81,6 +87,7 @@ public class ComparadorPreciosService {
                             .precio(null)
                             .formato(null)
                             .encontrado(false)
+                            .opciones(Collections.emptyList())
                             .build());
                     sinPrecio++;
                 }
@@ -92,7 +99,6 @@ public class ComparadorPreciosService {
             resultados.add(dto);
         }
 
-        // Ordenar primero por mayor cobertura de productos, luego por total de la cesta
         resultados.sort(Comparator
                 .comparingInt(ResultadoComparativaDto::getProductosEncontrados).reversed()
                 .thenComparing(ResultadoComparativaDto::getTotalEstimado)
@@ -101,7 +107,9 @@ public class ComparadorPreciosService {
         return resultados;
     }
 
-    private PrecioCache resolverMejorProducto(String busquedaOriginal, List<PrecioCache> catalogo) {
+    private List<ResultadoComparativaDto.OpcionProductoDto> obtenerOpcionesCandidatas(
+            String busquedaOriginal, List<PrecioCache> catalogo) {
+
         String queryNorm = normalizar(busquedaOriginal);
         List<String> tokensQuery = Arrays.stream(queryNorm.split("\\s+"))
                 .filter(t -> t.length() > 2)
@@ -111,53 +119,88 @@ public class ComparadorPreciosService {
             tokensQuery = List.of(queryNorm);
         }
 
-        // Detectar si la búsqueda pide expresamente algún modificador sensible
-        List<String> permitidos = MODIFICADORES_EXCLUIDOS.stream()
-                .filter(queryNorm::contains)
-                .toList();
+        // 1. Probar con todas las palabras (ej: "arroz sos", "espaguetis gallo")
+        List<PrecioCache> matches = filtrarCandidatos(queryNorm, tokensQuery, catalogo);
 
-        // 1. Intentar coincidencia con TODAS las palabras (incluyendo marca si la hay, ej: "arroz sos", "espaguetis gallo")
-        PrecioCache matchCompleto = buscarConTokens(tokensQuery, permitidos, catalogo);
-        if (matchCompleto != null) {
-            return matchCompleto;
-        }
-
-        // 2. Si tenía marca y falló (ej. Mercadona no tiene 'Gallo' o 'SOS'), intentar con la raíz canónica del producto
-        String raiz = tokensQuery.get(0);
-        List<String> variantesRaiz = EQUIVALENCIAS.getOrDefault(raiz, List.of(raiz));
-
-        for (String var : variantesRaiz) {
-            PrecioCache matchRaiz = buscarConTokens(List.of(var), permitidos, catalogo);
-            if (matchRaiz != null) {
-                return matchRaiz;
+        // 2. Si no hubo coincidencia (ej: Mercadona no vende Gallo ni SOS), buscar por la raíz canónica
+        if (matches.isEmpty() && tokensQuery.size() > 1) {
+            String raiz = tokensQuery.get(0);
+            List<String> variantesRaiz = EQUIVALENCIAS.getOrDefault(raiz, List.of(raiz));
+            for (String var : variantesRaiz) {
+                matches = filtrarCandidatos(queryNorm, List.of(var), catalogo);
+                if (!matches.isEmpty()) break;
             }
         }
 
-        return null;
+        if (matches.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // Ordenar: primero los que empiezan por la palabra buscada, luego por precio ascendente
+        String tokenPrincipal = tokensQuery.get(0);
+        matches.sort(Comparator
+                .comparing((PrecioCache pc) -> normalizar(pc.getProductoNombre()).startsWith(tokenPrincipal) ? 0 : 1)
+                .thenComparing(PrecioCache::getPrecio)
+        );
+
+        // Limitar a máximo 5 opciones razonables
+        List<ResultadoComparativaDto.OpcionProductoDto> opciones = new ArrayList<>();
+        int limiteMax = Math.min(5, matches.size());
+        for (int i = 0; i < limiteMax; i++) {
+            PrecioCache pc = matches.get(i);
+            opciones.add(ResultadoComparativaDto.OpcionProductoDto.builder()
+                    .id(pc.getId())
+                    .nombre(pc.getProductoNombre())
+                    .precio(pc.getPrecio())
+                    .formato(pc.getFormatoUnidad())
+                    .seleccionada(i == 0) // La primera (más económica) marcada como predeterminada
+                    .build());
+        }
+
+        return opciones;
     }
 
-    private PrecioCache buscarConTokens(List<String> tokensRequeridos, List<String> permitidos, List<PrecioCache> catalogo) {
-        List<PrecioCache> candidatosValidos = new ArrayList<>();
+    private List<PrecioCache> filtrarCandidatos(String queryOriginalNorm, List<String> tokensRequeridos, List<PrecioCache> catalogo) {
+        List<PrecioCache> validos = new ArrayList<>();
 
         for (PrecioCache pc : catalogo) {
             String prodNorm = normalizar(pc.getProductoNombre());
 
-            // Filtro de exclusión: descartar si tiene palabras trampa no solicitadas
+            // A. Excluir modificadores no solicitados
             boolean excluido = false;
             for (String mod : MODIFICADORES_EXCLUIDOS) {
-                if (prodNorm.contains(mod) && !permitidos.contains(mod)) {
+                if (prodNorm.contains(mod) && !queryOriginalNorm.contains(mod)) {
                     excluido = true;
                     break;
                 }
             }
             if (excluido) continue;
 
-            // Comprobar que contiene TODOS los tokens requeridos
+            // B. Exclusiones de contexto (ej: vinagre de comer vs limpieza)
+            for (Map.Entry<String, List<String>> entry : REGLAS_EXCLUSION_CONTEXTO.entrySet()) {
+                if (queryOriginalNorm.contains(entry.getKey())) {
+                    for (String noPermitido : entry.getValue()) {
+                        if (prodNorm.contains(noPermitido) && !queryOriginalNorm.contains(noPermitido)) {
+                            excluido = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (excluido) continue;
+
+            // C. Coincidencia de tokens o sus equivalentes
             boolean contieneTodos = true;
             for (String tok : tokensRequeridos) {
-                // Si el token tiene sinónimo canónico (ej: espaguetis -> spaghetti), aceptar cualquiera
                 List<String> alternativas = EQUIVALENCIAS.getOrDefault(tok, List.of(tok));
-                boolean coincideAlguna = alternativas.stream().anyMatch(prodNorm::contains);
+                boolean coincideAlguna = false;
+                for (String alt : alternativas) {
+                    Pattern p = Pattern.compile("\\b" + Pattern.quote(alt));
+                    if (p.matcher(prodNorm).find()) {
+                        coincideAlguna = true;
+                        break;
+                    }
+                }
                 if (!coincideAlguna) {
                     contieneTodos = false;
                     break;
@@ -165,26 +208,10 @@ public class ComparadorPreciosService {
             }
 
             if (contieneTodos) {
-                candidatosValidos.add(pc);
+                validos.add(pc);
             }
         }
-
-        if (candidatosValidos.isEmpty()) {
-            return null;
-        }
-
-        // Preferir:
-        // 1. Aquel cuyo nombre empiece por el producto buscado
-        // 2. El más corto en longitud de texto (evita productos hiper-compuestos)
-        // 3. El más barato
-        String tokenPrincipal = tokensRequeridos.get(0);
-        candidatosValidos.sort(Comparator
-                .comparing((PrecioCache pc) -> normalizar(pc.getProductoNombre()).startsWith(tokenPrincipal) ? 0 : 1)
-                .thenComparingInt(pc -> pc.getProductoNombre().length())
-                .thenComparing(PrecioCache::getPrecio)
-        );
-
-        return candidatosValidos.get(0);
+        return validos;
     }
 
     private String normalizar(String texto) {
