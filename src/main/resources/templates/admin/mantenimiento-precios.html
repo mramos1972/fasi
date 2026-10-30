@@ -37,7 +37,7 @@
                                 <i class="bi bi-database-fill-gear text-primary me-2"></i>Sincronización Total de Catálogos
                             </h4>
                             <p class="text-muted small mb-0">
-                                Recorrido exhaustivo por todas las subcategorías oficiales de Dia con paginación completa.
+                                Descarga e indexación directa de surtidos oficiales en PostgreSQL local.
                             </p>
                         </div>
                         <span class="badge bg-primary fs-6 px-3 py-2 rounded-pill">
@@ -47,31 +47,51 @@
 
                     <hr>
 
+                    <!-- FILA MERCADONA -->
+                    <div class="card border border-success-subtle bg-white shadow-sm mb-4">
+                        <div class="card-body p-4">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div class="d-flex align-items-center">
+                                    <div class="bg-success text-white rounded p-3 me-3 fw-bold fs-5">MERCADONA</div>
+                                    <div>
+                                        <h5 class="fw-bold mb-0">Catálogo Completo Mercadona</h5>
+                                        <span class="text-muted small">Recorre todas las categorías oficiales anidadas</span>
+                                    </div>
+                                </div>
+                                <button id="btnSincronizarMercadona" class="btn btn-success btn-lg px-4" onclick="iniciarExtraccionMercadona()">
+                                    <i class="bi bi-cloud-arrow-down-fill me-2"></i>Descargar Mercadona
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- FILA DIA -->
                     <div class="card border border-danger-subtle bg-white shadow-sm mb-4">
                         <div class="card-body p-4">
-                            <div class="d-flex align-items-center justify-content-between mb-3">
+                            <div class="d-flex align-items-center justify-content-between">
                                 <div class="d-flex align-items-center">
-                                    <div class="bg-danger text-white rounded p-3 me-3 fw-bold fs-4">DIA</div>
+                                    <div class="bg-danger text-white rounded p-3 me-3 fw-bold fs-5">DIA</div>
                                     <div>
-                                        <h5 class="fw-bold mb-0">Catálogo Exhaustivo Dia (Subcategorías)</h5>
-                                        <span class="text-muted small">Recorre todas las ramas L2 con lectura de total_pages</span>
+                                        <h5 class="fw-bold mb-0">Catálogo Exhaustivo Dia</h5>
+                                        <span class="text-muted small">Recorre todas las ramas L2 con lectura de páginas</span>
                                     </div>
                                 </div>
                                 <button id="btnSincronizarDia" class="btn btn-danger btn-lg px-4" onclick="iniciarExtraccionExhaustivaDia()">
-                                    <i class="bi bi-cloud-arrow-down-fill me-2"></i>Descargar Catálogo 100%
+                                    <i class="bi bi-cloud-arrow-down-fill me-2"></i>Descargar Dia
                                 </button>
                             </div>
-
-                            <div class="progress mb-2 d-none" id="progressContainer" style="height: 24px;">
-                                <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-danger fw-bold" 
-                                     role="progressbar" style="width: 0%;">0%</div>
-                            </div>
-                            <div id="progresoTexto" class="small text-muted mb-3 d-none">Listo para iniciar.</div>
-
-                            <div class="bg-dark text-success p-3 rounded font-monospace small" style="min-height: 240px; max-height: 360px; overflow-y: auto;" id="consolaLogs">
-                                <div>> Motor listo. Pulsa "Descargar Catálogo 100%" para recorrer todas las subcategorías.</div>
-                            </div>
                         </div>
+                    </div>
+
+                    <!-- BARRA DE ESTADO Y CONSOLA COMÚN -->
+                    <div class="progress mb-2 d-none" id="progressContainer" style="height: 24px;">
+                        <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary fw-bold" 
+                             role="progressbar" style="width: 0%;">0%</div>
+                    </div>
+                    <div id="progresoTexto" class="small text-muted mb-3 d-none">Listo para iniciar.</div>
+
+                    <div class="bg-dark text-success p-3 rounded font-monospace small" style="min-height: 240px; max-height: 360px; overflow-y: auto;" id="consolaLogs">
+                        <div>> Motor listo. Pulsa en el supermercado que desees sincronizar.</div>
                     </div>
 
                 </div>
@@ -91,61 +111,164 @@
         consola.scrollTop = consola.scrollHeight;
     }
 
-    async function iniciarExtraccionExhaustivaDia() {
-        const btn = document.getElementById("btnSincronizarDia");
+    function setBarraProgreso(pct, texto, colorClase = "bg-primary") {
         const progContainer = document.getElementById("progressContainer");
         const progBar = document.getElementById("progressBar");
         const progTexto = document.getElementById("progresoTexto");
 
-        btn.disabled = true;
         progContainer.classList.remove("d-none");
         progTexto.classList.remove("d-none");
-        progBar.style.width = "1%";
-        progBar.innerText = "1%";
+        progBar.className = `progress-bar progress-bar-striped progress-bar-animated ${colorClase} fw-bold`;
+        progBar.style.width = `${pct}%`;
+        progBar.innerText = `${pct}%`;
+        progTexto.innerText = texto;
+    }
 
-        logConsola("1/3 Descargando mapa taxonómico oficial...", "text-info");
+    // ══════════════════════════════════════════════════════════
+    //  EXTRACTOR MERCADONA
+    // ══════════════════════════════════════════════════════════
+    async function iniciarExtraccionMercadona() {
+        const btnM = document.getElementById("btnSincronizarMercadona");
+        const btnD = document.getElementById("btnSincronizarDia");
+        btnM.disabled = true;
+        btnD.disabled = true;
+
+        logConsola("🟢 Obteniendo árbol maestro de categorías de Mercadona...", "text-info");
+        setBarraProgreso(2, "Descargando índice de categorías...", "bg-success");
+
+        try {
+            const resp = await fetch("https://tienda.mercadona.es/api/categories/", {
+                headers: { 'Accept': 'application/json' }
+            });
+
+            if (!resp.ok) throw new Error("HTTP " + resp.status + " al conectar con Mercadona");
+
+            const rootData = await resp.json();
+            const rootCats = rootData.results || [];
+            
+            // Recoger todas las subcategorías (hojas) que contienen productos reales
+            const subcategorias = [];
+            for (const cat of rootCats) {
+                if (cat.categories && Array.isArray(cat.categories)) {
+                    for (const sub of cat.categories) {
+                        subcategorias.push({ id: sub.id, name: sub.name });
+                    }
+                }
+            }
+
+            logConsola(`✔ Detectadas ${subcategorias.length} categorías completas en Mercadona.`, "text-success");
+
+            let paso = 0;
+            let totalInsertados = 0;
+
+            for (const sub of subcategorias) {
+                paso++;
+                const pct = Math.round((paso / subcategorias.length) * 100);
+                setBarraProgreso(pct, `[${paso}/${subcategorias.length}] Mercadona: ${sub.name}`, "bg-success");
+
+                try {
+                    const rDetalle = await fetch(`https://tienda.mercadona.es/api/categories/${sub.id}/`, {
+                        headers: { 'Accept': 'application/json' }
+                    });
+
+                    if (rDetalle.ok) {
+                        const dataSub = await rDetalle.json();
+                        const productos = [];
+
+                        // Mercadona organiza por categories -> products
+                        if (dataSub.categories && Array.isArray(dataSub.categories)) {
+                            for (const inner of dataSub.categories) {
+                                if (inner.products && Array.isArray(inner.products)) {
+                                    for (const p of inner.products) {
+                                        const unitPrice = p.price_instructions ? (p.price_instructions.unit_price || 0) : 0;
+                                        if (unitPrice > 0) {
+                                            productos.push({
+                                                sku_id: String(p.id || ""),
+                                                display_name: p.display_name,
+                                                precio: unitPrice,
+                                                measure_unit: p.packaging || "Ud",
+                                                termino_busqueda: sub.name
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if (productos.length > 0) {
+                            const sendResp = await fetch('/admin/mantenimiento-precios/api/lote-mercadona', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(productos)
+                            });
+
+                            if (sendResp.ok) {
+                                const resJson = await sendResp.json();
+                                totalInsertados += resJson.procesadosEnLote;
+                                document.getElementById("labelTotalCache").innerText = resJson.totalEnCache;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    logConsola(`Aviso en subcategoría ${sub.name}: ${e.message}`, "text-muted");
+                }
+
+                await new Promise(r => setTimeout(r, 60)); // Pausa de cortesía
+            }
+
+            setBarraProgreso(100, `¡Mercadona completado! Registros procesados: ${totalInsertados}`, "bg-success");
+            logConsola(`🎉 Catálogo completo de Mercadona indexado: ${totalInsertados} referencias`, "text-success fw-bold");
+
+        } catch (err) {
+            logConsola(`Error en Mercadona: ${err.message}`, "text-danger");
+        } finally {
+            btnM.disabled = false;
+            btnD.disabled = false;
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  EXTRACTOR DIA
+    // ══════════════════════════════════════════════════════════
+    async function iniciarExtraccionExhaustivaDia() {
+        const btnM = document.getElementById("btnSincronizarMercadona");
+        const btnD = document.getElementById("btnSincronizarDia");
+        btnM.disabled = true;
+        btnD.disabled = true;
+
+        logConsola("🔴 Obteniendo mapa taxonómico de Dia...", "text-info");
+        setBarraProgreso(1, "Descargando índice taxonómico Dia...", "bg-danger");
 
         try {
             const respMeta = await fetch("https://www.dia.es/api/v1/plp-insight/initial_analytics/l1/all/L102", {
                 headers: { 'Accept': 'application/json' }
             });
 
-            if (!respMeta.ok) {
-                throw new Error("HTTP " + respMeta.status + " al obtener el mapa taxonómico");
-            }
+            if (!respMeta.ok) throw new Error("HTTP " + respMeta.status + " en taxonomía Dia");
 
             const dataMeta = await respMeta.json();
             const menu = dataMeta.menu_analytics || {};
 
-            // Extraer términos limpios de todas las subcategorías L2
             const terminos = new Set();
             for (const l1Key of Object.keys(menu)) {
-                const l1Obj = menu[l1Key];
-                const children = l1Obj.children || {};
+                const children = menu[l1Key].children || {};
                 for (const l2Key of Object.keys(children)) {
-                    const child = children[l2Key];
-                    let param = child.parameter || "";
-                    // Quitar prefijo "L2_" y "todo " para tener términos de búsqueda puros
+                    let param = children[l2Key].parameter || "";
                     param = param.replace(/^L2_/, "").replace(/^todo\s+/, "").trim();
-                    if (param.length > 2) {
-                        terminos.add(param);
-                    }
+                    if (param.length > 2) terminos.add(param);
                 }
             }
 
             const listaTerminos = Array.from(terminos);
-            logConsola(`✔ Detectadas ${listaTerminos.length} subcategorías reales para extracción exhaustiva.`, "text-success");
+            logConsola(`✔ Detectadas ${listaTerminos.length} subcategorías en Dia.`, "text-success");
 
-            let totalProcesados = 0;
             let paso = 0;
-            const totalPasos = listaTerminos.length;
+            let totalProcesados = 0;
 
             for (const termino of listaTerminos) {
                 paso++;
-                const pct = Math.round((paso / totalPasos) * 100);
-                progBar.style.width = `${pct}%`;
-                progBar.innerText = `${pct}%`;
-                progTexto.innerText = `[${paso}/${totalPasos}] Sincronizando rama: ${termino}`;
+                const pct = Math.round((paso / listaTerminos.length) * 100);
+                setBarraProgreso(pct, `[${paso}/${listaTerminos.length}] Dia: ${termino}`, "bg-danger");
 
                 let pagina = 1;
                 let totalPaginas = 1;
@@ -154,7 +277,6 @@
                     try {
                         const url = `https://www.dia.es/api/v1/search-back/search/reduced?q=${encodeURIComponent(termino)}&page=${pagina}`;
                         const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
-
                         if (!resp.ok) break;
 
                         const data = await resp.json();
@@ -184,28 +306,22 @@
                             totalProcesados += resJson.procesadosEnLote;
                             document.getElementById("labelTotalCache").innerText = resJson.totalEnCache;
                         }
-
                     } catch (e) {
                         logConsola(`Aviso en '${termino}' pág ${pagina}: ${e.message}`, "text-muted");
                     }
-
                     pagina++;
-                    await new Promise(r => setTimeout(r, 120));
+                    await new Promise(r => setTimeout(r, 100));
                 }
-
-                logConsola(`✔ [${termino}] procesadas ${pagina - 1} páginas`, "text-success");
             }
 
-            progBar.style.width = "100%";
-            progBar.innerText = "100%";
-            progBar.classList.remove("progress-bar-animated");
-            btn.disabled = false;
-            progTexto.innerText = `¡Completado! Total operaciones procesadas/actualizadas: ${totalProcesados}`;
-            logConsola(`🎉 Sincronización íntegra terminada. Total operaciones registradas: ${totalProcesados}`, "text-info fw-bold");
+            setBarraProgreso(100, `¡Dia completado! Registros: ${totalProcesados}`, "bg-danger");
+            logConsola(`🎉 Sincronización íntegra de Dia finalizada. Registros: ${totalProcesados}`, "text-success fw-bold");
 
         } catch (err) {
-            logConsola(`Error general: ${err.message}`, "text-danger");
-            btn.disabled = false;
+            logConsola(`Error en Dia: ${err.message}`, "text-danger");
+        } finally {
+            btnM.disabled = false;
+            btnD.disabled = false;
         }
     }
 </script>

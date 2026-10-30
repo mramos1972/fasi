@@ -35,24 +35,35 @@ public class MantenimientoPreciosController {
 
     @PostMapping("/api/lote-dia")
     @ResponseBody
-    public ResponseEntity<Map<String, Object>> registrarLoteDia(@RequestBody List<ItemDiaDto> lote) {
+    public ResponseEntity<Map<String, Object>> registrarLoteDia(@RequestBody List<ItemIngestaDto> lote) {
+        return procesarLoteSupermercado("DIA", lote);
+    }
+
+    @PostMapping("/api/lote-mercadona")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> registrarLoteMercadona(@RequestBody List<ItemIngestaDto> lote) {
+        return procesarLoteSupermercado("MERCADONA", lote);
+    }
+
+    private ResponseEntity<Map<String, Object>> procesarLoteSupermercado(String codigoSuper, List<ItemIngestaDto> lote) {
         if (lote == null || lote.isEmpty()) {
             return ResponseEntity.ok(Map.of("procesadosEnLote", 0, "totalEnCache", precioCacheRepo.count()));
         }
 
-        Supermercado dia = supermercadoRepo.findByActivoTrue().stream()
-                .filter(s -> s.getNombre().toLowerCase().contains("dia"))
+        Supermercado superm = supermercadoRepo.findByActivoTrue().stream()
+                .filter(s -> (s.getCodigoInterno() != null && s.getCodigoInterno().equalsIgnoreCase(codigoSuper))
+                        || s.getNombre().toUpperCase().contains(codigoSuper))
                 .findFirst()
                 .orElse(null);
 
-        if (dia == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Supermercado DIA no encontrado o inactivo"));
+        if (superm == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Supermercado " + codigoSuper + " no encontrado o inactivo"));
         }
 
         LocalDateTime ahora = LocalDateTime.now();
         int nuevosOActualizados = 0;
 
-        for (ItemDiaDto item : lote) {
+        for (ItemIngestaDto item : lote) {
             if (item.getDisplay_name() == null || item.getDisplay_name().isBlank()) continue;
             if (item.getPrecio() == null || item.getPrecio().compareTo(BigDecimal.ZERO) <= 0) continue;
 
@@ -61,8 +72,8 @@ public class MantenimientoPreciosController {
             String unidad = item.getMeasure_unit() != null ? item.getMeasure_unit().trim() : "Ud";
             String termino = item.getTermino_busqueda() != null ? item.getTermino_busqueda().trim() : nombre;
 
-            // UPSERT: Buscar si ya existe este producto para DIA (por nombre idéntico reciente)
-            Optional<PrecioCache> existente = precioCacheRepo.buscarPrecioReciente(dia.getId(), nombre, ahora.minusDays(60));
+            // UPSERT por coincidencia de nombre exacto reciente
+            Optional<PrecioCache> existente = precioCacheRepo.buscarPrecioReciente(superm.getId(), nombre, ahora.minusDays(60));
 
             if (existente.isPresent()) {
                 PrecioCache pc = existente.get();
@@ -72,7 +83,7 @@ public class MantenimientoPreciosController {
                 precioCacheRepo.save(pc);
             } else {
                 PrecioCache pc = PrecioCache.builder()
-                        .supermercado(dia)
+                        .supermercado(superm)
                         .terminoBusqueda(termino.toLowerCase())
                         .productoNombre(nombre)
                         .precio(precio)
@@ -85,7 +96,7 @@ public class MantenimientoPreciosController {
         }
 
         long total = precioCacheRepo.count();
-        log.info("📥 [DIA Sync] Procesados {} productos (Total BD: {})", nuevosOActualizados, total);
+        log.info("📥 [{} Sync] Procesados {} productos (Total BD: {})", codigoSuper, nuevosOActualizados, total);
 
         return ResponseEntity.ok(Map.of(
                 "procesadosEnLote", nuevosOActualizados,
@@ -94,7 +105,7 @@ public class MantenimientoPreciosController {
     }
 
     @Data
-    public static class ItemDiaDto {
+    public static class ItemIngestaDto {
         private String sku_id;
         private String display_name;
         private BigDecimal precio;
