@@ -26,7 +26,7 @@ public class ComparadorPreciosService {
             "snack", "bombones"
     );
 
-    private static final Map<String, List<String>> REGLAS_EXCLUSION_CONTEXTO = Map.of(
+    private static final Map<String, List<String>> REGLAS_EXCLUSION = Map.of(
             "vinagre", List.of("limpieza", "desinfectar", "lavadora", "concentrado"),
             "leche de arroz", List.of("arroz con leche", "postre", "dulce"),
             "pan", List.of("panela", "pan rallado"),
@@ -37,11 +37,13 @@ public class ComparadorPreciosService {
             "espaguetis", List.of("espagueti", "spaghetti", "spaghettis"),
             "espagueti", List.of("espaguetis", "spaghetti", "spaghettis"),
             "leche de arroz", List.of("bebida de arroz", "bebida arroz", "arroz bebida"),
-            "pan bimbo", List.of("pan de molde")
+            "pan bimbo", List.of("pan de molde bimbo", "pan bimbo", "pan molde")
     );
 
     @Transactional(readOnly = true)
     public List<ResultadoComparativaDto> compararLista(List<String> articulos) {
+        log.info("🛒 >>> INICIANDO COMPARATIVA PARA {} ARTÍCULOS: {}", articulos != null ? articulos.size() : 0, articulos);
+
         if (articulos == null || articulos.isEmpty()) {
             return Collections.emptyList();
         }
@@ -107,9 +109,7 @@ public class ComparadorPreciosService {
         return resultados;
     }
 
-    private List<OpcionProductoDto> obtenerOpcionesCandidatas(
-            String busquedaOriginal, List<PrecioCache> catalogo) {
-
+    private List<OpcionProductoDto> obtenerOpcionesCandidatas(String busquedaOriginal, List<PrecioCache> catalogo) {
         String queryNorm = normalizar(busquedaOriginal);
         List<String> tokensQuery = Arrays.stream(queryNorm.split("\\s+"))
                 .filter(t -> t.length() > 2)
@@ -134,11 +134,22 @@ public class ComparadorPreciosService {
             return Collections.emptyList();
         }
 
+        // Orden de opciones:
+        // 1. Coincidencia de prefijo con el término principal
+        // 2. Penalizar productos sospechosamente baratos (< 0.50 €) que suelen ser piezas sueltas
+        // 3. Similitud de longitud
         String tokenPrincipal = tokensQuery.get(0);
-        matches.sort(Comparator
-                .comparing((PrecioCache pc) -> normalizar(pc.getProductoNombre()).startsWith(tokenPrincipal) ? 0 : 1)
-                .thenComparing(PrecioCache::getPrecio)
-        );
+        matches.sort((a, b) -> {
+            boolean aStarts = normalizar(a.getProductoNombre()).startsWith(tokenPrincipal);
+            boolean bStarts = normalizar(b.getProductoNombre()).startsWith(tokenPrincipal);
+            if (aStarts != bStarts) return aStarts ? -1 : 1;
+
+            boolean aMinimo = a.getPrecio().compareTo(new BigDecimal("0.50")) < 0;
+            boolean bMinimo = b.getPrecio().compareTo(new BigDecimal("0.50")) < 0;
+            if (aMinimo != bMinimo) return aMinimo ? 1 : -1;
+
+            return a.getPrecio().compareTo(b.getPrecio());
+        });
 
         List<OpcionProductoDto> opciones = new ArrayList<>();
         int limiteMax = Math.min(5, matches.size());
@@ -162,6 +173,10 @@ public class ComparadorPreciosService {
         for (PrecioCache pc : catalogo) {
             String prodNorm = normalizar(pc.getProductoNombre());
 
+            if (pc.getPrecio() == null || pc.getPrecio().compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+
             boolean excluido = false;
             for (String mod : MODIFICADORES_EXCLUIDOS) {
                 if (prodNorm.contains(mod) && !queryOriginalNorm.contains(mod)) {
@@ -171,7 +186,7 @@ public class ComparadorPreciosService {
             }
             if (excluido) continue;
 
-            for (Map.Entry<String, List<String>> entry : REGLAS_EXCLUSION_CONTEXTO.entrySet()) {
+            for (Map.Entry<String, List<String>> entry : REGLAS_EXCLUSION.entrySet()) {
                 if (queryOriginalNorm.contains(entry.getKey())) {
                     for (String noPermitido : entry.getValue()) {
                         if (prodNorm.contains(noPermitido) && !queryOriginalNorm.contains(noPermitido)) {
