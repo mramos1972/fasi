@@ -66,10 +66,10 @@ public class ComparadorPreciosService {
 
             for (String art : articulos) {
                 String original = art.trim();
-                List<ResultadoComparativaDto.OpcionProductoDto> opciones = obtenerOpcionesCandidatas(original, catalogo);
+                List<OpcionProductoDto> opciones = obtenerOpcionesCandidatas(original, catalogo);
 
                 if (!opciones.isEmpty()) {
-                    ResultadoComparativaDto.OpcionProductoDto recomendada = opciones.get(0);
+                    OpcionProductoDto recomendada = opciones.get(0);
                     dto.getProductos().add(ResultadoComparativaDto.ItemComparadoDto.builder()
                             .terminoBuscado(original)
                             .productoEncontrado(recomendada.getNombre())
@@ -107,7 +107,7 @@ public class ComparadorPreciosService {
         return resultados;
     }
 
-    private List<ResultadoComparativaDto.OpcionProductoDto> obtenerOpcionesCandidatas(
+    private List<OpcionProductoDto> obtenerOpcionesCandidatas(
             String busquedaOriginal, List<PrecioCache> catalogo) {
 
         String queryNorm = normalizar(busquedaOriginal);
@@ -119,10 +119,8 @@ public class ComparadorPreciosService {
             tokensQuery = List.of(queryNorm);
         }
 
-        // 1. Probar con todas las palabras (ej: "arroz sos", "espaguetis gallo")
         List<PrecioCache> matches = filtrarCandidatos(queryNorm, tokensQuery, catalogo);
 
-        // 2. Si no hubo coincidencia (ej: Mercadona no vende Gallo ni SOS), buscar por la raíz canónica
         if (matches.isEmpty() && tokensQuery.size() > 1) {
             String raiz = tokensQuery.get(0);
             List<String> variantesRaiz = EQUIVALENCIAS.getOrDefault(raiz, List.of(raiz));
@@ -136,24 +134,22 @@ public class ComparadorPreciosService {
             return Collections.emptyList();
         }
 
-        // Ordenar: primero los que empiezan por la palabra buscada, luego por precio ascendente
         String tokenPrincipal = tokensQuery.get(0);
         matches.sort(Comparator
                 .comparing((PrecioCache pc) -> normalizar(pc.getProductoNombre()).startsWith(tokenPrincipal) ? 0 : 1)
                 .thenComparing(PrecioCache::getPrecio)
         );
 
-        // Limitar a máximo 5 opciones razonables
-        List<ResultadoComparativaDto.OpcionProductoDto> opciones = new ArrayList<>();
+        List<OpcionProductoDto> opciones = new ArrayList<>();
         int limiteMax = Math.min(5, matches.size());
         for (int i = 0; i < limiteMax; i++) {
             PrecioCache pc = matches.get(i);
-            opciones.add(ResultadoComparativaDto.OpcionProductoDto.builder()
+            opciones.add(OpcionProductoDto.builder()
                     .id(pc.getId())
                     .nombre(pc.getProductoNombre())
                     .precio(pc.getPrecio())
                     .formato(pc.getFormatoUnidad())
-                    .seleccionada(i == 0) // La primera (más económica) marcada como predeterminada
+                    .seleccionada(i == 0)
                     .build());
         }
 
@@ -166,7 +162,6 @@ public class ComparadorPreciosService {
         for (PrecioCache pc : catalogo) {
             String prodNorm = normalizar(pc.getProductoNombre());
 
-            // A. Excluir modificadores no solicitados
             boolean excluido = false;
             for (String mod : MODIFICADORES_EXCLUIDOS) {
                 if (prodNorm.contains(mod) && !queryOriginalNorm.contains(mod)) {
@@ -176,7 +171,6 @@ public class ComparadorPreciosService {
             }
             if (excluido) continue;
 
-            // B. Exclusiones de contexto (ej: vinagre de comer vs limpieza)
             for (Map.Entry<String, List<String>> entry : REGLAS_EXCLUSION_CONTEXTO.entrySet()) {
                 if (queryOriginalNorm.contains(entry.getKey())) {
                     for (String noPermitido : entry.getValue()) {
@@ -189,7 +183,6 @@ public class ComparadorPreciosService {
             }
             if (excluido) continue;
 
-            // C. Coincidencia de tokens o sus equivalentes
             boolean contieneTodos = true;
             for (String tok : tokensRequeridos) {
                 List<String> alternativas = EQUIVALENCIAS.getOrDefault(tok, List.of(tok));

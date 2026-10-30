@@ -18,9 +18,8 @@ public class ResultadoComparativaDto {
     private String supermercado;
     private String codigoPostal;
     @Builder.Default
-    private BigDecimal totalEstimado = BigDecimal.ZERO;
-    @Builder.Default
     private List<ItemComparadoDto> productos = new ArrayList<>();
+    private BigDecimal totalEstimado;
     private int productosEncontrados;
     private int productosSinPrecio;
 
@@ -34,5 +33,8 @@ public class ResultadoComparativaDto {
         private BigDecimal precio;
         private String formato;
         private boolean encontrado;
+        
+        @Builder.Default
+        private List<OpcionProductoDto> opciones = new ArrayList<>();
     }
 }
