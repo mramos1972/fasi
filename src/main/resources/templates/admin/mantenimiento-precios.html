@@ -55,7 +55,7 @@
                                     <div class="bg-success text-white rounded p-3 me-3 fw-bold fs-5">MERCADONA</div>
                                     <div>
                                         <h5 class="fw-bold mb-0">Catálogo Completo Mercadona</h5>
-                                        <span class="text-muted small">Recorre todas las categorías oficiales anidadas</span>
+                                        <span class="text-muted small">Descarga directa en servidor (Backend HTTP Client)</span>
                                     </div>
                                 </div>
                                 <button id="btnSincronizarMercadona" class="btn btn-success btn-lg px-4" onclick="iniciarExtraccionMercadona()">
@@ -125,7 +125,7 @@
     }
 
     // ══════════════════════════════════════════════════════════
-    //  EXTRACTOR MERCADONA
+    //  EXTRACTOR MERCADONA (SERVER-SIDE)
     // ══════════════════════════════════════════════════════════
     async function iniciarExtraccionMercadona() {
         const btnM = document.getElementById("btnSincronizarMercadona");
@@ -133,94 +133,27 @@
         btnM.disabled = true;
         btnD.disabled = true;
 
-        logConsola("🟢 Obteniendo árbol maestro de categorías de Mercadona...", "text-info");
-        setBarraProgreso(2, "Descargando índice de categorías...", "bg-success");
+        logConsola("🟢 Iniciando descarga de Mercadona en backend (evita CORS)...", "text-info");
+        setBarraProgreso(40, "Descargando catálogo completo de Mercadona en servidor...", "bg-success");
 
         try {
-            const resp = await fetch("https://tienda.mercadona.es/api/categories/", {
-                headers: { 'Accept': 'application/json' }
+            const resp = await fetch('/admin/mantenimiento-precios/api/sincronizar-mercadona', {
+                method: 'POST'
             });
 
-            if (!resp.ok) throw new Error("HTTP " + resp.status + " al conectar con Mercadona");
-
-            const rootData = await resp.json();
-            const rootCats = rootData.results || [];
-            
-            // Recoger todas las subcategorías (hojas) que contienen productos reales
-            const subcategorias = [];
-            for (const cat of rootCats) {
-                if (cat.categories && Array.isArray(cat.categories)) {
-                    for (const sub of cat.categories) {
-                        subcategorias.push({ id: sub.id, name: sub.name });
-                    }
-                }
+            if (!resp.ok) {
+                const errData = await resp.json().catch(() => ({}));
+                throw new Error(errData.error || ("HTTP " + resp.status));
             }
 
-            logConsola(`✔ Detectadas ${subcategorias.length} categorías completas en Mercadona.`, "text-success");
-
-            let paso = 0;
-            let totalInsertados = 0;
-
-            for (const sub of subcategorias) {
-                paso++;
-                const pct = Math.round((paso / subcategorias.length) * 100);
-                setBarraProgreso(pct, `[${paso}/${subcategorias.length}] Mercadona: ${sub.name}`, "bg-success");
-
-                try {
-                    const rDetalle = await fetch(`https://tienda.mercadona.es/api/categories/${sub.id}/`, {
-                        headers: { 'Accept': 'application/json' }
-                    });
-
-                    if (rDetalle.ok) {
-                        const dataSub = await rDetalle.json();
-                        const productos = [];
-
-                        // Mercadona organiza por categories -> products
-                        if (dataSub.categories && Array.isArray(dataSub.categories)) {
-                            for (const inner of dataSub.categories) {
-                                if (inner.products && Array.isArray(inner.products)) {
-                                    for (const p of inner.products) {
-                                        const unitPrice = p.price_instructions ? (p.price_instructions.unit_price || 0) : 0;
-                                        if (unitPrice > 0) {
-                                            productos.push({
-                                                sku_id: String(p.id || ""),
-                                                display_name: p.display_name,
-                                                precio: unitPrice,
-                                                measure_unit: p.packaging || "Ud",
-                                                termino_busqueda: sub.name
-                                            });
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        if (productos.length > 0) {
-                            const sendResp = await fetch('/admin/mantenimiento-precios/api/lote-mercadona', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify(productos)
-                            });
-
-                            if (sendResp.ok) {
-                                const resJson = await sendResp.json();
-                                totalInsertados += resJson.procesadosEnLote;
-                                document.getElementById("labelTotalCache").innerText = resJson.totalEnCache;
-                            }
-                        }
-                    }
-                } catch (e) {
-                    logConsola(`Aviso en subcategoría ${sub.name}: ${e.message}`, "text-muted");
-                }
-
-                await new Promise(r => setTimeout(r, 60)); // Pausa de cortesía
-            }
-
-            setBarraProgreso(100, `¡Mercadona completado! Registros procesados: ${totalInsertados}`, "bg-success");
-            logConsola(`🎉 Catálogo completo de Mercadona indexado: ${totalInsertados} referencias`, "text-success fw-bold");
+            const data = await resp.json();
+            setBarraProgreso(100, `¡Mercadona completado! Procesados: ${data.procesados}`, "bg-success");
+            document.getElementById("labelTotalCache").innerText = data.totalEnCache;
+            logConsola(`🎉 Mercadona sincronizado con éxito: ${data.procesados} productos indexados. Total BD: ${data.totalEnCache}`, "text-success fw-bold");
 
         } catch (err) {
             logConsola(`Error en Mercadona: ${err.message}`, "text-danger");
+            setBarraProgreso(100, "Error en la sincronización", "bg-danger");
         } finally {
             btnM.disabled = false;
             btnD.disabled = false;
@@ -228,7 +161,7 @@
     }
 
     // ══════════════════════════════════════════════════════════
-    //  EXTRACTOR DIA
+    //  EXTRACTOR DIA (CLIENT-SIDE)
     // ══════════════════════════════════════════════════════════
     async function iniciarExtraccionExhaustivaDia() {
         const btnM = document.getElementById("btnSincronizarMercadona");
