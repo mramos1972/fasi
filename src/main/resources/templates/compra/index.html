@@ -17,7 +17,7 @@
       </div>
     </div>
 
-    <button type="button" onclick="abrirModalComparativa()"
+    <button type="button" id="btn-abrir-comparativa" onclick="abrirModalComparativa()"
             class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition shadow flex items-center gap-2 cursor-pointer">
       🔍 Comparar Precios en Súpers
     </button>
@@ -72,14 +72,14 @@
 
   <!-- MODAL COMPARATIVA DE PRECIOS -->
   <div id="modal-comparativa" style="display:none;" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-white dark:bg-gray-800 rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <div class="bg-white dark:bg-gray-800 rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
       
       <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
         <div>
           <h3 class="text-base font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-            <span>📊</span> Comparativa de Precios en Supermercados
+            <span>📊</span> Comparativa de Precios Interactiva
           </h3>
-          <p class="text-xs text-gray-500 dark:text-gray-400">Precios actualizados en tiempo real y caché local</p>
+          <p class="text-xs text-gray-500 dark:text-gray-400">Selecciona la variante de cada producto para recalcular en directo</p>
         </div>
         <button type="button" onclick="cerrarModalComparativa()" class="text-gray-400 hover:text-gray-200 text-2xl font-bold p-1 cursor-pointer">✕</button>
       </div>
@@ -121,162 +121,137 @@
 
       try {
         const resp = await fetch('/compra/api/comparar');
+        if (!resp.ok) {
+          throw new Error('HTTP ' + resp.status);
+        }
         const data = await resp.json();
 
         loading.style.display = 'none';
         container.style.display = 'block';
 
-        if (!data || data.length === 0) {
-          container.innerHTML = '<p class="text-center text-sm text-gray-500 py-6">No hay artículos pendientes para comparar.</p>';
-          return;
-        }
-
-        // Renderizar tarjetas por supermercado
-        let html = '<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">';
-        data.forEach((s, idx) => {
-          const esPrimero = (idx === 0 && s.productosEncontrados > 0);
-          html += `
-            <div class="rounded-xl p-4 border ${esPrimero ? 'border-emerald-500 bg-emerald-50/30 dark:bg-emerald-950/20' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-700/20'} space-y-2">
-              <div class="flex justify-between items-start">
-                <div>
-                  <h4 class="font-bold text-sm text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
-                    ${s.supermercado}
-                    ${esPrimero ? '<span class="text-[10px] bg-emerald-600 text-white px-2 py-0.5 rounded-full font-bold">Más barato 🏆</span>' : ''}
-                  </h4>
-                  <p class="text-[11px] text-gray-500">Localizados: ${s.productosEncontrados} / ${s.productos.length}</p>
-                </div>
-                <div class="text-right">
-                  <span class="text-lg font-black ${esPrimero ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-800 dark:text-gray-200'}">
-                    ${s.totalEstimado.toFixed(2)} €
-                  </span>
-                </div>
-              </div>
-
-              <div class="mt-2 divide-y divide-gray-100 dark:divide-gray-700/50 text-xs">
-                ${s.productos.map(p => `
-                  <div class="py-1.5 flex justify-between items-center">
-                    <span class="text-gray-700 dark:text-gray-300 truncate pr-2" title="${p.productoEncontrado}">${p.terminoBuscado}</span>
-                    <span class="font-semibold ${p.encontrado ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400'} whitespace-nowrap">
-                      ${p.encontrado ? p.precio.toFixed(2) + ' €' : 'No disponible'}
-                    </span>
-                  </div>
-                `).join('')}
-              </div>
-            </div>
-          `;
-        });
-        html += '</div>';
-
-        container.innerHTML = html;
+        renderizarResultadosComparativa(data);
 
       } catch (err) {
+        console.error('Error al comparar:', err);
         loading.style.display = 'none';
         container.style.display = 'block';
-        container.innerHTML = '<p class="text-center text-sm text-red-500 py-6">Error al conectar con los supermercados: ' + err.message + '</p>';
+        container.innerHTML = '<div class="p-4 rounded-xl bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-300 text-sm">Error al conectar con el servidor: ' + err.message + '</div>';
+      }
+    }
+
+    function renderizarResultadosComparativa(data) {
+      const container = document.getElementById('comparativa-resultados');
+      if (!data || data.length === 0) {
+        container.innerHTML = '<p class="text-center text-sm text-gray-500 py-6">No hay artículos pendientes para comparar.</p>';
+        return;
+      }
+
+      let html = '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">';
+      data.forEach((s, sIdx) => {
+        const esPrimero = (sIdx === 0 && s.productosEncontrados > 0);
+        
+        html += `
+          <div class="rounded-xl p-4 border ${esPrimero ? 'border-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/20' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'} space-y-3 shadow-sm">
+            <div class="flex justify-between items-start border-b border-gray-100 dark:border-gray-700 pb-3">
+              <div>
+                <h4 class="font-bold text-sm text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
+                  ${s.supermercado}
+                  ${esPrimero ? '<span class="text-[10px] bg-emerald-600 text-white px-2 py-0.5 rounded-full font-bold">Más barato 🏆</span>' : ''}
+                </h4>
+                <p class="text-[11px] text-gray-500 mt-0.5">Localizados: ${s.productosEncontrados} / ${s.productos.length}</p>
+              </div>
+              <div class="text-right">
+                <span class="text-xl font-extrabold text-emerald-600 dark:text-emerald-400" id="total_super_${sIdx}">
+                  ${Number(s.totalEstimado || 0).toFixed(2)} €
+                </span>
+              </div>
+            </div>
+
+            <div class="divide-y divide-gray-100 dark:divide-gray-700/50 text-xs">
+        `;
+
+        s.productos.forEach((item, pIdx) => {
+          if (!item.encontrado || !item.opciones || item.opciones.length === 0) {
+            html += `
+              <div class="py-2 flex justify-between items-center text-gray-400">
+                <span>${item.terminoBuscado}</span>
+                <span class="bg-gray-100 dark:bg-gray-700 text-gray-500 px-2 py-0.5 rounded text-[10px]">No disponible</span>
+              </div>
+            `;
+          } else if (item.opciones.length === 1) {
+            const op = item.opciones[0];
+            html += `
+              <div class="py-2">
+                <div class="flex justify-between items-center">
+                  <span class="font-medium text-gray-800 dark:text-gray-200 truncate pr-2" title="${op.nombre}">${op.nombre}</span>
+                  <span class="font-bold text-gray-900 dark:text-gray-100 whitespace-nowrap item-precio-fijo-${sIdx}" data-precio="${op.precio}">
+                    ${Number(op.precio).toFixed(2)} €
+                  </span>
+                </div>
+                <span class="text-[10px] text-gray-400 uppercase tracking-wider">${item.terminoBuscado}</span>
+              </div>
+            `;
+          } else {
+            // Múltiples opciones -> Selector desplegable
+            let opts = '';
+            item.opciones.forEach((op, oIdx) => {
+              const sel = (oIdx === 0) ? 'selected' : '';
+              opts += `<option value="${op.precio}" ${sel}>${op.nombre} (${Number(op.precio).toFixed(2)} €)</option>`;
+            });
+
+            html += `
+              <div class="py-2 space-y-1">
+                <div class="flex justify-between items-center">
+                  <span class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">${item.terminoBuscado}</span>
+                  <span class="font-bold text-indigo-600 dark:text-indigo-400 whitespace-nowrap" id="precio_lbl_${sIdx}_${pIdx}">
+                    ${Number(item.opciones[0].precio).toFixed(2)} €
+                  </span>
+                </div>
+                <select class="w-full text-xs rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1.5 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-indigo-500 select-producto-${sIdx}"
+                        onchange="actualizarPrecioYTotal(${sIdx}, ${pIdx}, this)">
+                  ${opts}
+                </select>
+              </div>
+            `;
+          }
+        });
+
+        html += `
+            </div>
+          </div>
+        `;
+      });
+      html += '</div>';
+
+      container.innerHTML = html;
+    }
+
+    function actualizarPrecioYTotal(sIdx, pIdx, selectElem) {
+      const nuevoPrecio = parseFloat(selectElem.value) || 0;
+      const lbl = document.getElementById(`precio_lbl_${sIdx}_${pIdx}`);
+      if (lbl) {
+        lbl.innerText = nuevoPrecio.toFixed(2) + ' €';
+      }
+
+      // Recalcular total de la columna
+      let total = 0;
+      document.querySelectorAll(`.item-precio-fijo-${sIdx}`).forEach(el => {
+        total += parseFloat(el.getAttribute('data-precio')) || 0;
+      });
+      document.querySelectorAll(`.select-producto-${sIdx}`).forEach(sel => {
+        total += parseFloat(sel.value) || 0;
+      });
+
+      const totalEl = document.getElementById(`total_super_${sIdx}`);
+      if (totalEl) {
+        totalEl.innerText = total.toFixed(2) + ' €';
       }
     }
 
     function cerrarModalComparativa() {
       document.getElementById('modal-comparativa').style.display = 'none';
     }
-  function renderizarComparativa(data) {
-    const contenedor = document.getElementById("comparativaResultados") || document.getElementById("comparativaContenido") || document.querySelector("#modalComparativaPrecios .modal-body");
-    if (!contenedor) return;
-
-    if (!data || data.length === 0) {
-        contenedor.innerHTML = "<div class="alert alert-warning text-center my-3">No se encontraron resultados de precios.</div>";
-        return;
-    }
-
-    let out = "<div class="row g-3">";
-    data.forEach((s, sIdx) => {
-        const esPrimero = sIdx === 0 && s.productosEncontrados > 0;
-        const borderCls = esPrimero ? "border-success" : "border-secondary-subtle";
-        const badgeMasBarato = esPrimero ? "<span class="badge bg-success ms-2">Más barato 🎉</span>" : "";
-
-        out += `
-            <div class="col-12 col-md-6 col-lg-4">
-                <div class="card h-100 shadow-sm ${borderCls}">
-                    <div class="card-header bg-white py-3">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <h6 class="fw-bold mb-0">${s.supermercado} ${badgeMasBarato}</h6>
-                            <h5 class="fw-bold mb-0 text-dark" id="total_col_${sIdx}">${Number(s.totalEstimado || 0).toFixed(2)} €</h5>
-                        </div>
-                        <small class="text-muted">Localizados: ${s.productosEncontrados || 0} / ${s.productos ? s.productos.length : 0}</small>
-                    </div>
-                    <div class="card-body p-3" style="max-height: 480px; overflow-y: auto;">
-        `;
-
-        if (s.productos) {
-            s.productos.forEach((item, pIdx) => {
-                if (!item.encontrado || !item.opciones || item.opciones.length === 0) {
-                    out += `
-                        <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
-                            <span class="small text-muted">${item.terminoBuscado}</span>
-                            <span class="badge bg-light text-secondary border">No disponible</span>
-                        </div>
-                    `;
-                } else if (item.opciones.length === 1) {
-                    const op = item.opciones[0];
-                    out += `
-                        <div class="py-2 border-bottom">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <span class="small fw-semibold text-truncate me-2" title="${op.nombre}">${op.nombre}</span>
-                                <span class="fw-bold text-dark item-precio-fijo-${sIdx}" data-precio="${op.precio}">${Number(op.precio).toFixed(2)} €</span>
-                            </div>
-                            <span class="badge bg-light text-muted border" style="font-size: 0.65rem;">${item.terminoBuscado}</span>
-                        </div>
-                    `;
-                } else {
-                    let opts = "";
-                    item.opciones.forEach((op, oIdx) => {
-                        const sel = oIdx === 0 ? "selected" : "";
-                        opts += `<option value="${op.precio}" ${sel}>${op.nombre} - ${Number(op.precio).toFixed(2)} €</option>`;
-                    });
-
-                    out += `
-                        <div class="py-2 border-bottom">
-                            <div class="d-flex justify-content-between align-items-center mb-1">
-                                <span class="badge bg-light text-secondary border" style="font-size: 0.65rem;">${item.terminoBuscado}</span>
-                                <span class="fw-bold text-primary" id="lbl_precio_${sIdx}_${pIdx}">${Number(item.opciones[0].precio).toFixed(2)} €</span>
-                            </div>
-                            <select class="form-select form-select-sm select-super-${sIdx}" 
-                                    onchange="recalcularColumna(${sIdx}, ${pIdx}, this)">
-                                ${opts}
-                            </select>
-                        </div>
-                    `;
-                }
-            });
-        }
-
-        out += `
-                    </div>
-                </div>
-            </div>
-        `;
-    });
-    out += "</div>";
-    contenedor.innerHTML = out;
-}
-
-function recalcularColumna(sIdx, pIdx, selElem) {
-    const val = parseFloat(selElem.value) || 0;
-    const lbl = document.getElementById("lbl_precio_" + sIdx + "_" + pIdx);
-    if (lbl) lbl.innerText = val.toFixed(2) + " €";
-
-    let total = 0;
-    document.querySelectorAll(".item-precio-fijo-" + sIdx).forEach(el => {
-        total += parseFloat(el.getAttribute("data-precio")) || 0;
-    });
-    document.querySelectorAll(".select-super-" + sIdx).forEach(sel => {
-        total += parseFloat(sel.value) || 0;
-    });
-
-    const totalEl = document.getElementById("total_col_" + sIdx);
-    if (totalEl) totalEl.innerText = total.toFixed(2) + " €";
-}
-</script>
+  </script>
 
 </main>
 </body>
