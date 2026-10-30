@@ -132,8 +132,8 @@ public class MantenimientoPreciosController {
                                     if (!nombreProd.isBlank() && precioDbl > 0.0) {
                                         BigDecimal precio = BigDecimal.valueOf(precioDbl).setScale(2, RoundingMode.HALF_UP);
 
-                                        Optional<PrecioCache> existente = precioCacheRepo.buscarPrecioReciente(
-                                                mercadona.getId(), nombreProd, ahora.minusDays(60));
+                                        Optional<PrecioCache> existente = precioCacheRepo.buscarPreciosRecientes(
+                                                mercadona.getId(), nombreProd, ahora.minusDays(60)).stream().findFirst();
 
                                         if (existente.isPresent()) {
                                             PrecioCache pc = existente.get();
@@ -159,8 +159,7 @@ public class MantenimientoPreciosController {
                         }
                     }
 
-                    // Pausa de cortesía para no saturar
-                    Thread.sleep(80);
+                    Thread.sleep(60);
 
                 } catch (Exception e) {
                     log.warn("Aviso descargando categoría {} de Mercadona: {}", subId, e.getMessage());
@@ -208,7 +207,8 @@ public class MantenimientoPreciosController {
             String unidad = item.getMeasure_unit() != null ? item.getMeasure_unit().trim() : "Ud";
             String termino = item.getTermino_busqueda() != null ? item.getTermino_busqueda().trim() : nombre;
 
-            Optional<PrecioCache> existente = precioCacheRepo.buscarPrecioReciente(superm.getId(), nombre, ahora.minusDays(60));
+            Optional<PrecioCache> existente = precioCacheRepo.buscarPreciosRecientes(
+                    superm.getId(), nombre, ahora.minusDays(60)).stream().findFirst();
 
             if (existente.isPresent()) {
                 PrecioCache pc = existente.get();
