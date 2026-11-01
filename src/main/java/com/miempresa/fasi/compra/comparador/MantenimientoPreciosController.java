@@ -20,6 +20,8 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Slf4j
 @Controller
@@ -257,33 +259,21 @@ public class MantenimientoPreciosController {
     @PostMapping("/api/sincronizar-aldi")
     @ResponseBody
     public ResponseEntity<Map<String, Object>> sincronizarAldiServidor() {
-        log.info("Iniciando sincronización completa de ALDI desde el servidor...");
-        List<String> subcategorias = List.of(
-            "lacteos-y-huevos/leche-y-bebidas-vegetales",
-            "lacteos-y-huevos/huevos",
-            "lacteos-y-huevos/yogures-y-postres-lacteos",
-            "lacteos-y-huevos/mantequilla-margarina-y-nata",
-            "despensa/arroz-legumbres-y-pasta",
-            "despensa/aceites-vinagres-y-alinos",
-            "despensa/conservas-y-platos-preparados",
-            "despensa/harinas-azucar-y-reposteria",
-            "despensa/salsas-y-condimentos",
-            "panaderia-y-bolleria/pan",
-            "panaderia-y-bolleria/bolleria",
-            "desayuno/cafe-cacao-e-infusiones",
-            "desayuno/cereales-y-galletas",
-            "carne/pollo-y-pavo",
-            "carne/cerdo-y-vacuno",
-            "charcuteria/embutidos-y-fiambres",
-            "quesos",
-            "limpieza-y-hogar/cuidado-de-la-ropa",
-            "limpieza-y-hogar/limpieza-de-la-vajilla",
-            "limpieza-y-hogar/limpieza-del-hogar",
-            "limpieza-y-hogar/papel-higienico-y-panuelos",
-            "cuidado-personal/higiene-corporal",
-            "cuidado-personal/cuidado-del-cabello",
-            "fruta-y-verdura",
-            "bebidas/aguas-y-refrescos"
+        log.info("Iniciando sincronización completa y dinámica de ALDI desde el servidor...");
+
+        List<String> categoriasPadre = List.of(
+                "lacteos-y-huevos",
+                "despensa",
+                "panaderia-y-bolleria",
+                "carne-pescado-y-marisco",
+                "charcuteria-y-quesos",
+                "congelados",
+                "fruta-y-verdura",
+                "bebidas",
+                "limpieza-y-hogar",
+                "cuidado-personal",
+                "bebe",
+                "mascotas"
         );
 
         HttpClient client = HttpClient.newBuilder()
@@ -291,12 +281,52 @@ public class MantenimientoPreciosController {
                 .followRedirects(HttpClient.Redirect.NORMAL)
                 .build();
 
-        int totalProcesados = 0;
-        String buildId = "Uaol5T0hC3jS0YDFqYFLA";
+        Set<String> rutasValidas = new LinkedHashSet<>();
+        String buildIdDetectado = "Uaol5T0hC3jS0YDFqYFLA";
 
-        for (String sub : subcategorias) {
+        Pattern pBuild = Pattern.compile("\"buildId\":\"([^\"]+)\"");
+
+        for (String cat : categoriasPadre) {
             try {
-                String url = "https://www.aldi.es/_next/data/" + buildId + "/es/productos/" + sub + ".html.json";
+                HttpRequest req = HttpRequest.newBuilder()
+                        .uri(URI.create("https://www.aldi.es/productos/" + cat + ".html"))
+                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                        .timeout(Duration.ofSeconds(10))
+                        .GET()
+                        .build();
+
+                HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
+                if (resp.statusCode() == 200) {
+                    String body = resp.body();
+
+                    Matcher mBuild = pBuild.matcher(body);
+                    if (mBuild.find()) {
+                        buildIdDetectado = mBuild.group(1);
+                    }
+
+                    Pattern pLinks = Pattern.compile("/productos/" + Pattern.quote(cat) + "/([a-z0-9\\-]+)\\.html");
+                    Matcher mLinks = pLinks.matcher(body);
+                    boolean alguna = false;
+                    while (mLinks.find()) {
+                        rutasValidas.add(cat + "/" + mLinks.group(1));
+                        alguna = true;
+                    }
+                    if (!alguna) {
+                        rutasValidas.add(cat);
+                    }
+                }
+                Thread.sleep(60);
+            } catch (Exception e) {
+                log.warn("Aviso explorando categoría padre ALDI {}: {}", cat, e.getMessage());
+            }
+        }
+
+        log.info("ALDI: Detectadas {} subcategorías reales con buildId {}", rutasValidas.size(), buildIdDetectado);
+
+        int totalProcesados = 0;
+        for (String ruta : rutasValidas) {
+            try {
+                String url = "https://www.aldi.es/_next/data/" + buildIdDetectado + "/es/productos/" + ruta + ".html.json";
                 HttpRequest request = HttpRequest.newBuilder()
                         .uri(URI.create(url))
                         .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
@@ -307,7 +337,7 @@ public class MantenimientoPreciosController {
 
                 HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
                 if (response.statusCode() != 200) {
-                    log.warn("ALDI: status {} en subcategoría {}", response.statusCode(), sub);
+                    log.warn("ALDI: status {} en ruta descubierta {}", response.statusCode(), ruta);
                     continue;
                 }
 
@@ -332,7 +362,7 @@ public class MantenimientoPreciosController {
                     String displayName = brand.isEmpty() ? name : name + " " + brand;
                     String sku = h.path("objectID").asText("");
                     String unit = h.path("salesUnit").asText("Ud");
-                    String termino = sub.contains("/") ? sub.substring(sub.lastIndexOf("/") + 1) : sub;
+                    String termino = ruta.contains("/") ? ruta.substring(ruta.lastIndexOf("/") + 1) : ruta;
 
                     ItemIngestaDto dto = new ItemIngestaDto();
                     dto.setSku_id(sku);
@@ -348,18 +378,19 @@ public class MantenimientoPreciosController {
                     totalProcesados += lote.size();
                 }
 
-                Thread.sleep(80);
+                Thread.sleep(70);
             } catch (Exception e) {
-                log.warn("Error procesando subcategoría ALDI {}: {}", sub, e.getMessage());
+                log.warn("Error procesando subcategoría ALDI {}: {}", ruta, e.getMessage());
             }
         }
 
         long totalEnCache = precioCacheRepo.count();
+        log.info("🎉 Sincronización ALDI finalizada. Procesados: {} (Total BD: {})", totalProcesados, totalEnCache);
+
         return ResponseEntity.ok(Map.of(
                 "supermercado", "ALDI",
                 "procesados", totalProcesados,
                 "totalEnCache", totalEnCache
         ));
     }
-
 }
