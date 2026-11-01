@@ -314,14 +314,29 @@ public class MantenimientoPreciosController {
     public ResponseEntity<Map<String, Object>> sincronizarElJamonServidor() {
         log.info("🛒 [El Jamón Sync] Iniciando descubrimiento y sincronización...");
 
-        Supermercado elJamon = supermercadoRepo.findByActivoTrue().stream()
-                .filter(s -> (s.getCodigoInterno() != null && s.getCodigoInterno().equalsIgnoreCase("EL_JAMON"))
-                        || s.getNombre().toUpperCase().contains("JAMON"))
+        // Buscar El Jamón de forma tolerante a tildes o mayúsculas/minúsculas
+        Supermercado elJamon = supermercadoRepo.findAll().stream()
+                .filter(s -> {
+                    String cod = s.getCodigoInterno() != null ? s.getCodigoInterno().toUpperCase() : "";
+                    String nom = s.getNombre() != null ? s.getNombre().toUpperCase().replace("Ó", "O") : "";
+                    return cod.equals("EL_JAMON") || nom.contains("JAMON");
+                })
                 .findFirst()
-                .orElse(null);
+                .orElseGet(() -> {
+                    log.info("⚠️ El Jamón no estaba en BD. Creándolo automáticamente...");
+                    Supermercado nuevo = Supermercado.builder()
+                            .nombre("Supermercados El Jamon")
+                            .codigoInterno("EL_JAMON")
+                            .codigoPostal("11540")
+                            .activo(true)
+                            .creadoEl(LocalDateTime.now())
+                            .build();
+                    return supermercadoRepo.save(nuevo);
+                });
 
-        if (elJamon == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Supermercado El Jamón no encontrado o inactivo en BD"));
+        if (!elJamon.isActivo()) {
+            elJamon.setActivo(true);
+            supermercadoRepo.save(elJamon);
         }
 
         HttpClient client = HttpClient.newBuilder()
