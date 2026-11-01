@@ -15,12 +15,17 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.security.SecureRandom;
+import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -314,7 +319,6 @@ public class MantenimientoPreciosController {
     public ResponseEntity<Map<String, Object>> sincronizarElJamonServidor() {
         log.info("🛒 [El Jamón Sync] Iniciando descubrimiento y sincronización...");
 
-        // Buscar El Jamón de forma tolerante a tildes o mayúsculas/minúsculas
         Supermercado elJamon = supermercadoRepo.findAll().stream()
                 .filter(s -> {
                     String cod = s.getCodigoInterno() != null ? s.getCodigoInterno().toUpperCase() : "";
@@ -338,11 +342,7 @@ public class MantenimientoPreciosController {
             supermercadoRepo.save(elJamon);
         }
 
-        HttpClient client = HttpClient.newBuilder()
-                .version(HttpClient.Version.HTTP_1_1)
-                .connectTimeout(Duration.ofSeconds(15))
-                .followRedirects(HttpClient.Redirect.NORMAL)
-                .build();
+        HttpClient client = crearHttpClientToleranteSSL();
 
         List<String> subcategorias = descubrirSubcategoriasElJamon(client);
         log.info("🛒 [El Jamón Sync] Subcategorías a explorar: {}", subcategorias.size());
@@ -355,7 +355,7 @@ public class MantenimientoPreciosController {
             try {
                 HttpRequest req = HttpRequest.newBuilder()
                         .uri(URI.create(urlSubcat))
-                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
                         .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
                         .header("Cookie", "searcher_cp=11540; searcher_sale_channel=SURT-0-CA")
                         .timeout(Duration.ofSeconds(15))
@@ -450,6 +450,35 @@ public class MantenimientoPreciosController {
                 "categoriasProcesadas", subcatsConProductos,
                 "totalEnCache", totalBd
         ));
+    }
+
+    private HttpClient crearHttpClientToleranteSSL() {
+        try {
+            TrustManager[] trustAllCerts = new TrustManager[]{
+                    new X509TrustManager() {
+                        public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
+                        public void checkClientTrusted(X509Certificate[] certs, String authType) {}
+                        public void checkServerTrusted(X509Certificate[] certs, String authType) {}
+                    }
+            };
+
+            SSLContext sslContext = SSLContext.getInstance("TLS");
+            sslContext.init(null, trustAllCerts, new SecureRandom());
+
+            return HttpClient.newBuilder()
+                    .sslContext(sslContext)
+                    .version(HttpClient.Version.HTTP_1_1)
+                    .connectTimeout(Duration.ofSeconds(15))
+                    .followRedirects(HttpClient.Redirect.NORMAL)
+                    .build();
+        } catch (Exception e) {
+            log.warn("No se pudo configurar SSL tolerante, usando estándar: {}", e.getMessage());
+            return HttpClient.newBuilder()
+                    .version(HttpClient.Version.HTTP_1_1)
+                    .connectTimeout(Duration.ofSeconds(15))
+                    .followRedirects(HttpClient.Redirect.NORMAL)
+                    .build();
+        }
     }
 
     private List<String> descubrirSubcategoriasElJamon(HttpClient client) {
