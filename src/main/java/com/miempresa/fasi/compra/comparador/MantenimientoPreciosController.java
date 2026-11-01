@@ -256,78 +256,34 @@ public class MantenimientoPreciosController {
         private String termino_busqueda;
     }
 
-        @PostMapping("/api/sincronizar-aldi")
+    @PostMapping("/api/sincronizar-aldi")
     @ResponseBody
     public ResponseEntity<Map<String, Object>> sincronizarAldiServidor() {
-        log.info("Iniciando sincronización completa de ALDI desde el servidor...");
+        log.info("Iniciando crawling y sincronización en árbol de ALDI desde el servidor...");
 
-        // Lista exhaustiva de subcategorías con productos y precios en ALDI España
-        List<String> subcategorias = List.of(
-            // Lácteos y huevos (comprobadas con éxito)
-            "lacteos-y-huevos/leche-y-bebidas-vegetales",
-            "lacteos-y-huevos/huevos",
-            "lacteos-y-huevos/yogures-y-postres-lacteos",
-            "lacteos-y-huevos/mantequilla-margarina-y-nata",
-            "lacteos-y-huevos/quesos",
-
-            // Despensa y básicos
-            "despensa/arroz-y-legumbres",
-            "despensa/pasta",
-            "despensa/aceites-y-vinagres",
-            "despensa/conservas-de-pescado",
-            "despensa/conservas-vegetales",
-            "despensa/platos-preparados",
-            "despensa/harinas-y-levaduras",
-            "despensa/azucar-y-edulcorantes",
-            "despensa/salsas-y-tomate",
-            "despensa/especias-y-condimentos",
-            "despensa/caldos-y-sopas",
-
-            // Panadería y desayuno
-            "panaderia-y-bolleria/pan-fresco",
-            "panaderia-y-bolleria/pan-de-molde-y-tostado",
-            "panaderia-y-bolleria/bolleria-y-pasteleria",
-            "desayuno-y-meriendas/cafe",
-            "desayuno-y-meriendas/cacao-e-infusiones",
-            "desayuno-y-meriendas/galletas",
-            "desayuno-y-meriendas/cereales-y-muesli",
-            "desayuno-y-meriendas/mermeladas-y-miel",
-
-            // Frescos y congelados
-            "carne-y-aves/pollo-y-pavo",
-            "carne-y-aves/cerdo",
-            "carne-y-aves/vacuno",
-            "carne-y-aves/elaborados-carnicos",
-            "charcuteria/jamon-y-paleta",
-            "charcuteria/embutidos",
-            "charcuteria/cocidos-y-fiambres",
-            "fruta-y-verdura/fruta",
-            "fruta-y-verdura/verdura",
-            "congelados/pescado-y-marisco",
-            "congelados/verduras-y-patatas",
-            "congelados/pizzas-y-platos-preparados",
-            "congelados/helados",
-
-            // Bebidas
-            "bebidas/agua",
-            "bebidas/refrescos",
-            "bebidas/zumos",
-            "bebidas/cervezas",
-            "bebidas/vinos",
-
-            // Limpieza y droguería
-            "limpieza-y-hogar/detergentes-y-suavizantes",
-            "limpieza-y-hogar/lavavajillas",
-            "limpieza-y-hogar/limpiadores-del-hogar",
-            "limpieza-y-hogar/papel-de-cocina-y-servilletas",
-            "limpieza-y-hogar/papel-higienico",
-
-            // Cuidado personal e higiene
-            "higiene-y-cuidado-personal/gel-y-jabon",
-            "higiene-y-cuidado-personal/cuidado-del-cabello",
-            "higiene-y-cuidado-personal/higiene-bucal",
-            "higiene-y-cuidado-personal/cuidado-facial-y-corporal",
-            "higiene-y-cuidado-personal/desodorantes"
+        List<String> categoriasRaiz = List.of(
+                "lacteos-y-huevos",
+                "quesos",
+                "carne",
+                "pescado-y-marisco",
+                "charcuteria",
+                "fruta-y-verdura",
+                "panaderia-y-bolleria",
+                "despensa",
+                "desayuno",
+                "cafe-cacao-e-infusiones",
+                "aperitivos",
+                "chocolates-y-dulces",
+                "platos-preparados-y-pizza",
+                "congelados",
+                "bebidas",
+                "bebidas-alcoholicas",
+                "limpieza-y-hogar",
+                "cuidado-personal",
+                "bebe-e-infantil",
+                "mascotas",
+                "gourmet",
+                "dulces-de-navidad"
         );
 
         HttpClient client = HttpClient.newBuilder()
@@ -335,13 +291,39 @@ public class MantenimientoPreciosController {
                 .followRedirects(HttpClient.Redirect.NORMAL)
                 .build();
 
-        int totalProcesados = 0;
-        int exitosas = 0;
         String buildId = "Uaol5T0hC3jS0YDFqYFLA";
 
-        for (String sub : subcategorias) {
+        try {
+            HttpRequest rHome = HttpRequest.newBuilder()
+                    .uri(URI.create("https://www.aldi.es/productos.html"))
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                    .timeout(Duration.ofSeconds(8))
+                    .GET().build();
+            HttpResponse<String> respHome = client.send(rHome, HttpResponse.BodyHandlers.ofString());
+            if (respHome.statusCode() == 200) {
+                Pattern pBuild = Pattern.compile("\"buildId\":\"([^\"]+)\"");
+                Matcher m = pBuild.matcher(respHome.body());
+                if (m.find()) {
+                    buildId = m.group(1);
+                    log.info("BuildId dinámico detectado para ALDI: {}", buildId);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Usando buildId de fallback para ALDI: {}", e.getMessage());
+        }
+
+        Queue<String> colaExploracion = new LinkedList<>(categoriasRaiz);
+        Set<String> rutasVisitadas = new HashSet<>();
+        int totalProcesados = 0;
+        int categoriasConProductos = 0;
+
+        while (!colaExploracion.isEmpty()) {
+            String rutaActual = colaExploracion.poll();
+            if (rutasVisitadas.contains(rutaActual)) continue;
+            rutasVisitadas.add(rutaActual);
+
             try {
-                String url = "https://www.aldi.es/_next/data/" + buildId + "/es/productos/" + sub + ".html.json";
+                String url = "https://www.aldi.es/_next/data/" + buildId + "/es/productos/" + rutaActual + ".html.json";
                 HttpRequest request = HttpRequest.newBuilder()
                         .uri(URI.create(url))
                         .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
@@ -357,51 +339,93 @@ public class MantenimientoPreciosController {
 
                 JsonNode root = objectMapper.readTree(response.body());
                 JsonNode results = root.path("pageProps").path("algoliaState").path("initialResults");
-                if (results.isMissingNode() || !results.isObject()) continue;
 
-                var fieldNames = results.fieldNames();
-                if (!fieldNames.hasNext()) continue;
-                String primerIndex = fieldNames.next();
+                if (!results.isMissingNode() && results.isObject()) {
+                    Iterator<String> it = results.fieldNames();
+                    while (it.hasNext()) {
+                        String idx = it.next();
+                        JsonNode resArray = results.path(idx).path("results");
+                        if (resArray.isArray()) {
+                            for (JsonNode r : resArray) {
+                                JsonNode hits = r.path("hits");
+                                if (hits.isArray()) {
+                                    for (JsonNode h : hits) {
+                                        String link = h.path("url").asText("");
+                                        if (link.isEmpty()) link = h.path("categoryUrl").asText("");
+                                        if (link.isEmpty()) link = h.path("link").asText("");
 
-                JsonNode hits = results.path(primerIndex).path("results").path(0).path("hits");
-                if (hits.isMissingNode() || !hits.isArray() || hits.isEmpty()) continue;
+                                        if (!link.isEmpty() && link.contains("/productos/")) {
+                                            int idxProd = link.indexOf("/productos/") + "/productos/".length();
+                                            String slugHijo = link.substring(idxProd);
+                                            if (slugHijo.endsWith(".html")) {
+                                                slugHijo = slugHijo.substring(0, slugHijo.length() - 5);
+                                            }
+                                            if (slugHijo.startsWith("/")) {
+                                                slugHijo = slugHijo.substring(1);
+                                            }
+                                            if (!slugHijo.isBlank() && !rutasVisitadas.contains(slugHijo)) {
+                                                colaExploracion.add(slugHijo);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
 
                 List<ItemIngestaDto> lote = new ArrayList<>();
-                for (JsonNode h : hits) {
-                    double precio = h.path("currentPrice").path("priceValue").asDouble(0.0);
-                    if (precio <= 0) continue;
+                if (!results.isMissingNode() && results.isObject()) {
+                    Iterator<String> it = results.fieldNames();
+                    while (it.hasNext()) {
+                        String idx = it.next();
+                        JsonNode resArray = results.path(idx).path("results");
+                        if (resArray.isArray()) {
+                            for (JsonNode r : resArray) {
+                                JsonNode hits = r.path("hits");
+                                if (hits.isArray()) {
+                                    for (JsonNode h : hits) {
+                                        double precio = h.path("currentPrice").path("priceValue").asDouble(0.0);
+                                        if (precio <= 0) continue;
 
-                    String name = h.path("name").asText("");
-                    String brand = h.path("brandName").asText("").replaceAll("[®™]", "").trim();
-                    String displayName = brand.isEmpty() ? name : name + " " + brand;
-                    String sku = h.path("objectID").asText("");
-                    String unit = h.path("salesUnit").asText("Ud");
-                    String termino = sub.contains("/") ? sub.substring(sub.lastIndexOf("/") + 1) : sub;
+                                        String name = h.path("name").asText("");
+                                        String brand = h.path("brandName").asText("").replaceAll("[®™]", "").trim();
+                                        String displayName = brand.isEmpty() ? name : name + " " + brand;
+                                        String sku = h.path("objectID").asText("");
+                                        String unit = h.path("salesUnit").asText("Ud");
+                                        String termino = rutaActual.contains("/") ? rutaActual.substring(rutaActual.lastIndexOf("/") + 1) : rutaActual;
 
-                    ItemIngestaDto dto = new ItemIngestaDto();
-                    dto.setSku_id(sku);
-                    dto.setDisplay_name(displayName);
-                    dto.setPrecio(BigDecimal.valueOf(precio));
-                    dto.setMeasure_unit(unit);
-                    dto.setTermino_busqueda(termino);
-                    lote.add(dto);
+                                        ItemIngestaDto dto = new ItemIngestaDto();
+                                        dto.setSku_id(sku);
+                                        dto.setDisplay_name(displayName);
+                                        dto.setPrecio(BigDecimal.valueOf(precio));
+                                        dto.setMeasure_unit(unit);
+                                        dto.setTermino_busqueda(termino);
+                                        lote.add(dto);
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
 
                 if (!lote.isEmpty()) {
                     procesarLoteSupermercado("ALDI", lote);
                     totalProcesados += lote.size();
-                    exitosas++;
-                    log.info("✔ ALDI [{}]: +{} productos", sub, lote.size());
+                    categoriasConProductos++;
+                    log.info("✔ ALDI [{}]: +{} productos", rutaActual, lote.size());
                 }
 
-                Thread.sleep(70);
+                Thread.sleep(60);
+
             } catch (Exception e) {
-                log.warn("Aviso en subcategoría ALDI {}: {}", sub, e.getMessage());
+                log.warn("Aviso procesando rama ALDI {}: {}", rutaActual, e.getMessage());
             }
         }
 
         long totalEnCache = precioCacheRepo.count();
-        log.info("🎉 Sincronización ALDI finalizada. Subcategorías exitosas: {}, Productos procesados: {} (Total BD: {})", exitosas, totalProcesados, totalEnCache);
+        log.info("🎉 Sincronización ALDI finalizada. Categorías indexadas: {}, Productos procesados: {} (Total BD: {})",
+                categoriasConProductos, totalProcesados, totalEnCache);
 
         return ResponseEntity.ok(Map.of(
                 "supermercado", "ALDI",
