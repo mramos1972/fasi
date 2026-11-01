@@ -253,4 +253,113 @@ public class MantenimientoPreciosController {
         private String measure_unit;
         private String termino_busqueda;
     }
+
+    @PostMapping("/api/sincronizar-aldi")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> sincronizarAldiServidor() {
+        log.info("Iniciando sincronización completa de ALDI desde el servidor...");
+        List<String> subcategorias = List.of(
+            "lacteos-y-huevos/leche-y-bebidas-vegetales",
+            "lacteos-y-huevos/huevos",
+            "lacteos-y-huevos/yogures-y-postres-lacteos",
+            "lacteos-y-huevos/mantequilla-margarina-y-nata",
+            "despensa/arroz-legumbres-y-pasta",
+            "despensa/aceites-vinagres-y-alinos",
+            "despensa/conservas-y-platos-preparados",
+            "despensa/harinas-azucar-y-reposteria",
+            "despensa/salsas-y-condimentos",
+            "panaderia-y-bolleria/pan",
+            "panaderia-y-bolleria/bolleria",
+            "desayuno/cafe-cacao-e-infusiones",
+            "desayuno/cereales-y-galletas",
+            "carne/pollo-y-pavo",
+            "carne/cerdo-y-vacuno",
+            "charcuteria/embutidos-y-fiambres",
+            "quesos",
+            "limpieza-y-hogar/cuidado-de-la-ropa",
+            "limpieza-y-hogar/limpieza-de-la-vajilla",
+            "limpieza-y-hogar/limpieza-del-hogar",
+            "limpieza-y-hogar/papel-higienico-y-panuelos",
+            "cuidado-personal/higiene-corporal",
+            "cuidado-personal/cuidado-del-cabello",
+            "fruta-y-verdura",
+            "bebidas/aguas-y-refrescos"
+        );
+
+        HttpClient client = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(10))
+                .followRedirects(HttpClient.Redirect.NORMAL)
+                .build();
+
+        int totalProcesados = 0;
+        String buildId = "Uaol5T0hC3jS0YDFqYFLA";
+
+        for (String sub : subcategorias) {
+            try {
+                String url = "https://www.aldi.es/_next/data/" + buildId + "/es/productos/" + sub + ".html.json";
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(url))
+                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                        .header("Accept", "application/json")
+                        .timeout(Duration.ofSeconds(10))
+                        .GET()
+                        .build();
+
+                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() != 200) {
+                    log.warn("ALDI: status {} en subcategoría {}", response.statusCode(), sub);
+                    continue;
+                }
+
+                JsonNode root = objectMapper.readTree(response.body());
+                JsonNode results = root.path("pageProps").path("algoliaState").path("initialResults");
+                if (results.isMissingNode() || !results.isObject()) continue;
+
+                var fieldNames = results.fieldNames();
+                if (!fieldNames.hasNext()) continue;
+                String primerIndex = fieldNames.next();
+
+                JsonNode hits = results.path(primerIndex).path("results").path(0).path("hits");
+                if (hits.isMissingNode() || !hits.isArray()) continue;
+
+                List<ItemIngestaDto> lote = new ArrayList<>();
+                for (JsonNode h : hits) {
+                    double precio = h.path("currentPrice").path("priceValue").asDouble(0.0);
+                    if (precio <= 0) continue;
+
+                    String name = h.path("name").asText("");
+                    String brand = h.path("brandName").asText("").replaceAll("[®™]", "").trim();
+                    String displayName = brand.isEmpty() ? name : name + " " + brand;
+                    String sku = h.path("objectID").asText("");
+                    String unit = h.path("salesUnit").asText("Ud");
+                    String termino = sub.contains("/") ? sub.substring(sub.lastIndexOf("/") + 1) : sub;
+
+                    ItemIngestaDto dto = new ItemIngestaDto();
+                    dto.setSku_id(sku);
+                    dto.setDisplay_name(displayName);
+                    dto.setPrecio(BigDecimal.valueOf(precio));
+                    dto.setMeasure_unit(unit);
+                    dto.setTermino_busqueda(termino);
+                    lote.add(dto);
+                }
+
+                if (!lote.isEmpty()) {
+                    procesarLoteSupermercado("ALDI", lote);
+                    totalProcesados += lote.size();
+                }
+
+                Thread.sleep(80);
+            } catch (Exception e) {
+                log.warn("Error procesando subcategoría ALDI {}: {}", sub, e.getMessage());
+            }
+        }
+
+        long totalEnCache = precioCacheRepo.count();
+        return ResponseEntity.ok(Map.of(
+                "supermercado", "ALDI",
+                "procesados", totalProcesados,
+                "totalEnCache", totalEnCache
+        ));
+    }
+
 }
