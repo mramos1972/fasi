@@ -101,6 +101,24 @@
                         </div>
                     </div>
 
+                    <!-- FILA EL JAMÓN -->
+                    <div class="card border border-warning-subtle bg-white shadow-sm mb-4">
+                        <div class="card-body p-4">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div class="d-flex align-items-center">
+                                    <div class="bg-warning text-dark rounded p-3 me-3 fw-bold fs-5">EL JAMÓN</div>
+                                    <div>
+                                        <h5 class="fw-bold mb-0">Catálogo Supermercados El Jamón</h5>
+                                        <span class="text-muted small">Descarga directa en servidor (CP 11540 Sanlúcar)</span>
+                                    </div>
+                                </div>
+                                <button id="btnSincronizarElJamon" class="btn btn-warning btn-lg px-4 fw-bold" onclick="iniciarExtraccionElJamon()">
+                                    <i class="bi bi-cloud-arrow-down-fill me-2"></i>Descargar El Jamón
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- BARRA DE ESTADO Y CONSOLA COMÚN -->
                     <div class="progress mb-2 d-none" id="progressContainer" style="height: 24px;">
                         <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary fw-bold" 
@@ -147,11 +165,42 @@
     }
 
     // ══════════════════════════════════════════════════════════
-    //  EXTRACTOR ALDI (CLIENT-SIDE VÍA NEXT.JS / ALGOLIA)
+    //  EXTRACTOR EL JAMÓN (SERVER-SIDE)
     // ══════════════════════════════════════════════════════════
-        async function iniciarExtraccionAldi() {
+    async function iniciarExtraccionElJamon() {
         setBotonesBloqueados(true);
-        logConsola("🔵 Iniciando sincronización de ALDI en backend (evita CORS)...", "text-info");
+        logConsola("🟡 Iniciando sincronización de Supermercados El Jamón...", "text-warning");
+        setBarraProgreso(30, "Descargando catálogo de El Jamón en servidor...", "bg-warning text-dark");
+
+        try {
+            const resp = await fetch('/admin/mantenimiento-precios/api/sincronizar-eljamon', {
+                method: 'POST'
+            });
+
+            if (!resp.ok) {
+                const errData = await resp.json().catch(() => ({}));
+                throw new Error(errData.error || ("HTTP " + resp.status));
+            }
+
+            const data = await resp.json();
+            setBarraProgreso(100, `¡El Jamón completado! Procesados: ${data.procesados}`, "bg-warning text-dark");
+            document.getElementById("labelTotalCache").innerText = data.totalEnCache;
+            logConsola(`🎉 El Jamón sincronizado con éxito: ${data.procesados} productos indexados. Total BD: ${data.totalEnCache}`, "text-success fw-bold");
+
+        } catch (err) {
+            logConsola(`Error en El Jamón: ${err.message}`, "text-danger");
+            setBarraProgreso(100, "Error en la sincronización de El Jamón", "bg-danger");
+        } finally {
+            setBotonesBloqueados(false);
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  EXTRACTOR ALDI (SERVER-SIDE)
+    // ══════════════════════════════════════════════════════════
+    async function iniciarExtraccionAldi() {
+        setBotonesBloqueados(true);
+        logConsola("🔵 Iniciando sincronización de ALDI en backend...", "text-info");
         setBarraProgreso(40, "Descargando catálogo completo de ALDI en servidor...", "bg-primary");
 
         try {
@@ -182,7 +231,7 @@
     // ══════════════════════════════════════════════════════════
     async function iniciarExtraccionMercadona() {
         setBotonesBloqueados(true);
-        logConsola("🟢 Iniciando descarga de Mercadona en backend (evita CORS)...", "text-info");
+        logConsola("🟢 Iniciando descarga de Mercadona en backend...", "text-info");
         setBarraProgreso(40, "Descargando catálogo completo de Mercadona en servidor...", "bg-success");
 
         try {

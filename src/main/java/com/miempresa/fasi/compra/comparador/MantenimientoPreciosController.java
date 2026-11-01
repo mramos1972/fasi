@@ -5,6 +5,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
@@ -188,74 +192,6 @@ public class MantenimientoPreciosController {
         }
     }
 
-    private ResponseEntity<Map<String, Object>> procesarLoteSupermercado(String codigoSuper, List<ItemIngestaDto> lote) {
-        if (lote == null || lote.isEmpty()) {
-            return ResponseEntity.ok(Map.of("procesadosEnLote", 0, "totalEnCache", precioCacheRepo.count()));
-        }
-
-        Supermercado superm = supermercadoRepo.findByActivoTrue().stream()
-                .filter(s -> (s.getCodigoInterno() != null && s.getCodigoInterno().equalsIgnoreCase(codigoSuper))
-                        || s.getNombre().toUpperCase().contains(codigoSuper))
-                .findFirst()
-                .orElse(null);
-
-        if (superm == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Supermercado " + codigoSuper + " no encontrado o inactivo"));
-        }
-
-        LocalDateTime ahora = LocalDateTime.now();
-        int nuevosOActualizados = 0;
-
-        for (ItemIngestaDto item : lote) {
-            if (item.getDisplay_name() == null || item.getDisplay_name().isBlank()) continue;
-            if (item.getPrecio() == null || item.getPrecio().compareTo(BigDecimal.ZERO) <= 0) continue;
-
-            String nombre = item.getDisplay_name().trim();
-            BigDecimal precio = item.getPrecio().setScale(2, RoundingMode.HALF_UP);
-            String unidad = item.getMeasure_unit() != null ? item.getMeasure_unit().trim() : "Ud";
-            String termino = item.getTermino_busqueda() != null ? item.getTermino_busqueda().trim() : nombre;
-
-            Optional<PrecioCache> existente = precioCacheRepo.buscarPreciosRecientes(
-                    superm.getId(), nombre, ahora.minusDays(60)).stream().findFirst();
-
-            if (existente.isPresent()) {
-                PrecioCache pc = existente.get();
-                pc.setPrecio(precio);
-                pc.setFormatoUnidad(unidad);
-                pc.setActualizadoEl(ahora);
-                precioCacheRepo.save(pc);
-            } else {
-                PrecioCache pc = PrecioCache.builder()
-                        .supermercado(superm)
-                        .terminoBusqueda(termino.toLowerCase())
-                        .productoNombre(nombre)
-                        .precio(precio)
-                        .formatoUnidad(unidad)
-                        .actualizadoEl(ahora)
-                        .build();
-                precioCacheRepo.save(pc);
-            }
-            nuevosOActualizados++;
-        }
-
-        long total = precioCacheRepo.count();
-        log.info("📥 [{} Sync] Procesados {} productos (Total BD: {})", codigoSuper, nuevosOActualizados, total);
-
-        return ResponseEntity.ok(Map.of(
-                "procesadosEnLote", nuevosOActualizados,
-                "totalEnCache", total
-        ));
-    }
-
-    @Data
-    public static class ItemIngestaDto {
-        private String sku_id;
-        private String display_name;
-        private BigDecimal precio;
-        private String measure_unit;
-        private String termino_busqueda;
-    }
-
     @PostMapping("/api/sincronizar-aldi")
     @ResponseBody
     public ResponseEntity<Map<String, Object>> sincronizarAldiServidor() {
@@ -267,11 +203,9 @@ public class MantenimientoPreciosController {
                 .followRedirects(HttpClient.Redirect.NORMAL)
                 .build();
 
-        // 1. Descubrir categorías dinámicas desde el sitemap oficial
         List<String> categorias = descubrirCategoriasAldi(client);
         log.info("🛒 [ALDI Sync] Categorías descubiertas para procesar: {}", categorias.size());
 
-        // 2. Extraer el buildId dinámico de Next.js
         String buildId = "Uaol5T0hC3jS0YDFqYFLA";
         try {
             HttpRequest rHome = HttpRequest.newBuilder()
@@ -295,7 +229,6 @@ public class MantenimientoPreciosController {
         int totalProcesados = 0;
         int categoriasConProductos = 0;
 
-        // 3. Recorrer cada subcategoría hoja encontrada
         for (String ruta : categorias) {
             try {
                 String url = "https://www.aldi.es/_next/data/" + buildId + "/es/productos/" + ruta + ".html.json";
@@ -376,6 +309,199 @@ public class MantenimientoPreciosController {
         ));
     }
 
+    @PostMapping("/api/sincronizar-eljamon")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> sincronizarElJamonServidor() {
+        log.info("🛒 [El Jamón Sync] Iniciando descubrimiento y sincronización...");
+
+        Supermercado elJamon = supermercadoRepo.findByActivoTrue().stream()
+                .filter(s -> (s.getCodigoInterno() != null && s.getCodigoInterno().equalsIgnoreCase("EL_JAMON"))
+                        || s.getNombre().toUpperCase().contains("JAMON"))
+                .findFirst()
+                .orElse(null);
+
+        if (elJamon == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Supermercado El Jamón no encontrado o inactivo en BD"));
+        }
+
+        HttpClient client = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
+                .connectTimeout(Duration.ofSeconds(15))
+                .followRedirects(HttpClient.Redirect.NORMAL)
+                .build();
+
+        List<String> subcategorias = descubrirSubcategoriasElJamon(client);
+        log.info("🛒 [El Jamón Sync] Subcategorías a explorar: {}", subcategorias.size());
+
+        int totalProcesados = 0;
+        int subcatsConProductos = 0;
+        LocalDateTime ahora = LocalDateTime.now();
+
+        for (String urlSubcat : subcategorias) {
+            try {
+                HttpRequest req = HttpRequest.newBuilder()
+                        .uri(URI.create(urlSubcat))
+                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                        .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                        .header("Cookie", "searcher_cp=11540; searcher_sale_channel=SURT-0-CA")
+                        .timeout(Duration.ofSeconds(15))
+                        .GET()
+                        .build();
+
+                HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
+                if (resp.statusCode() != 200) continue;
+
+                Document doc = Jsoup.parse(resp.body());
+                Elements articulos = doc.select("div[id*='articulo_']");
+
+                if (articulos.isEmpty()) {
+                    continue;
+                }
+
+                String terminoSubcat = extraerTerminoDeUrl(urlSubcat);
+                int procesadosEnSubcat = 0;
+
+                for (Element art : articulos) {
+                    try {
+                        String idAttr = art.id();
+                        String sku = idAttr.contains("_") ? idAttr.substring(idAttr.lastIndexOf("_") + 1) : idAttr;
+
+                        Element nombreElem = art.selectFirst("p.nombre a");
+                        if (nombreElem == null) continue;
+                        String nombre = nombreElem.text().trim();
+
+                        Element marcaElem = art.selectFirst("p.marca");
+                        String marca = (marcaElem != null) ? marcaElem.text().trim() : "";
+                        String nombreCompleto = (!marca.isEmpty() && !nombre.toLowerCase().contains(marca.toLowerCase()))
+                                ? marca + " " + nombre : nombre;
+
+                        Element precioElem = art.selectFirst("p.precio span:last-child");
+                        if (precioElem == null) precioElem = art.selectFirst("p.precio");
+                        if (precioElem == null) continue;
+
+                        String precioRaw = precioElem.text().replaceAll("[^0-9,\\.]", "").replace(",", ".");
+                        if (precioRaw.isBlank()) continue;
+                        BigDecimal precio = new BigDecimal(precioRaw).setScale(2, RoundingMode.HALF_UP);
+                        if (precio.compareTo(BigDecimal.ZERO) <= 0) continue;
+
+                        Element unidadElem = art.selectFirst("div.texto-porKilo");
+                        String unidad = (unidadElem != null) ? unidadElem.text().trim() : "Ud";
+
+                        Optional<PrecioCache> existente = precioCacheRepo.buscarPreciosRecientes(
+                                elJamon.getId(), nombreCompleto, ahora.minusDays(60)).stream().findFirst();
+
+                        if (existente.isPresent()) {
+                            PrecioCache pc = existente.get();
+                            pc.setPrecio(precio);
+                            pc.setFormatoUnidad(unidad);
+                            pc.setActualizadoEl(ahora);
+                            precioCacheRepo.save(pc);
+                        } else {
+                            PrecioCache pc = PrecioCache.builder()
+                                    .supermercado(elJamon)
+                                    .terminoBusqueda(terminoSubcat.toLowerCase())
+                                    .productoNombre(nombreCompleto)
+                                    .precio(precio)
+                                    .formatoUnidad(unidad)
+                                    .actualizadoEl(ahora)
+                                    .build();
+                            precioCacheRepo.save(pc);
+                        }
+                        procesadosEnSubcat++;
+                    } catch (Exception exProd) {
+                        log.debug("Aviso procesando producto de El Jamón: {}", exProd.getMessage());
+                    }
+                }
+
+                if (procesadosEnSubcat > 0) {
+                    totalProcesados += procesadosEnSubcat;
+                    subcatsConProductos++;
+                    log.info("✔ El Jamón [{}] (+{} productos)", terminoSubcat, procesadosEnSubcat);
+                }
+
+                Thread.sleep(80);
+
+            } catch (Exception e) {
+                log.warn("⚠️ Error en subcategoría El Jamón {}: {}", urlSubcat, e.getMessage());
+            }
+        }
+
+        long totalBd = precioCacheRepo.count();
+        log.info("🎉 [El Jamón Sync] Finalizado: {} subcategorías con productos, {} productos procesados. Total BD: {}",
+                subcatsConProductos, totalProcesados, totalBd);
+
+        return ResponseEntity.ok(Map.of(
+                "supermercado", "Supermercados El Jamón",
+                "procesados", totalProcesados,
+                "categoriasProcesadas", subcatsConProductos,
+                "totalEnCache", totalBd
+        ));
+    }
+
+    private List<String> descubrirSubcategoriasElJamon(HttpClient client) {
+        Set<String> urls = new LinkedHashSet<>();
+        List<String> raices = List.of(
+                "https://www.supermercadoseljamon.com/categorias/la-despensa/01",
+                "https://www.supermercadoseljamon.com/categorias/desayuno-y-dulces/02",
+                "https://www.supermercadoseljamon.com/categorias/lacteos/03",
+                "https://www.supermercadoseljamon.com/categorias/frescos/04",
+                "https://www.supermercadoseljamon.com/categorias/congelados/05",
+                "https://www.supermercadoseljamon.com/categorias/bebidas/06",
+                "https://www.supermercadoseljamon.com/categorias/drogueria-y-limpieza/09"
+        );
+
+        for (String raiz : raices) {
+            try {
+                HttpRequest req = HttpRequest.newBuilder()
+                        .uri(URI.create(raiz))
+                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                        .timeout(Duration.ofSeconds(10))
+                        .GET()
+                        .build();
+
+                HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
+                if (resp.statusCode() == 200) {
+                    Document doc = Jsoup.parse(resp.body());
+                    Elements enlaces = doc.select("a[href*='/categorias/']");
+                    for (Element a : enlaces) {
+                        String href = a.absUrl("href");
+                        if (href.matches(".*/categorias/.+/\\d{6}$")) {
+                            urls.add(href);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Aviso explorando raíz {}: {}", raiz, e.getMessage());
+            }
+        }
+
+        if (urls.isEmpty()) {
+            return List.of(
+                    "https://www.supermercadoseljamon.com/categorias/la-despensa/aceites-y-condimentos/aceite-de-oliva-virgen-y-virgen-extra/010603",
+                    "https://www.supermercadoseljamon.com/categorias/la-despensa/arroz-legumbres-y-pasta/arroz/010101",
+                    "https://www.supermercadoseljamon.com/categorias/la-despensa/arroz-legumbres-y-pasta/pasta/010103",
+                    "https://www.supermercadoseljamon.com/categorias/lacteos/leches/leche-entera/030101",
+                    "https://www.supermercadoseljamon.com/categorias/lacteos/leches/leche-semidesnatada/030102",
+                    "https://www.supermercadoseljamon.com/categorias/lacteos/leches/leche-desnatada/030103",
+                    "https://www.supermercadoseljamon.com/categorias/lacteos/huevos/huevos/030401",
+                    "https://www.supermercadoseljamon.com/categorias/drogueria-y-limpieza/papel-higienico-y-panuelos/papel-higienico/090101"
+            );
+        }
+
+        return new ArrayList<>(urls);
+    }
+
+    private String extraerTerminoDeUrl(String url) {
+        try {
+            String sinCodigo = url.replaceAll("/\\d+$", "");
+            int ultSlash = sinCodigo.lastIndexOf('/');
+            if (ultSlash != -1) {
+                return sinCodigo.substring(ultSlash + 1).replace("-", " ");
+            }
+        } catch (Exception ignored) {}
+        return "general";
+    }
+
     private List<String> descubrirCategoriasAldi(HttpClient client) {
         Set<String> rutasHojas = new LinkedHashSet<>();
         try {
@@ -401,7 +527,7 @@ public class MantenimientoPreciosController {
                 }
             }
         } catch (Exception e) {
-            log.warn("⚠️ Error leyendo sitemap dinámico de ALDI, recurriendo al catálogo base: {}", e.getMessage());
+            log.warn("⚠️ Error leyendo sitemap dinámico de ALDI: {}", e.getMessage());
         }
 
         if (rutasHojas.isEmpty()) {
@@ -416,5 +542,73 @@ public class MantenimientoPreciosController {
         }
 
         return new ArrayList<>(rutasHojas);
+    }
+
+    private ResponseEntity<Map<String, Object>> procesarLoteSupermercado(String codigoSuper, List<ItemIngestaDto> lote) {
+        if (lote == null || lote.isEmpty()) {
+            return ResponseEntity.ok(Map.of("procesadosEnLote", 0, "totalEnCache", precioCacheRepo.count()));
+        }
+
+        Supermercado superm = supermercadoRepo.findByActivoTrue().stream()
+                .filter(s -> (s.getCodigoInterno() != null && s.getCodigoInterno().equalsIgnoreCase(codigoSuper))
+                        || s.getNombre().toUpperCase().contains(codigoSuper))
+                .findFirst()
+                .orElse(null);
+
+        if (superm == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Supermercado " + codigoSuper + " no encontrado o inactivo"));
+        }
+
+        LocalDateTime ahora = LocalDateTime.now();
+        int nuevosOActualizados = 0;
+
+        for (ItemIngestaDto item : lote) {
+            if (item.getDisplay_name() == null || item.getDisplay_name().isBlank()) continue;
+            if (item.getPrecio() == null || item.getPrecio().compareTo(BigDecimal.ZERO) <= 0) continue;
+
+            String nombre = item.getDisplay_name().trim();
+            BigDecimal precio = item.getPrecio().setScale(2, RoundingMode.HALF_UP);
+            String unidad = item.getMeasure_unit() != null ? item.getMeasure_unit().trim() : "Ud";
+            String termino = item.getTermino_busqueda() != null ? item.getTermino_busqueda().trim() : nombre;
+
+            Optional<PrecioCache> existente = precioCacheRepo.buscarPreciosRecientes(
+                    superm.getId(), nombre, ahora.minusDays(60)).stream().findFirst();
+
+            if (existente.isPresent()) {
+                PrecioCache pc = existente.get();
+                pc.setPrecio(precio);
+                pc.setFormatoUnidad(unidad);
+                pc.setActualizadoEl(ahora);
+                precioCacheRepo.save(pc);
+            } else {
+                PrecioCache pc = PrecioCache.builder()
+                        .supermercado(superm)
+                        .terminoBusqueda(termino.toLowerCase())
+                        .productoNombre(nombre)
+                        .precio(precio)
+                        .formatoUnidad(unidad)
+                        .actualizadoEl(ahora)
+                        .build();
+                precioCacheRepo.save(pc);
+            }
+            nuevosOActualizados++;
+        }
+
+        long total = precioCacheRepo.count();
+        log.info("📥 [{} Sync] Procesados {} productos (Total BD: {})", codigoSuper, nuevosOActualizados, total);
+
+        return ResponseEntity.ok(Map.of(
+                "procesadosEnLote", nuevosOActualizados,
+                "totalEnCache", total
+        ));
+    }
+
+    @Data
+    public static class ItemIngestaDto {
+        private String sku_id;
+        private String display_name;
+        private BigDecimal precio;
+        private String measure_unit;
+        private String termino_busqueda;
     }
 }
