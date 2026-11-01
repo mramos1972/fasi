@@ -53,6 +53,12 @@ public class MantenimientoPreciosController {
         return procesarLoteSupermercado("DIA", lote);
     }
 
+    @PostMapping("/api/lote-aldi")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> registrarLoteAldi(@RequestBody List<ItemIngestaDto> lote) {
+        return procesarLoteSupermercado("ALDI", lote);
+    }
+
     @PostMapping("/api/sincronizar-mercadona")
     @ResponseBody
     public ResponseEntity<Map<String, Object>> sincronizarMercadonaServer() {
