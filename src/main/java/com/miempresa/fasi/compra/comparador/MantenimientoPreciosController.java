@@ -329,7 +329,6 @@ public class MantenimientoPreciosController {
                             .codigoInterno("EL_JAMON")
                             .codigoPostal("11540")
                             .activo(true)
-                            .creadoEl(LocalDateTime.now())
                             .build();
                     return supermercadoRepo.save(nuevo);
                 });
