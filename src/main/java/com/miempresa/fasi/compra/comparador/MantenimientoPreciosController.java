@@ -123,7 +123,7 @@ public class MantenimientoPreciosController {
             for (Integer subId : subcatIds) {
                 try {
                     HttpRequest catReq = HttpRequest.newBuilder()
-                            .uri(URI.create("https://tienda.mercadona.es/api/categories/" + subId + "/"))
+                    .uri(URI.create("https://tienda.mercadona.es/api/categories/" + subId + "/"))
                             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
                             .header("Accept", "application/json")
                             .timeout(Duration.ofSeconds(10))
@@ -342,8 +342,34 @@ public class MantenimientoPreciosController {
             supermercadoRepo.save(elJamon);
         }
 
-        HttpClient client = crearHttpClientToleranteSSL();
+        // 1. Inicializar sesión de Comerzzia con cookies vivas (JSESSIONID)
+        Map<String, String> sessionCookies = new HashMap<>();
+        String userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
+        try {
+            org.jsoup.Connection.Response homeResp = Jsoup.connect("https://www.supermercadoseljamon.com/")
+                    .userAgent(userAgent)
+                    .timeout(15000)
+                    .execute();
+            sessionCookies.putAll(homeResp.cookies());
 
+            // 2. Fijar tienda 163 (Sanlúcar de Barrameda - CP 11540) sobre la sesión
+            org.jsoup.Connection.Response zipResp = Jsoup.connect("https://www.supermercadoseljamon.com/delegate/seleccionarCodPostalAjaxServletFood")
+                    .data("accion", "enviarCodTiendaRecogida")
+                    .data("codTiendaRecogida", "163")
+                    .data("codTipoServicio", "1020")
+                    .data("locale", "es")
+                    .cookies(sessionCookies)
+                    .userAgent(userAgent)
+                    .timeout(15000)
+                    .ignoreContentType(true)
+                    .execute();
+            sessionCookies.putAll(zipResp.cookies());
+            log.info("🛒 [El Jamón Sync] Sesión iniciada y anclada a tienda 163 (CP 11540). Cookies: {}", sessionCookies.keySet());
+        } catch (Exception e) {
+            log.warn("⚠️ Error inicializando sesión en El Jamón: {}", e.getMessage());
+        }
+
+        HttpClient client = crearHttpClientToleranteSSL();
         List<String> subcategorias = descubrirSubcategoriasElJamon(client);
         log.info("🛒 [El Jamón Sync] Subcategorías a explorar: {}", subcategorias.size());
 
@@ -353,21 +379,13 @@ public class MantenimientoPreciosController {
 
         for (String urlSubcat : subcategorias) {
             try {
-                HttpRequest req = HttpRequest.newBuilder()
-                        .uri(URI.create(urlSubcat))
-                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
-                        .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-                        .header("Cookie", "searcher_cp=11540; searcher_sale_channel=SURT-0-CA")
-                        .timeout(Duration.ofSeconds(15))
-                        .GET()
-                        .build();
+                Document doc = Jsoup.connect(urlSubcat)
+                        .cookies(sessionCookies)
+                        .userAgent(userAgent)
+                        .timeout(15000)
+                        .get();
 
-                HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
-                if (resp.statusCode() != 200) continue;
-
-                Document doc = Jsoup.parse(resp.body());
                 Elements articulos = doc.select("div[id*='articulo_']");
-
                 if (articulos.isEmpty()) {
                     continue;
                 }
@@ -377,9 +395,6 @@ public class MantenimientoPreciosController {
 
                 for (Element art : articulos) {
                     try {
-                        String idAttr = art.id();
-                        String sku = idAttr.contains("_") ? idAttr.substring(idAttr.lastIndexOf("_") + 1) : idAttr;
-
                         Element nombreElem = art.selectFirst("p.nombre a");
                         if (nombreElem == null) continue;
                         String nombre = nombreElem.text().trim();
@@ -389,13 +404,17 @@ public class MantenimientoPreciosController {
                         String nombreCompleto = (!marca.isEmpty() && !nombre.toLowerCase().contains(marca.toLowerCase()))
                                 ? marca + " " + nombre : nombre;
 
-                        Element precioElem = art.selectFirst("p.precio span:last-child");
+                        // Buscar primero precio activo (no tachado si hay promo)
+                        Element precioElem = art.selectFirst("p.precio span:not(.tachado)");
+                        if (precioElem == null) precioElem = art.selectFirst("p.precio span");
                         if (precioElem == null) precioElem = art.selectFirst("p.precio");
                         if (precioElem == null) continue;
 
-                        String precioRaw = precioElem.text().replaceAll("[^0-9,\\.]", "").replace(",", ".");
-                        if (precioRaw.isBlank()) continue;
-                        BigDecimal precio = new BigDecimal(precioRaw).setScale(2, RoundingMode.HALF_UP);
+                        String texto = precioElem.text();
+                        Matcher m = Pattern.compile("(\\d+[.,]\\d{2})").matcher(texto);
+                        if (!m.find()) continue;
+
+                        BigDecimal precio = new BigDecimal(m.group(1).replace(",", ".")).setScale(2, RoundingMode.HALF_UP);
                         if (precio.compareTo(BigDecimal.ZERO) <= 0) continue;
 
                         Element unidadElem = art.selectFirst("div.texto-porKilo");
