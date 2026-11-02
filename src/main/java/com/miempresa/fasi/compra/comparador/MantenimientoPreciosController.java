@@ -16,6 +16,7 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 import java.math.BigDecimal;
@@ -123,7 +124,7 @@ public class MantenimientoPreciosController {
             for (Integer subId : subcatIds) {
                 try {
                     HttpRequest catReq = HttpRequest.newBuilder()
-                    .uri(URI.create("https://tienda.mercadona.es/api/categories/" + subId + "/"))
+                            .uri(URI.create("https://tienda.mercadona.es/api/categories/" + subId + "/"))
                             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
                             .header("Accept", "application/json")
                             .timeout(Duration.ofSeconds(10))
@@ -342,18 +343,23 @@ public class MantenimientoPreciosController {
             supermercadoRepo.save(elJamon);
         }
 
-        // 1. Inicializar sesión de Comerzzia con cookies vivas (JSESSIONID)
+        SSLSocketFactory sslSocketFactory = crearSslSocketFactoryTolerante();
+
+        // 1. Inicializar sesión de Comerzzia con cookies vivas (JSESSIONID) ignorando certificado roto
         Map<String, String> sessionCookies = new HashMap<>();
         String userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
         try {
-            org.jsoup.Connection.Response homeResp = Jsoup.connect("https://www.supermercadoseljamon.com/")
+            org.jsoup.Connection connHome = Jsoup.connect("https://www.supermercadoseljamon.com/")
                     .userAgent(userAgent)
-                    .timeout(15000)
-                    .execute();
+                    .timeout(15000);
+            if (sslSocketFactory != null) {
+                connHome.sslSocketFactory(sslSocketFactory);
+            }
+            org.jsoup.Connection.Response homeResp = connHome.execute();
             sessionCookies.putAll(homeResp.cookies());
 
             // 2. Fijar tienda 163 (Sanlúcar de Barrameda - CP 11540) sobre la sesión
-            org.jsoup.Connection.Response zipResp = Jsoup.connect("https://www.supermercadoseljamon.com/delegate/seleccionarCodPostalAjaxServletFood")
+            org.jsoup.Connection connZip = Jsoup.connect("https://www.supermercadoseljamon.com/delegate/seleccionarCodPostalAjaxServletFood")
                     .data("accion", "enviarCodTiendaRecogida")
                     .data("codTiendaRecogida", "163")
                     .data("codTipoServicio", "1020")
@@ -361,8 +367,11 @@ public class MantenimientoPreciosController {
                     .cookies(sessionCookies)
                     .userAgent(userAgent)
                     .timeout(15000)
-                    .ignoreContentType(true)
-                    .execute();
+                    .ignoreContentType(true);
+            if (sslSocketFactory != null) {
+                connZip.sslSocketFactory(sslSocketFactory);
+            }
+            org.jsoup.Connection.Response zipResp = connZip.execute();
             sessionCookies.putAll(zipResp.cookies());
             log.info("🛒 [El Jamón Sync] Sesión iniciada y anclada a tienda 163 (CP 11540). Cookies: {}", sessionCookies.keySet());
         } catch (Exception e) {
@@ -379,11 +388,15 @@ public class MantenimientoPreciosController {
 
         for (String urlSubcat : subcategorias) {
             try {
-                Document doc = Jsoup.connect(urlSubcat)
+                org.jsoup.Connection connSub = Jsoup.connect(urlSubcat)
                         .cookies(sessionCookies)
                         .userAgent(userAgent)
-                        .timeout(15000)
-                        .get();
+                        .timeout(15000);
+                if (sslSocketFactory != null) {
+                    connSub.sslSocketFactory(sslSocketFactory);
+                }
+
+                Document doc = connSub.get();
 
                 Elements articulos = doc.select("div[id*='articulo_']");
                 if (articulos.isEmpty()) {
@@ -469,6 +482,24 @@ public class MantenimientoPreciosController {
                 "categoriasProcesadas", subcatsConProductos,
                 "totalEnCache", totalBd
         ));
+    }
+
+    private SSLSocketFactory crearSslSocketFactoryTolerante() {
+        try {
+            TrustManager[] trustAllCerts = new TrustManager[]{
+                    new X509TrustManager() {
+                        public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
+                        public void checkClientTrusted(X509Certificate[] certs, String authType) {}
+                        public void checkServerTrusted(X509Certificate[] certs, String authType) {}
+                    }
+            };
+            SSLContext sslContext = SSLContext.getInstance("TLS");
+            sslContext.init(null, trustAllCerts, new SecureRandom());
+            return sslContext.getSocketFactory();
+        } catch (Exception e) {
+            log.warn("No se pudo crear SSLSocketFactory tolerante: {}", e.getMessage());
+            return null;
+        }
     }
 
     private HttpClient crearHttpClientToleranteSSL() {
